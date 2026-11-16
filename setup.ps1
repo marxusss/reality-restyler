@@ -6,8 +6,21 @@ $requirements = Join-Path $root 'requirements.txt'
 $runtimeDir = Join-Path $root '.runtime'
 $wheelDir = Join-Path $runtimeDir 'wheels'
 $marker = Join-Path $runtimeDir 'setup.env'
-$requirementsHash = (Get-FileHash -LiteralPath $requirements -Algorithm SHA256).Hash
-$setupHash = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
+
+function Get-Sha256 {
+    param([string]$Path)
+    $stream = [IO.File]::OpenRead($Path)
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try {
+        return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
+    } finally {
+        $algorithm.Dispose()
+        $stream.Dispose()
+    }
+}
+
+$requirementsHash = Get-Sha256 -Path $requirements
+$setupHash = Get-Sha256 -Path $PSCommandPath
 $wheelName = 'nunchaku-1.4.1+cu13.0torch2.14-cp311-cp311-win_amd64.whl'
 $wheelHash = '4cbe71d71c49590728b208ecdb9fc22e405c582def53deb6cca9cd396e598da4'
 $wheelRevision = '51c61df1b9369b50b652587dd7c7ce1c985024a5'

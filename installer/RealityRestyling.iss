@@ -105,10 +105,12 @@ var
   Parameters: String;
 begin
   if CurStep = ssPostInstall then begin
-    Parameters := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\install-flow.ps1') + '" ' + GetInstallParameters('');
-    if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-      MsgBox('The setup wizard could not start the local runtime setup.', mbError, MB_OK)
-    else if ResultCode <> 0 then
-      MsgBox('Setup needs attention. Run RealityRestylingSetup.exe again to retry.', mbError, MB_OK);
+    if not WizardSilent then begin
+      Parameters := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\install-flow.ps1') + '" ' + GetInstallParameters('');
+      if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+        MsgBox('The setup wizard could not start the local runtime setup.', mbError, MB_OK)
+      else if ResultCode <> 0 then
+        MsgBox('Setup needs attention. Run RealityRestylingSetup.exe again to retry.', mbError, MB_OK);
+    end;
   end;
 end;

@@ -44,7 +44,7 @@ function Invoke-ModelSetup {
     param([string[]]$Arguments)
     $previousPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    & $python $modelSetup @Arguments
+    & $python $modelSetup @Arguments | ForEach-Object { Write-Host $_ }
     $exitCode = $LASTEXITCODE
     $ErrorActionPreference = $previousPreference
     return $exitCode
@@ -133,7 +133,7 @@ if ($tailscale) {
         $ErrorActionPreference = $previousPreference
         try { $tailscaleStatus = ($statusOutput | ConvertFrom-Json) } catch { $tailscaleStatus = $null }
     } elseif (-not $tailscaleStatus.Self.DNSName) {
-        Write-Host 'Enable MagicDNS in Tailscale Admin → DNS for a phone link.'
+        Write-Host 'Enable MagicDNS in Tailscale Admin > DNS for a phone link.'
     }
 } else {
     Write-Host 'Phone access requires Tailscale: https://tailscale.com/download/windows'

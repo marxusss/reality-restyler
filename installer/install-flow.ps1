@@ -73,8 +73,10 @@ function Invoke-Child {
         Start-Sleep -Milliseconds 120
         $process.Refresh()
     }
+    $process.WaitForExit()
+    $process.Refresh()
     $script:activeProcess = $null
-    return $process.ExitCode
+    return [int]$process.ExitCode
 }
 
 function Quote-Argument {
