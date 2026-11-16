@@ -4,6 +4,7 @@
 
 - Windows 11, Python 3.11, a CUDA-capable NVIDIA GPU, and Tailscale on the PC and phone.
 - Place the model files below, then run `run.bat`. The first launch installs the pinned Python runtime.
+- [Setup guide](docs/setup.md)
 
 ## Model files
 
