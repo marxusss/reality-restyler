@@ -2,6 +2,7 @@ param([switch]$InstallUpscaler)
 
 $installUpscaler = [bool]$InstallUpscaler
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
 $setup = Join-Path $PSScriptRoot 'setup.ps1'
 try {
     & $setup
@@ -73,8 +74,8 @@ if ($modelState -ne 0) {
     }
 }
 if ($modelState -ne 0) {
-    $answer = Read-Host 'Download the missing model files now? [Y/n]'
-    if (-not $answer -or $answer.Trim().ToLowerInvariant() -in @('y', 'yes')) {
+    $download = [System.Windows.Forms.MessageBox]::Show('Download the missing model files now?', 'Reality Restyling', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+    if ($download -eq [System.Windows.Forms.DialogResult]::Yes) {
         $modelArguments = @('--root', $modelsRoot, '--download-required')
         $modelState = Invoke-ModelSetup -Arguments $modelArguments
     }
@@ -101,8 +102,8 @@ $tailscale = Find-Tailscale
 if (-not $tailscale) {
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if ($winget) {
-        $install = Read-Host 'Install Tailscale with winget for phone access? [y/N]'
-        if ($install.Trim().ToLowerInvariant() -in @('y', 'yes')) {
+        $install = [System.Windows.Forms.MessageBox]::Show('Install Tailscale with winget for phone access?', 'Reality Restyling', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+        if ($install -eq [System.Windows.Forms.DialogResult]::Yes) {
             $previousPreference = $ErrorActionPreference
             $ErrorActionPreference = 'Continue'
             & $winget.Source install --id Tailscale.Tailscale --exact --accept-source-agreements --accept-package-agreements
@@ -125,7 +126,7 @@ if ($tailscale) {
         $ErrorActionPreference = 'Continue'
         & $tailscale up
         $ErrorActionPreference = $previousPreference
-        Read-Host 'Press Enter after Tailscale sign-in to continue' | Out-Null
+        [System.Windows.Forms.MessageBox]::Show('Complete Tailscale sign-in in the browser, then continue.', 'Reality Restyling', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
         $previousPreference = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         $statusOutput = & $tailscale status --json 2>$null
