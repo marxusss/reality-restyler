@@ -39,23 +39,22 @@
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
 </button>
 </div>
-<label class="field prompt-field"><span>Prompt</span><textarea id="promptInput" rows="3" maxlength="2000" spellcheck="false"></textarea></label>
+<div class="field prompt-field">
+<div class="prompt-heading"><label for="promptInput">Prompt</label><button id="clearPromptButton" class="icon-button small" type="button" aria-label="Clear prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+<textarea id="promptInput" rows="3" maxlength="2000" spellcheck="false"></textarea>
+</div>
 <div class="setting-row">
 <label class="field"><span>Steps</span><div class="range-wrap"><input id="stepsInput" type="range" min="1" max="12" value="4"><output id="stepsValue">4</output></div></label>
 <label class="field"><span>Resolution</span><select id="resolutionInput"><option value="512">512</option><option value="640">640</option><option value="768">768</option><option value="896">896</option><option value="1024" selected>1024</option></select></label>
 </div>
-<div class="setting-row">
-<label class="field"><span>Seed</span><div class="seed-wrap"><input id="seedInput" type="number" min="0" max="2147483647" value="0" inputmode="numeric"><button id="randomSeedButton" class="icon-button small" type="button" aria-label="Random seed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6.5L20 12M4 12l2 5.5A7 7 0 0 0 18.4 15"/></svg></button></div></label>
+<div class="setting-row camera-row">
 <label class="field"><span>Camera</span><select id="cameraInput"></select></label>
 </div>
 <div class="setting-footer">
 <button id="upscaleButton" class="toggle-button" type="button" aria-pressed="true">
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v5h5M20 9V4h-5"/><path d="m4 20 7-7m2-2 7-7"/></svg><span>Upscale</span>
 </button>
-<div class="setting-actions">
-<button id="setSettingsButton" class="toggle-button" type="button">Set</button>
-<button id="stopModelButton" class="toggle-button" type="button">Stop</button>
-</div>
+<button id="quitModelButton" class="toggle-button" type="button">Quit</button>
 </div>
 </section>
 <div id="error" class="error" role="alert" hidden></div>

@@ -6,8 +6,8 @@ const localInputCanvas = document.createElement("canvas");
 const localInputContext = localInputCanvas.getContext("2d", { alpha: false });
 const startButton = $("startButton");
 const settingsButton = $("settingsButton");
-const setSettingsButton = $("setSettingsButton");
-const stopModelButton = $("stopModelButton");
+const quitModelButton = $("quitModelButton");
+const clearPromptButton = $("clearPromptButton");
 const settingsPanel = $("settingsPanel");
 const errorBox = $("error");
 const startup = $("startup");
@@ -19,7 +19,6 @@ const promptInput = $("promptInput");
 const stepsInput = $("stepsInput");
 const stepsValue = $("stepsValue");
 const resolutionInput = $("resolutionInput");
-const seedInput = $("seedInput");
 const cameraInput = $("cameraInput");
 const upscaleButton = $("upscaleButton");
 const flashButton = $("flashButton");
@@ -36,6 +35,10 @@ let mirror = false;
 let upscale = true;
 let heartbeatTimer = 0;
 let metricsTimer = 0;
+let promptApplyTimer = 0;
+let settingsApplyQueue = Promise.resolve();
+let cameraSwitchQueue = Promise.resolve();
+let cameraSwitchSequence = 0;
 let localFramePending = false;
 let localFrameTimer = 0;
 let localFrameSentAt = 0;
@@ -67,13 +70,10 @@ function currentRotation() {
 }
 
 function readSettings() {
-  let seed = Number(seedInput.value);
-  if (!Number.isInteger(seed) || seed < 0 || seed > 2147483647) seed = 0;
   return {
     prompt: promptInput.value,
     steps: Number(stepsInput.value),
     resolution: Number(resolutionInput.value),
-    seed,
     upscale,
     rotation: currentRotation()
   };
@@ -85,7 +85,6 @@ function saveSettings() {
       prompt: promptInput.value,
       steps: Number(stepsInput.value),
       resolution: Number(resolutionInput.value),
-      seed: Number(seedInput.value) || 0,
       upscale,
       version: 2
     }));
@@ -99,7 +98,6 @@ function restoreSettings() {
     if (Number.isInteger(saved.steps) && saved.steps >= 1 && saved.steps <= 12) stepsInput.value = String(saved.steps);
     if (saved.version !== 2 && Number(saved.resolution) === 640) resolutionInput.value = "1024";
     else if ([512, 640, 768, 896, 1024].includes(Number(saved.resolution))) resolutionInput.value = String(saved.resolution);
-    if (Number.isInteger(saved.seed) && saved.seed >= 0 && saved.seed <= 2147483647) seedInput.value = String(saved.seed);
     if (typeof saved.upscale === "boolean") upscale = saved.upscale;
   } catch (_) {}
   stepsValue.value = stepsInput.value;
@@ -156,7 +154,35 @@ async function cameraStream(deviceId = "", facingMode = "environment") {
   const video = deviceId
     ? { ...camera, deviceId: { exact: deviceId } }
     : { ...camera, facingMode: { ideal: facingMode } };
-  return navigator.mediaDevices.getUserMedia({ video, audio: false });
+  try {
+    return await navigator.mediaDevices.getUserMedia({ video, audio: false });
+  } catch (error) {
+    if (["NotAllowedError", "PermissionDeniedError", "SecurityError"].includes(error.name)) {
+      throw new Error("Allow camera access in browser settings, then retry.");
+    }
+    if (["NotFoundError", "DevicesNotFoundError"].includes(error.name)) {
+      throw new Error("No camera is available.");
+    }
+    if (["NotReadableError", "TrackStartError", "AbortError"].includes(error.name) || error.message === "Load failed") {
+      throw new Error("The selected camera could not be opened. It may be busy or unavailable.");
+    }
+    if (error.name === "OverconstrainedError") {
+      throw new Error("The selected camera is unavailable. Choose another camera.");
+    }
+    throw error;
+  }
+}
+
+function applyCameraMirror(track) {
+  const settings = track && track.getSettings ? track.getSettings() : {};
+  let facing = settings.facingMode;
+  if (facing !== "user" && facing !== "environment") {
+    const label = cameraInput.selectedOptions?.[0]?.textContent?.toLowerCase() || "";
+    if (/\b(front|selfie|user)\b/.test(label)) facing = "user";
+    else if (/\b(back|rear|environment)\b/.test(label)) facing = "environment";
+  }
+  if (facing === "user") setMirror(true);
+  else if (facing === "environment") setMirror(false);
 }
 
 async function populateCameras(selectedId = "") {
@@ -190,6 +216,7 @@ async function startPeer() {
   peer.addEventListener("track", event => {
     if (!peer || event.track.kind !== "video") return;
     localOutput.hidden = true;
+    output.classList.remove("camera-source");
     output.hidden = false;
     output.srcObject = event.streams[0] || new MediaStream([event.track]);
     output.play().catch(() => {});
@@ -279,7 +306,8 @@ async function handleLocalMessage(event, sourceSocket) {
     bitmap.close();
     localRoundTripMs = performance.now() - localFrameSentAt;
     localOutput.hidden = false;
-    output.hidden = true;
+    output.hidden = false;
+    output.classList.add("camera-source");
     latency.hidden = false;
     showError("");
     void updateMetrics();
@@ -336,42 +364,62 @@ async function sendRotation() {
 
 async function applySettings() {
   saveSettings();
-  if (!runtimeLoaded) return;
-  setSettingsButton.disabled = true;
-  try {
-    await request("/settings", { settings: readSettings() });
-    showError("");
-  } catch (error) {
-    showError(error.message);
-  } finally {
-    setSettingsButton.disabled = false;
-  }
+  if (!runtimeLoaded) return Promise.resolve();
+  const settings = readSettings();
+  settingsApplyQueue = settingsApplyQueue.catch(() => {}).then(async () => {
+    if (!runtimeLoaded) return;
+    try {
+      await request("/settings", { settings });
+      showError("");
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+  return settingsApplyQueue;
+}
+
+function schedulePromptApply() {
+  saveSettings();
+  clearTimeout(promptApplyTimer);
+  promptApplyTimer = setTimeout(() => {
+    promptApplyTimer = 0;
+    void applySettings();
+  }, 3000);
 }
 
 async function start() {
   if (busy || started) return;
+  const runtimeWasLoaded = runtimeLoaded;
+  let loadedDuringStart = false;
   busy = true;
   showError("");
-  showStartup("Loading");
+  clearTimeout(promptApplyTimer);
+  promptApplyTimer = 0;
+  showStartup("Opening camera");
   startButton.disabled = true;
-  stopModelButton.disabled = true;
+  quitModelButton.disabled = true;
+  cameraInput.disabled = true;
   localRoundTripMs = 0;
   try {
+    stream = await cameraStream(cameraInput.value);
+    const cameraTrack = stream.getVideoTracks()[0];
+    if (!cameraTrack) throw new Error("The selected camera returned no video.");
+    output.srcObject = stream;
+    output.hidden = false;
+    output.classList.add("camera-source");
+    localOutput.hidden = true;
+    await output.play().catch(() => {});
+    await populateCameras(cameraTrack.getSettings?.().deviceId || "");
+    updateFlashVisibility(cameraTrack);
+    applyCameraMirror(cameraTrack);
     const connection = await request("/transport");
     transportMode = connection.mode;
+    showStartup("Loading");
     await startRuntime();
+    loadedDuringStart = !runtimeWasLoaded && runtimeLoaded;
     if (!heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
     if (!(await heartbeat())) throw new Error("The model stopped during startup. Press Start to retry.");
-    showStartup("Opening camera");
-    stream = await cameraStream(cameraInput.value);
-    updateFlashVisibility(stream.getVideoTracks()[0]);
-    output.hidden = false;
-    localOutput.hidden = true;
-    output.srcObject = stream;
-    await output.play().catch(() => {});
-    await populateCameras(stream.getVideoTracks()[0]?.getSettings?.().deviceId || "");
     await request("/settings", { settings: readSettings() });
-    if (!(await heartbeat())) throw new Error("The model stopped during camera setup. Press Start to retry.");
     showStartup("Connecting");
     if (transportMode === "local") await openLocalStream();
     else await startPeer();
@@ -383,16 +431,27 @@ async function start() {
     if (transportMode === "local") scheduleLocalFrame();
     await updateMetrics();
   } catch (error) {
-    await stop(true, true);
+    if (loadedDuringStart) {
+      await stop(true, true);
+    } else {
+      clearCameraSession();
+      if (!runtimeLoaded) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = 0;
+      }
+      startButton.textContent = runtimeLoaded ? "Resume" : "Start";
+    }
     if (error.message !== "Start cancelled.") showError(error.message);
   } finally {
     busy = false;
     startButton.disabled = false;
-    stopModelButton.disabled = false;
+    quitModelButton.disabled = false;
+    cameraInput.disabled = false;
   }
 }
 
 function clearCameraSession() {
+  cameraSwitchSequence += 1;
   const currentPeer = peer;
   const currentStream = stream;
   peer = null;
@@ -419,6 +478,7 @@ function clearCameraSession() {
     }
   }
   output.srcObject = null;
+  output.classList.remove("camera-source");
   output.hidden = false;
   localOutput.hidden = true;
   latency.hidden = true;
@@ -449,6 +509,8 @@ async function pause(preserveError = false) {
 }
 
 async function stop(preserveError = false, sendRequest = true) {
+  clearTimeout(promptApplyTimer);
+  promptApplyTimer = 0;
   clearCameraSession();
   clearInterval(heartbeatTimer);
   heartbeatTimer = 0;
@@ -533,31 +595,58 @@ async function updateMetrics() {
   }
 }
 
-async function switchCamera(deviceId) {
-  if (!deviceId || !stream) return;
+async function switchCamera(deviceId, sequence) {
+  if (!deviceId || !stream || !started) return;
+  const previous = stream;
+  const previousTrack = previous.getVideoTracks()[0];
+  if (!previousTrack) {
+    showError("The current camera is unavailable.");
+    return;
+  }
+  if (previousTrack.getSettings?.().deviceId === deviceId) return;
+  const activePeer = peer;
   let next = null;
   try {
     next = await cameraStream(deviceId);
     const nextTrack = next.getVideoTracks()[0];
     if (!nextTrack) throw new Error("The selected camera returned no video.");
-    if (peer) {
-      const sender = peer.getSenders().find(item => item.track && item.track.kind === "video");
+    if (sequence !== cameraSwitchSequence || !started || stream !== previous) {
+      for (const track of next.getTracks()) track.stop();
+      return;
+    }
+    if (activePeer) {
+      const sender = activePeer.getSenders().find(item => item.track && item.track.kind === "video");
       if (!sender) throw new Error("The camera connection is unavailable.");
       await sender.replaceTrack(nextTrack);
+      if (sequence !== cameraSwitchSequence || !started || stream !== previous || peer !== activePeer) {
+        for (const track of next.getTracks()) track.stop();
+        return;
+      }
     }
-    const previous = stream;
     stream = next;
     updateFlashVisibility(nextTrack);
-    localOutput.hidden = true;
-    output.hidden = false;
-    output.srcObject = next;
-    output.play().catch(() => {});
+    applyCameraMirror(nextTrack);
+    if (transportMode === "local") {
+      output.srcObject = next;
+      output.hidden = false;
+      output.classList.add("camera-source");
+      output.play().catch(() => {});
+    }
     if (previous) for (const track of previous.getTracks()) track.stop();
     if (transportMode === "local") scheduleLocalFrame();
+    showError("");
   } catch (error) {
     if (next) for (const track of next.getTracks()) track.stop();
-    showError(error.message);
+    if (sequence !== cameraSwitchSequence) return;
+    const previousId = previousTrack.getSettings?.().deviceId;
+    if (previousId && [...cameraInput.options].some(option => option.value === previousId)) cameraInput.value = previousId;
+    showError(error.message || "Could not switch camera.");
   }
+}
+
+function queueCameraSwitch(deviceId) {
+  const sequence = ++cameraSwitchSequence;
+  cameraSwitchQueue = cameraSwitchQueue.catch(() => {}).then(() => switchCamera(deviceId, sequence));
 }
 
 async function toggleFlash() {
@@ -583,41 +672,36 @@ function setPanel(open) {
   settingsButton.setAttribute("aria-expanded", String(open));
 }
 
-function randomizeSeed() {
-  const values = new Uint32Array(1);
-  crypto.getRandomValues(values);
-  seedInput.value = String(values[0] % 2147483648);
-  saveSettings();
-}
-
 settingsButton.addEventListener("click", () => setPanel(settingsPanel.hidden));
 $("closeSettingsButton").addEventListener("click", () => setPanel(false));
 startButton.addEventListener("click", () => started ? void pause() : void start());
-setSettingsButton.addEventListener("click", () => void applySettings());
-stopModelButton.addEventListener("click", async () => {
-  stopModelButton.disabled = true;
+clearPromptButton.addEventListener("click", () => {
+  promptInput.value = "";
+  promptInput.dispatchEvent(new Event("input", { bubbles: true }));
+  promptInput.focus();
+});
+quitModelButton.addEventListener("click", async () => {
+  quitModelButton.disabled = true;
   await stop();
   setPanel(false);
-  stopModelButton.disabled = false;
+  quitModelButton.disabled = false;
 });
 flashButton.addEventListener("click", () => void toggleFlash());
 mirrorButton.addEventListener("click", () => setMirror(!mirror));
 upscaleButton.addEventListener("click", () => {
   upscale = !upscale;
   upscaleButton.setAttribute("aria-pressed", String(upscale));
-  saveSettings();
+  void applySettings();
 });
 stepsInput.addEventListener("input", () => {
   stepsValue.value = stepsInput.value;
   stepsValue.textContent = stepsInput.value;
   saveSettings();
 });
-for (const element of [promptInput, resolutionInput, seedInput]) {
-  element.addEventListener("input", saveSettings);
-  element.addEventListener("change", saveSettings);
-}
-cameraInput.addEventListener("change", () => void switchCamera(cameraInput.value));
-$("randomSeedButton").addEventListener("click", randomizeSeed);
+stepsInput.addEventListener("change", () => void applySettings());
+resolutionInput.addEventListener("change", () => void applySettings());
+promptInput.addEventListener("input", schedulePromptApply);
+cameraInput.addEventListener("change", () => queueCameraSwitch(cameraInput.value));
 for (const eventName of ["orientationchange", "resize"]) {
   window.addEventListener(eventName, () => {
     if (runtimeLoaded) void sendRotation();

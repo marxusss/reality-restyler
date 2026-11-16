@@ -16,17 +16,18 @@ class RuntimeSettingsTests(unittest.TestCase):
         self.assertEqual(settings["resolution"], 1024)
 
     def test_partial_updates_preserve_other_values(self):
-        updated = normalize_settings({"steps": 8}, {"prompt": "portrait", "steps": 4, "resolution": 640, "seed": 12, "upscale": True, "rotation": 90})
+        updated = normalize_settings({"steps": 8}, {"prompt": "portrait", "steps": 4, "resolution": 640, "upscale": True, "rotation": 90})
         self.assertEqual(updated["steps"], 8)
         self.assertEqual(updated["prompt"], "portrait")
         self.assertEqual(updated["rotation"], 90)
 
     def test_rejects_unknown_model_and_runtime_controls(self):
-        with self.assertRaises(ValueError):
-            normalize_settings({"model": "other"})
+        for payload in ({"model": "other"}, {"seed": 4}):
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                normalize_settings(payload)
 
     def test_rejects_invalid_ranges_and_boolean_integers(self):
-        for payload in ({"steps": 0}, {"steps": True}, {"resolution": 600}, {"resolution": 640.0}, {"seed": -1}, {"rotation": 45}, {"rotation": 90.0}):
+        for payload in ({"steps": 0}, {"steps": True}, {"resolution": 600}, {"resolution": 640.0}, {"rotation": 45}, {"rotation": 90.0}):
             with self.subTest(payload=payload):
                 with self.assertRaises(ValueError):
                     normalize_settings(payload)
@@ -77,8 +78,6 @@ class RuntimeSettingsFuzzTests(unittest.TestCase):
             self.assertIn(settings["resolution"], RESOLUTIONS)
             self.assertGreaterEqual(settings["steps"], 1)
             self.assertLessEqual(settings["steps"], 12)
-            self.assertGreaterEqual(settings["seed"], 0)
-            self.assertLessEqual(settings["seed"], 2147483647)
 
 if __name__ == "__main__":
     unittest.main()

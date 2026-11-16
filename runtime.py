@@ -15,7 +15,6 @@ DEFAULT_SETTINGS = {
     "prompt": "",
     "steps": 4,
     "resolution": 1024,
-    "seed": 0,
     "upscale": True,
     "rotation": 0,
 }
@@ -38,9 +37,6 @@ def normalize_settings(raw, previous=None):
     resolution = source.get("resolution")
     if type(resolution) is not int or resolution not in RESOLUTIONS:
         raise ValueError("Resolution is not supported.")
-    seed = source.get("seed")
-    if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= 2147483647:
-        raise ValueError("Seed must be between 0 and 2147483647.")
     upscale = source.get("upscale")
     if not isinstance(upscale, bool):
         raise ValueError("Upscale must be a boolean.")
@@ -51,7 +47,6 @@ def normalize_settings(raw, previous=None):
         "prompt": prompt,
         "steps": steps,
         "resolution": int(resolution),
-        "seed": seed,
         "upscale": upscale,
         "rotation": rotation,
     }
@@ -306,7 +301,7 @@ class Runtime:
             import torch
             generation_started = time.perf_counter()
             embeds, ids = self._encode_prompt(settings["prompt"])
-            generator = torch.Generator(device="cuda").manual_seed(settings["seed"])
+            generator = torch.Generator(device="cuda").manual_seed(0)
             pipe = self._pipe
             original_encode = pipe.encode_prompt
             had_override = "encode_prompt" in pipe.__dict__

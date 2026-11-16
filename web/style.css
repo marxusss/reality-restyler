@@ -31,6 +31,10 @@ button {
   object-fit: contain;
   background: #050505;
 }
+#output.camera-source {
+  opacity: 0;
+  pointer-events: none;
+}
 #localOutput {
   position: absolute;
   inset: 0;
@@ -248,7 +252,16 @@ button {
 .prompt-field {
   margin-bottom: 14px;
 }
-textarea, select, .seed-wrap input {
+.prompt-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+}
+.prompt-heading label {
+  color: inherit;
+}
+textarea, select {
   width: 100%;
   min-width: 0;
   color: #f4f5f6;
@@ -263,11 +276,11 @@ textarea {
   padding: 11px 12px;
   line-height: 1.4;
 }
-select, .seed-wrap input {
+select {
   height: 40px;
   padding: 0 11px;
 }
-textarea:focus, select:focus, .seed-wrap input:focus {
+textarea:focus, select:focus {
   border-color: rgba(255,255,255,.44);
 }
 .setting-row {
@@ -276,7 +289,7 @@ textarea:focus, select:focus, .seed-wrap input:focus {
   gap: 12px;
   margin-bottom: 14px;
 }
-.range-wrap, .seed-wrap {
+.range-wrap {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -292,24 +305,12 @@ textarea:focus, select:focus, .seed-wrap input:focus {
   color: #fff;
   font-variant-numeric: tabular-nums;
 }
-.seed-wrap input {
-  flex: 1;
-}
-.seed-wrap .icon-button {
-  flex: 0 0 34px;
-  background: rgba(255,255,255,.055);
-  box-shadow: none;
-}
 .setting-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-top: 1px solid rgba(255,255,255,.09);
   padding-top: 14px;
-}
-.setting-actions {
-  display: flex;
-  gap: 8px;
 }
 .toggle-button {
   display: inline-flex;
