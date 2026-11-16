@@ -42,6 +42,13 @@ Name: "{group}\Setup Guide"; Filename: "{app}\docs\setup.md"
 [Run]
 Filename: "{app}\run.bat"; Description: "Launch Reality Restyling"; Flags: postinstall skipifsilent
 
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}\.runtime"
+Type: filesandordirs; Name: "{app}\.venv"
+Type: filesandordirs; Name: "{app}\__pycache__"
+Type: filesandordirs; Name: "{app}\web\__pycache__"
+Type: dirifempty; Name: "{app}"
+
 [Code]
 var
   ModelPage: TInputOptionWizardPage;

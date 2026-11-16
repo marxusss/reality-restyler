@@ -10,6 +10,8 @@
 
 Model files come from [FLUX.2 Klein 9B Nunchaku](https://huggingface.co/tonera/FLUX.2-klein-9B-Nunchaku) and are stored outside the application folder. The selected path is saved in `.runtime/models.path`. Compact 2x comes from [Phips/2xNomosUni_compact_multijpg](https://huggingface.co/Phips/2xNomosUni_compact_multijpg). To add it later, run the installer again.
 
+Uninstall removes the generated Python environment and runtime files. Model files remain in their selected folder; Python and Tailscale are not removed.
+
 ## Tailscale
 
 1. Sign in on the PC and phone to the same tailnet.
