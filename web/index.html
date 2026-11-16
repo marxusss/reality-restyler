@@ -11,19 +11,20 @@
 <body>
 <main id="app">
 <video id="output" autoplay playsinline muted></video>
+<canvas id="localOutput" hidden></canvas>
 <div id="shade"></div>
 <header class="topbar">
-<button id="settingsButton" class="icon-button" type="button" aria-label="Settings" aria-expanded="false">
-<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.63-.07-.94l2.03-1.58c.18-.14.23-.39.12-.6l-1.92-3.32c-.11-.2-.35-.27-.56-.2l-2.39.96c-.5-.38-1.04-.7-1.63-.94l-.36-2.54c-.03-.22-.21-.38-.44-.38h-3.8c-.22 0-.41.16-.44.38l-.36 2.54c-.59.24-1.13.56-1.63.94l-2.39-.96c-.21-.08-.45 0-.56.2L2.88 8.88c-.11.2-.06.46.12.6l2.03 1.58c-.05.31-.07.63-.07.94s.02.63.07.94l-2.03 1.58c-.18.14-.23.39-.12.6l1.92 3.32c.11.2.35.27.56.2l2.39-.96c.5.38 1.04.7 1.63.94l.36 2.54c.03.22.21.38.44.38h3.8c.22 0 .41-.16.44-.38l.36-2.54c.59-.24 1.13-.56 1.63-.94l2.39.96c.21.08.45 0 .56-.2l1.92-3.32c.11-.2.06-.46-.12-.6l-2.02-1.58zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
-</button>
 <div id="latency" class="latency" hidden></div>
 </header>
 <div id="startup" class="startup" role="status" hidden></div>
 <div class="actions">
-<button id="flashButton" class="icon-button" type="button" aria-label="Flash" aria-pressed="false">
+<button id="flashButton" class="icon-button" type="button" aria-label="Flash" aria-pressed="false" hidden>
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.3 2.5 5.8 13h5l-.5 8.5 7.9-11.1h-5.1l.2-7.9Z"/></svg>
 </button>
 <button id="startButton" class="start-button" type="button">Start</button>
+<button id="settingsButton" class="icon-button" type="button" aria-label="Settings" aria-expanded="false">
+<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.63-.07-.94l2.03-1.58c.18-.14.23-.39.12-.6l-1.92-3.32c-.11-.2-.35-.27-.56-.2l-2.39.96c-.5-.38-1.04-.7-1.63-.94l-.36-2.54c-.03-.22-.21-.38-.44-.38h-3.8c-.22 0-.41.16-.44.38l-.36 2.54c-.59.24-1.13.56-1.63.94l-2.39-.96c-.21-.08-.45 0-.56.2L2.88 8.88c-.11.2-.06.46.12.6l2.03 1.58c-.05.31-.07.63-.07.94s.02.63.07.94l-2.03 1.58c-.18.14-.23.39-.12.6l1.92 3.32c.11.2.35.27.56.2l2.39-.96c.5.38 1.04.7 1.63.94l.36 2.54c.03.22.21.38.44.38h3.8c.22 0 .41-.16.44-.38l.36-2.54c.59-.24 1.13-.56 1.63-.94l2.39.96c.21.08.45 0 .56-.2l1.92-3.32c.11-.2.06-.46-.12-.6l-2.02-1.58zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
+</button>
 <button id="mirrorButton" class="icon-button" type="button" aria-label="Mirror" aria-pressed="false">
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"/><path d="m8 7-4 5 4 5M16 7l4 5-4 5"/></svg>
 </button>
@@ -38,7 +39,7 @@
 <label class="field prompt-field"><span>Prompt</span><textarea id="promptInput" rows="3" maxlength="2000" spellcheck="false"></textarea></label>
 <div class="setting-row">
 <label class="field"><span>Steps</span><div class="range-wrap"><input id="stepsInput" type="range" min="1" max="12" value="4"><output id="stepsValue">4</output></div></label>
-<label class="field"><span>Resolution</span><select id="resolutionInput"><option value="512">512</option><option value="640" selected>640</option><option value="768">768</option><option value="896">896</option><option value="1024">1024</option></select></label>
+<label class="field"><span>Resolution</span><select id="resolutionInput"><option value="512">512</option><option value="640">640</option><option value="768">768</option><option value="896">896</option><option value="1024" selected>1024</option></select></label>
 </div>
 <div class="setting-row">
 <label class="field"><span>Seed</span><div class="seed-wrap"><input id="seedInput" type="number" min="0" max="2147483647" value="0" inputmode="numeric"><button id="randomSeedButton" class="icon-button small" type="button" aria-label="Random seed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6.5L20 12M4 12l2 5.5A7 7 0 0 0 18.4 15"/></svg></button></div></label>
@@ -48,6 +49,10 @@
 <button id="upscaleButton" class="toggle-button" type="button" aria-pressed="true">
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v5h5M20 9V4h-5"/><path d="m4 20 7-7m2-2 7-7"/></svg><span>Upscale</span>
 </button>
+<div class="setting-actions">
+<button id="setSettingsButton" class="toggle-button" type="button">Set</button>
+<button id="stopModelButton" class="toggle-button" type="button">Stop</button>
+</div>
 </div>
 </section>
 <div id="error" class="error" role="alert" hidden></div>

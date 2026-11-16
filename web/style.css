@@ -31,7 +31,21 @@ button {
   object-fit: contain;
   background: #050505;
 }
+#localOutput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #050505;
+}
+#output[hidden], #localOutput[hidden], .icon-button[hidden] {
+  display: none;
+}
 #output.mirrored {
+  transform: scaleX(-1);
+}
+#localOutput.mirrored {
   transform: scaleX(-1);
 }
 #shade {
@@ -47,7 +61,7 @@ button {
   right: max(14px, env(safe-area-inset-right));
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 14px;
 }
 .icon-button {
@@ -260,9 +274,14 @@ textarea:focus, select:focus, .seed-wrap input:focus {
 }
 .setting-footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   border-top: 1px solid rgba(255,255,255,.09);
   padding-top: 14px;
+}
+.setting-actions {
+  display: flex;
+  gap: 8px;
 }
 .toggle-button {
   display: inline-flex;

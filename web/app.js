@@ -1,7 +1,13 @@
 const $ = id => document.getElementById(id);
 const output = $("output");
+const localOutput = $("localOutput");
+const localContext = localOutput.getContext("2d", { alpha: false });
+const localInputCanvas = document.createElement("canvas");
+const localInputContext = localInputCanvas.getContext("2d", { alpha: false });
 const startButton = $("startButton");
 const settingsButton = $("settingsButton");
+const setSettingsButton = $("setSettingsButton");
+const stopModelButton = $("stopModelButton");
 const settingsPanel = $("settingsPanel");
 const errorBox = $("error");
 const startup = $("startup");
@@ -17,14 +23,20 @@ const flashButton = $("flashButton");
 const mirrorButton = $("mirrorButton");
 let peer = null;
 let stream = null;
+let localSocket = null;
 let sessionId = "";
 let started = false;
 let busy = false;
+let runtimeLoaded = false;
+let transportMode = "remote";
 let mirror = false;
 let upscale = true;
-let settingsTimer = 0;
 let heartbeatTimer = 0;
 let metricsTimer = 0;
+let localFramePending = false;
+let localFrameTimer = 0;
+let localFrameSentAt = 0;
+let localRoundTripMs = 0;
 let previousStats = null;
 let jitterMs = 0;
 let decodeMs = 0;
@@ -66,7 +78,8 @@ function saveSettings() {
       steps: Number(stepsInput.value),
       resolution: Number(resolutionInput.value),
       seed: Number(seedInput.value) || 0,
-      upscale
+      upscale,
+      version: 2
     }));
   } catch (_) {}
 }
@@ -76,7 +89,8 @@ function restoreSettings() {
     const saved = JSON.parse(localStorage.getItem("reality-restyle-settings") || "{}");
     if (typeof saved.prompt === "string") promptInput.value = saved.prompt;
     if (Number.isInteger(saved.steps) && saved.steps >= 1 && saved.steps <= 12) stepsInput.value = String(saved.steps);
-    if ([512, 640, 768, 896, 1024].includes(Number(saved.resolution))) resolutionInput.value = String(saved.resolution);
+    if (saved.version !== 2 && Number(saved.resolution) === 640) resolutionInput.value = "1024";
+    else if ([512, 640, 768, 896, 1024].includes(Number(saved.resolution))) resolutionInput.value = String(saved.resolution);
     if (Number.isInteger(saved.seed) && saved.seed >= 0 && saved.seed <= 2147483647) seedInput.value = String(saved.seed);
     if (typeof saved.upscale === "boolean") upscale = saved.upscale;
   } catch (_) {}
@@ -109,7 +123,9 @@ async function startRuntime() {
     result = await request("/start", { settings: readSettings(), allow_low_vram: false });
   } catch (error) {
     if (error.status === 409 && error.data && error.data.low_vram) {
-      const proceed = window.confirm("Low free VRAM. Starting may fail or cause the system to use shared memory. Continue?");
+      const free = Number(error.data.free_vram_gb) || 0;
+      const total = Number(error.data.total_vram_gb) || 0;
+      const proceed = window.confirm(`Low VRAM: ${free.toFixed(1)} GB free of ${total.toFixed(1)} GB. Start anyway?`);
       if (!proceed) throw new Error("Start cancelled.");
       result = await request("/start", { settings: readSettings(), allow_low_vram: true });
     } else {
@@ -117,15 +133,21 @@ async function startRuntime() {
     }
   }
   if (!result.ok) throw new Error("Could not start the local runtime.");
+  runtimeLoaded = true;
 }
 
 async function cameraStream(deviceId = "", facingMode = "environment") {
   if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     throw new Error("Camera access requires a secure HTTPS page.");
   }
+  const camera = {
+    width: { ideal: 1920, max: 1920 },
+    height: { ideal: 1080, max: 1080 },
+    frameRate: { ideal: 30, max: 30 }
+  };
   const video = deviceId
-    ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, frameRate: { ideal: 30, max: 30 } }
-    : { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, frameRate: { ideal: 30, max: 30 } };
+    ? { ...camera, deviceId: { exact: deviceId } }
+    : { ...camera, facingMode: { ideal: facingMode } };
   return navigator.mediaDevices.getUserMedia({ video, audio: false });
 }
 
@@ -141,9 +163,17 @@ async function populateCameras(selectedId = "") {
   if (selectedId && devices.some(item => item.deviceId === selectedId)) cameraInput.value = selectedId;
 }
 
+function updateFlashVisibility(track) {
+  let available = false;
+  try { available = Boolean(track && track.getCapabilities && track.getCapabilities().torch); } catch (_) {}
+  flashButton.hidden = !available;
+  if (!available) flashButton.setAttribute("aria-pressed", "false");
+}
+
 function setMirror(value) {
   mirror = Boolean(value);
   output.classList.toggle("mirrored", mirror);
+  localOutput.classList.toggle("mirrored", mirror);
   mirrorButton.setAttribute("aria-pressed", String(mirror));
 }
 
@@ -151,6 +181,8 @@ async function startPeer() {
   peer = new RTCPeerConnection({ iceServers: [] });
   peer.addEventListener("track", event => {
     if (!peer || event.track.kind !== "video") return;
+    localOutput.hidden = true;
+    output.hidden = false;
     output.srcObject = event.streams[0] || new MediaStream([event.track]);
     output.play().catch(() => {});
   });
@@ -158,7 +190,7 @@ async function startPeer() {
     if (!started || !peer) return;
     if (peer.connectionState === "failed") {
       showError("Camera connection failed.");
-      void stop(false);
+      void pause(true);
     }
   });
   for (const track of stream.getTracks()) peer.addTrack(track, stream);
@@ -181,19 +213,131 @@ async function startPeer() {
   await peer.setRemoteDescription({ sdp: answer.sdp, type: answer.type });
 }
 
-async function sendSettings() {
-  if (!started) return;
+function openLocalStream() {
+  const url = new URL("/local-stream", window.location.href);
+  url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const socket = new WebSocket(url);
+  socket.binaryType = "blob";
+  localSocket = socket;
+  socket.addEventListener("message", event => void handleLocalMessage(event, socket));
+  socket.addEventListener("close", async () => {
+    if (localSocket !== socket) return;
+    localSocket = null;
+    if (started) {
+      try {
+        const result = await request("/health");
+        if (!result.loaded) {
+          runtimeLoaded = false;
+          clearInterval(heartbeatTimer);
+          heartbeatTimer = 0;
+          clearCameraSession();
+          startButton.textContent = "Start";
+          showError("");
+          return;
+        }
+      } catch (_) {}
+      showError("Camera connection closed.");
+      void pause(true);
+    }
+  });
+  return new Promise((resolve, reject) => {
+    socket.addEventListener("open", resolve, { once: true });
+    socket.addEventListener("error", () => reject(new Error("Local camera connection failed.")), { once: true });
+  });
+}
+
+async function handleLocalMessage(event, sourceSocket) {
+  if (sourceSocket !== localSocket) return;
+  if (typeof event.data === "string") {
+    try {
+      const result = JSON.parse(event.data);
+      if (result.error) {
+        showError(result.error);
+        if (started) void pause(true);
+      }
+    } catch (_) {}
+    localFramePending = false;
+    return;
+  }
   try {
-    await request("/settings", { settings: readSettings() });
+    const bitmap = await createImageBitmap(event.data);
+    if (sourceSocket !== localSocket || !started) {
+      bitmap.close();
+      return;
+    }
+    localOutput.width = bitmap.width;
+    localOutput.height = bitmap.height;
+    localContext.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    localRoundTripMs = performance.now() - localFrameSentAt;
+    localOutput.hidden = false;
+    output.hidden = true;
+    latency.hidden = false;
+    showError("");
+    void updateMetrics();
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    localFramePending = false;
+    if (started) scheduleLocalFrame();
+  }
+}
+
+function scheduleLocalFrame() {
+  if (localFrameTimer || !started) return;
+  localFrameTimer = setTimeout(() => {
+    localFrameTimer = 0;
+    void sendLocalFrame();
+  }, 8);
+}
+
+async function sendLocalFrame() {
+  const socket = localSocket;
+  const track = stream && stream.getVideoTracks()[0];
+  if (!started || !socket || socket.readyState !== WebSocket.OPEN || localFramePending || !track || document.visibilityState !== "visible") return;
+  if (output.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    scheduleLocalFrame();
+    return;
+  }
+  localFramePending = true;
+  try {
+    const settings = track.getSettings();
+    const width = settings.width || output.videoWidth;
+    const height = settings.height || output.videoHeight;
+    localInputCanvas.width = width;
+    localInputCanvas.height = height;
+    localInputContext.drawImage(output, 0, 0, width, height);
+    const image = await new Promise(resolve => localInputCanvas.toBlob(resolve, "image/png"));
+    if (!image || !localSocket || localSocket.readyState !== WebSocket.OPEN) throw new Error("Could not capture a camera frame.");
+    localFrameSentAt = performance.now();
+    localSocket.send(await image.arrayBuffer());
+  } catch (error) {
+    localFramePending = false;
+    showError(error.message);
+  }
+}
+
+async function sendRotation() {
+  if (!runtimeLoaded) return;
+  try {
+    await request("/settings", { settings: { rotation: currentRotation() } });
   } catch (error) {
     showError(error.message);
   }
 }
 
-function scheduleSettings() {
+async function applySettings() {
   saveSettings();
-  clearTimeout(settingsTimer);
-  settingsTimer = setTimeout(() => void sendSettings(), 120);
+  if (!runtimeLoaded) return;
+  setSettingsButton.disabled = true;
+  try {
+    await request("/settings", { settings: readSettings() });
+    showError("");
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    setSettingsButton.disabled = false;
+  }
 }
 
 async function start() {
@@ -202,21 +346,33 @@ async function start() {
   showError("");
   showStartup("Loading");
   startButton.disabled = true;
+  stopModelButton.disabled = true;
+  localRoundTripMs = 0;
   try {
+    const connection = await request("/transport");
+    transportMode = connection.mode;
     await startRuntime();
+    if (!heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
+    if (!(await heartbeat())) throw new Error("The model stopped during startup. Press Start to retry.");
     showStartup("Opening camera");
-    stream = await cameraStream();
+    stream = await cameraStream(cameraInput.value);
+    updateFlashVisibility(stream.getVideoTracks()[0]);
+    output.hidden = false;
+    localOutput.hidden = true;
     output.srcObject = stream;
+    await output.play().catch(() => {});
     await populateCameras(stream.getVideoTracks()[0]?.getSettings?.().deviceId || "");
     await request("/settings", { settings: readSettings() });
+    if (!(await heartbeat())) throw new Error("The model stopped during camera setup. Press Start to retry.");
     showStartup("Connecting");
-    await startPeer();
+    if (transportMode === "local") await openLocalStream();
+    else await startPeer();
     started = true;
-    startButton.textContent = "Stop";
+    startButton.textContent = "Pause";
     latency.hidden = false;
     showStartup("");
-    heartbeatTimer = setInterval(() => void heartbeat(), 10000);
     metricsTimer = setInterval(() => void updateMetrics(), 1000);
+    if (transportMode === "local") scheduleLocalFrame();
     await updateMetrics();
   } catch (error) {
     await stop(true, true);
@@ -224,21 +380,28 @@ async function start() {
   } finally {
     busy = false;
     startButton.disabled = false;
+    stopModelButton.disabled = false;
   }
 }
 
-async function stop(sendRequest = true, preserveError = false) {
+function clearCameraSession() {
   const currentPeer = peer;
   const currentStream = stream;
   peer = null;
   stream = null;
   sessionId = "";
   started = false;
-  clearInterval(heartbeatTimer);
   clearInterval(metricsTimer);
-  clearTimeout(settingsTimer);
-  heartbeatTimer = 0;
+  clearTimeout(localFrameTimer);
   metricsTimer = 0;
+  localFrameTimer = 0;
+  localFramePending = false;
+  localRoundTripMs = 0;
+  if (localSocket) {
+    const socket = localSocket;
+    localSocket = null;
+    try { socket.close(); } catch (_) {}
+  }
   if (currentPeer) {
     try { currentPeer.close(); } catch (_) {}
   }
@@ -248,26 +411,72 @@ async function stop(sendRequest = true, preserveError = false) {
     }
   }
   output.srcObject = null;
+  output.hidden = false;
+  localOutput.hidden = true;
   latency.hidden = true;
   showStartup("");
-  startButton.textContent = "Start";
+  updateFlashVisibility(null);
   flashButton.setAttribute("aria-pressed", "false");
-  if (sendRequest) {
-    try { await request("/stop", {}); } catch (error) { if (!preserveError) showError(error.message); }
+}
+
+async function pause(preserveError = false) {
+  if (busy || !started) return;
+  busy = true;
+  startButton.disabled = true;
+  clearCameraSession();
+  try {
+    const result = await request("/pause", {});
+    runtimeLoaded = Boolean(result.loaded);
+    if (!runtimeLoaded) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = 0;
+    }
+  } catch (error) {
+    if (!preserveError) showError(error.message);
   }
+  startButton.textContent = runtimeLoaded ? "Resume" : "Start";
+  startButton.disabled = false;
+  busy = false;
+  if (!preserveError) showError("");
+}
+
+async function stop(preserveError = false, sendRequest = true) {
+  clearCameraSession();
+  clearInterval(heartbeatTimer);
+  heartbeatTimer = 0;
+  if (sendRequest) {
+    try {
+      await request("/stop", {});
+      runtimeLoaded = false;
+    } catch (error) {
+      if (!preserveError) showError(error.message);
+    }
+  } else {
+    runtimeLoaded = false;
+  }
+  startButton.textContent = runtimeLoaded ? "Resume" : "Start";
   if (!preserveError) showError("");
 }
 
 async function heartbeat() {
-  if (!started || document.visibilityState !== "visible") return;
+  if (!runtimeLoaded || document.visibilityState !== "visible") return true;
   try {
     const result = await request("/heartbeat", {});
     if (!result.loaded) {
-      await stop(false, true);
-      showError("The runtime ended after inactivity.");
+      runtimeLoaded = false;
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = 0;
+      if (started) {
+        clearCameraSession();
+        showError("The model unloaded after inactivity.");
+      }
+      startButton.textContent = "Start";
+      return false;
     }
+    return true;
   } catch (error) {
     showError(error.message);
+    return false;
   }
 }
 
@@ -309,15 +518,15 @@ async function updateMetrics() {
     }
     const modelMs = Number(metrics.model_ms) || 0;
     const totalMs = Number(metrics.total_ms) || modelMs;
-    const phoneMs = totalMs + roundTrip + jitterMs + decodeMs;
-    latency.textContent = "Model " + Math.round(modelMs) + " ms · Phone " + Math.round(phoneMs) + " ms";
+    const clientMs = transportMode === "local" ? localRoundTripMs : totalMs + roundTrip + jitterMs + decodeMs;
+    latency.textContent = "Model " + Math.round(modelMs) + " ms · End-to-end " + Math.round(clientMs) + " ms";
   } catch (error) {
     showError(error.message);
   }
 }
 
 async function switchCamera(deviceId) {
-  if (!deviceId) return;
+  if (!deviceId || !stream) return;
   let next = null;
   try {
     next = await cameraStream(deviceId);
@@ -330,9 +539,13 @@ async function switchCamera(deviceId) {
     }
     const previous = stream;
     stream = next;
+    updateFlashVisibility(nextTrack);
+    localOutput.hidden = true;
+    output.hidden = false;
     output.srcObject = next;
     output.play().catch(() => {});
     if (previous) for (const track of previous.getTracks()) track.stop();
+    if (transportMode === "local") scheduleLocalFrame();
   } catch (error) {
     if (next) for (const track of next.getTracks()) track.stop();
     showError(error.message);
@@ -340,10 +553,7 @@ async function switchCamera(deviceId) {
 }
 
 async function toggleFlash() {
-  if (!stream) {
-    showError("Start the camera before using flash.");
-    return;
-  }
+  if (!stream) return;
   const track = stream.getVideoTracks()[0];
   const capabilities = track.getCapabilities ? track.getCapabilities() : {};
   if (!capabilities.torch) {
@@ -369,39 +579,61 @@ function randomizeSeed() {
   const values = new Uint32Array(1);
   crypto.getRandomValues(values);
   seedInput.value = String(values[0] % 2147483648);
-  scheduleSettings();
+  saveSettings();
 }
 
 settingsButton.addEventListener("click", () => setPanel(settingsPanel.hidden));
 $("closeSettingsButton").addEventListener("click", () => setPanel(false));
-startButton.addEventListener("click", () => started ? void stop(true) : void start());
+startButton.addEventListener("click", () => started ? void pause() : void start());
+setSettingsButton.addEventListener("click", () => void applySettings());
+stopModelButton.addEventListener("click", async () => {
+  stopModelButton.disabled = true;
+  await stop();
+  setPanel(false);
+  stopModelButton.disabled = false;
+});
 flashButton.addEventListener("click", () => void toggleFlash());
 mirrorButton.addEventListener("click", () => setMirror(!mirror));
 upscaleButton.addEventListener("click", () => {
   upscale = !upscale;
   upscaleButton.setAttribute("aria-pressed", String(upscale));
-  scheduleSettings();
+  saveSettings();
 });
 stepsInput.addEventListener("input", () => {
   stepsValue.value = stepsInput.value;
   stepsValue.textContent = stepsInput.value;
-  scheduleSettings();
+  saveSettings();
 });
 for (const element of [promptInput, resolutionInput, seedInput]) {
-  element.addEventListener("input", scheduleSettings);
-  element.addEventListener("change", scheduleSettings);
+  element.addEventListener("input", saveSettings);
+  element.addEventListener("change", saveSettings);
 }
 cameraInput.addEventListener("change", () => void switchCamera(cameraInput.value));
 $("randomSeedButton").addEventListener("click", randomizeSeed);
 for (const eventName of ["orientationchange", "resize"]) {
   window.addEventListener(eventName, () => {
-    if (started) void sendSettings();
+    if (runtimeLoaded) void sendRotation();
   });
 }
 if (screen.orientation) screen.orientation.addEventListener("change", () => {
-  if (started) void sendSettings();
+  if (runtimeLoaded) void sendRotation();
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && started) void heartbeat();
+  if (document.visibilityState === "visible" && runtimeLoaded) void heartbeat();
 });
+
+async function syncRuntime() {
+  try {
+    const result = await request("/health");
+    if (busy || started) return;
+    runtimeLoaded = Boolean(result.loaded);
+    if (runtimeLoaded) {
+      startButton.textContent = "Resume";
+      if (!heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
+      void heartbeat();
+    }
+  } catch (_) {}
+}
+
 restoreSettings();
+void syncRuntime();

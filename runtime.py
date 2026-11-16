@@ -14,7 +14,7 @@ RESOLUTIONS = (512, 640, 768, 896, 1024)
 DEFAULT_SETTINGS = {
     "prompt": "",
     "steps": 4,
-    "resolution": 640,
+    "resolution": 1024,
     "seed": 0,
     "upscale": True,
     "rotation": 0,
@@ -94,18 +94,33 @@ class Runtime:
             return result
 
     def loaded(self):
-        with self._lock:
-            return self._pipe is not None
+        return self._pipe is not None
 
     def heartbeat(self):
         with self._lock:
-            if self._pipe is not None:
-                self._last_heartbeat = time.monotonic()
-            return self._pipe is not None
+            if self._pipe is None:
+                self._last_heartbeat = 0.0
+                return False
+            self._last_heartbeat = time.monotonic()
+            return True
 
     def idle_expired(self, idle_seconds):
         with self._lock:
-            return self._pipe is not None and self._last_heartbeat > 0.0 and time.monotonic() - self._last_heartbeat >= idle_seconds
+            return self._idle_expired_locked(idle_seconds)
+
+    def _idle_expired_locked(self, idle_seconds):
+        return self._pipe is not None and self._last_heartbeat > 0.0 and time.monotonic() - self._last_heartbeat >= idle_seconds
+
+    def unload_if_idle(self, idle_seconds):
+        with self._lock:
+            if not self._idle_expired_locked(idle_seconds):
+                return False
+            self._unload_locked()
+            return True
+
+    def report_error(self, message):
+        with self._lock:
+            self._metrics["error"] = str(message)[:500]
 
     def start(self, raw, allow_low_vram=False):
         self.set_settings(raw)
@@ -195,30 +210,33 @@ class Runtime:
 
     def unload(self):
         with self._lock:
-            pipe = self._pipe
-            upscaler = self._upscaler
-            self._pipe = None
-            self._upscaler = None
-            self._upscaler_attempted = False
-            self._prompt = None
-            self._prompt_embeds = None
-            self._prompt_ids = None
-            self._last_heartbeat = 0.0
-            self._metrics.update({
-                "loaded": False,
-                "model_ms": 0.0,
-                "upscale_ms": 0.0,
-                "total_ms": 0.0,
-            })
-            del pipe
-            del upscaler
-            gc.collect()
-            try:
-                import torch
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-            except Exception as exc:
-                print(f"CUDA cache release failed: {type(exc).__name__}: {exc}", flush=True)
+            self._unload_locked()
+
+    def _unload_locked(self):
+        pipe = self._pipe
+        upscaler = self._upscaler
+        self._pipe = None
+        self._upscaler = None
+        self._upscaler_attempted = False
+        self._prompt = None
+        self._prompt_embeds = None
+        self._prompt_ids = None
+        self._last_heartbeat = 0.0
+        self._metrics.update({
+            "loaded": False,
+            "model_ms": 0.0,
+            "upscale_ms": 0.0,
+            "total_ms": 0.0,
+        })
+        del pipe
+        del upscaler
+        gc.collect()
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception as exc:
+            print(f"CUDA cache release failed: {type(exc).__name__}: {exc}", flush=True)
 
     def _encode_prompt(self, prompt):
         if self._prompt == prompt and self._prompt_embeds is not None:
@@ -263,16 +281,18 @@ class Runtime:
             return image
         import numpy as np
         array = np.asarray(image.convert("RGB"))
-        tensor = torch.from_numpy(array.copy()).to("cuda").permute(2, 0, 1).unsqueeze(0).float().div_(255.0)
-        if getattr(model, "supports_half", False):
-            tensor = tensor.half()
-        output = model(tensor).clamp_(0, 1).mul_(255.0).add_(0.5).byte().squeeze(0).permute(1, 2, 0).contiguous().cpu().numpy()
+        with torch.inference_mode():
+            tensor = torch.from_numpy(array.copy()).to("cuda").permute(2, 0, 1).unsqueeze(0).float() / 255.0
+            if getattr(model, "supports_half", False):
+                tensor = tensor.half()
+            output = (model(tensor).clamp(0, 1) * 255.0 + 0.5).to(torch.uint8)
+            output = output.squeeze(0).permute(1, 2, 0).contiguous().cpu().numpy()
         return Image.fromarray(output)
 
     def render(self, image):
         with self._lock:
             if self._pipe is None:
-                return image
+                raise RuntimeError("The model is not loaded.")
             settings = self.settings()
             rotation = settings["rotation"]
             source = image.convert("RGB")

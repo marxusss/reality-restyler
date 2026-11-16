@@ -1,30 +1,36 @@
 import asyncio
 import ipaddress
+from io import BytesIO
 import json
 import os
 import shutil
 import socket
 import subprocess
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import av
-from aiohttp import web
+from aiohttp import WSMsgType, web
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
+from PIL import Image
 
 from runtime import Runtime
 
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "web"
 RUNTIME_DIR = ROOT / ".runtime"
+LIFECYCLE_LOCK_KEY = web.AppKey("lifecycle_lock", asyncio.Lock)
 PORT = int(os.environ.get("REALITY_RESTYLE_PORT", "8781"))
 IDLE_SECONDS = min(3600, max(5, int(os.environ.get("REALITY_RESTYLE_IDLE_SECONDS", "30"))))
 ALLOW_LAN = os.environ.get("REALITY_RESTYLE_ALLOW_LAN", "").strip().lower() in {"1", "true", "yes", "on"}
 runtime = Runtime()
 sessions = {}
+local_sessions = set()
 reaper_task = None
+local_peer_addresses = None
 
 def _trusted_peer(value):
     try:
@@ -34,6 +40,38 @@ def _trusted_peer(value):
     if address.is_loopback or address in ipaddress.ip_network("100.64.0.0/10") or address in ipaddress.ip_network("fd7a:115c:a1e0::/48"):
         return True
     return bool(ALLOW_LAN and address.is_private and not address.is_link_local)
+
+def _local_addresses():
+    addresses = {"127.0.0.1", "::1"}
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None):
+            addresses.add(ipaddress.ip_address(info[4][0].split("%")[0]).compressed)
+    except Exception:
+        pass
+    executable = shutil.which("tailscale")
+    if executable:
+        try:
+            result = subprocess.run([executable, "status", "--json"], capture_output=True, text=True, timeout=5, check=True)
+            data = json.loads(result.stdout)
+            for value in (data.get("Self") or {}).get("TailscaleIPs") or []:
+                addresses.add(ipaddress.ip_address(str(value).split("%")[0]).compressed)
+        except Exception:
+            pass
+    return addresses
+
+def _is_local_peer(value):
+    global local_peer_addresses
+    try:
+        address = ipaddress.ip_address(str(value or "").split("%")[0])
+    except ValueError:
+        return False
+    if address.is_loopback:
+        return True
+    if getattr(address, "ipv4_mapped", None):
+        address = address.ipv4_mapped
+    if local_peer_addresses is None:
+        local_peer_addresses = _local_addresses()
+    return address.compressed in local_peer_addresses
 
 @web.middleware
 async def boundary(request, handler):
@@ -78,10 +116,60 @@ async def favicon(_request):
     return web.FileResponse(WEB_ROOT / "favicon.svg", headers={"Content-Type": "image/svg+xml"})
 
 async def health(_request):
-    return web.json_response({"ok": True, "loaded": runtime.loaded()})
+    return web.json_response({"ok": True, "loaded": await asyncio.to_thread(runtime.loaded)})
 
 async def metrics(_request):
-    return web.json_response(runtime.metrics())
+    return web.json_response(await asyncio.to_thread(runtime.metrics))
+
+async def transport_mode(request):
+    local = await asyncio.to_thread(_is_local_peer, request.remote)
+    return web.json_response({"mode": "local" if local else "remote"})
+
+async def local_stream(request):
+    if not await asyncio.to_thread(_is_local_peer, request.remote):
+        raise web.HTTPForbidden()
+    origin = request.headers.get("Origin", "")
+    if not origin or urlsplit(origin).netloc.lower() != request.headers.get("Host", "").lower():
+        raise web.HTTPForbidden()
+    if local_sessions or sessions:
+        raise web.HTTPConflict(text="A camera session is already active.")
+    socket = web.WebSocketResponse(max_msg_size=16 * 1024 * 1024, heartbeat=30)
+    local_sessions.add(socket)
+    try:
+        await socket.prepare(request)
+        async for message in socket:
+            if message.type != WSMsgType.BINARY:
+                continue
+            if not runtime.loaded():
+                await socket.send_json({"error": "The model stopped. Press Start to retry."})
+                break
+            try:
+                with Image.open(BytesIO(message.data)) as source:
+                    if source.format != "PNG":
+                        raise ValueError("Camera frame format is not supported.")
+                    if source.width > 4096 or source.height > 4096:
+                        raise ValueError("Camera frame is too large.")
+                    source.load()
+                    frame = source.convert("RGB")
+                result = await asyncio.to_thread(runtime.render, frame)
+                buffer = BytesIO()
+                result.save(buffer, format="PNG", compress_level=1)
+            except Exception as exc:
+                detail = "".join(traceback.format_exception_only(type(exc), exc)).strip()
+                await asyncio.to_thread(runtime.report_error, f"Frame processing failed: {detail}")
+                print(f"Local frame processing failed: {detail}", flush=True)
+                try:
+                    await socket.send_json({"error": f"Frame processing failed: {detail}"})
+                except Exception:
+                    break
+                continue
+            try:
+                await socket.send_bytes(buffer.getvalue())
+            except Exception:
+                break
+    finally:
+        local_sessions.discard(socket)
+    return socket
 
 async def start_runtime(request):
     data = await _json(request)
@@ -92,7 +180,8 @@ async def start_runtime(request):
     if not isinstance(settings, dict) or not isinstance(allow_low_vram, bool):
         raise web.HTTPBadRequest(text="Invalid settings.")
     try:
-        result = await asyncio.to_thread(runtime.start, settings, allow_low_vram)
+        async with request.app[LIFECYCLE_LOCK_KEY]:
+            result = await asyncio.to_thread(runtime.start, settings, allow_low_vram)
         if result.get("ok"):
             return web.json_response(result)
         return web.json_response(result, status=409)
@@ -115,9 +204,14 @@ async def update_settings(request):
         return web.json_response({"ok": False, "error": str(exc)}, status=422)
 
 async def heartbeat(_request):
-    return web.json_response({"ok": True, "loaded": runtime.heartbeat()})
+    return web.json_response({"ok": True, "loaded": await asyncio.to_thread(runtime.heartbeat)})
 
 async def close_sessions():
+    for socket in list(local_sessions):
+        try:
+            await socket.close(code=1000)
+        except Exception as exc:
+            print(f"Local camera close failed: {type(exc).__name__}: {exc}", flush=True)
     current = list(sessions.items())
     sessions.clear()
     for _, pc in current:
@@ -127,14 +221,21 @@ async def close_sessions():
             print(f"Peer close failed: {type(exc).__name__}: {exc}", flush=True)
 
 async def stop_runtime(_request):
-    await close_sessions()
-    await asyncio.to_thread(runtime.unload)
+    async with _request.app[LIFECYCLE_LOCK_KEY]:
+        await close_sessions()
+        await asyncio.to_thread(runtime.unload)
     return web.json_response({"ok": True})
+
+async def pause_runtime(_request):
+    async with _request.app[LIFECYCLE_LOCK_KEY]:
+        await close_sessions()
+        loaded = await asyncio.to_thread(runtime.heartbeat)
+    return web.json_response({"ok": True, "loaded": loaded})
 
 async def offer(request):
     if not runtime.loaded():
-        return web.json_response({"ok": False, "error": "Start the camera before connecting."}, status=409)
-    if sessions:
+        return web.json_response({"ok": False, "error": "The model stopped before the camera connected. Press Start to retry."}, status=409)
+    if sessions or local_sessions:
         return web.json_response({"ok": False, "error": "A camera session is already active."}, status=409)
     data = await _json(request)
     if set(data) != {"sdp", "type"} or data.get("type") != "offer" or not isinstance(data.get("sdp"), str) or not data["sdp"].strip():
@@ -180,6 +281,7 @@ class RestyleTrack(VideoStreamTrack):
         self.input_frames = asyncio.Queue(maxsize=1)
         self.output_frames = asyncio.Queue(maxsize=1)
         self.last_image = None
+        self.last_error = ""
         self.reader_task = asyncio.create_task(self._read())
         self.render_task = asyncio.create_task(self._render())
 
@@ -214,8 +316,15 @@ class RestyleTrack(VideoStreamTrack):
                     image = frame.to_image()
                     output = await asyncio.to_thread(self.runtime.render, image)
                 except Exception as exc:
-                    print(f"Frame processing failed: {type(exc).__name__}: {exc}", flush=True)
-                    output = frame.to_image()
+                    error = f"{type(exc).__name__}: {exc}"
+                    if error != self.last_error:
+                        detail = "".join(traceback.format_exception_only(type(exc), exc)).strip()
+                        print(f"Frame processing failed: {detail}", flush=True)
+                        await asyncio.to_thread(self.runtime.report_error, f"Frame processing failed: {detail}")
+                        self.last_error = error
+                    output = self.last_image.copy() if self.last_image is not None else Image.new("RGB", (frame.width, frame.height))
+                else:
+                    self.last_error = ""
                 await self._replace_latest(self.output_frames, output)
         except asyncio.CancelledError:
             raise
@@ -256,9 +365,9 @@ class RestyleTrack(VideoStreamTrack):
 async def idle_reaper(_app):
     while True:
         await asyncio.sleep(min(5, max(1, IDLE_SECONDS / 6)))
-        if runtime.idle_expired(IDLE_SECONDS):
-            await close_sessions()
-            await asyncio.to_thread(runtime.unload)
+        async with _app[LIFECYCLE_LOCK_KEY]:
+            if await asyncio.to_thread(runtime.unload_if_idle, IDLE_SECONDS):
+                await close_sessions()
 
 async def on_startup(app):
     global reaper_task
@@ -384,15 +493,19 @@ def _tls_context():
 
 def create_app():
     app = web.Application(middlewares=[boundary], client_max_size=2 * 1024 * 1024)
+    app[LIFECYCLE_LOCK_KEY] = asyncio.Lock()
     app.router.add_get("/", index)
     app.router.add_get("/app.js", app_script)
     app.router.add_get("/style.css", style_sheet)
     app.router.add_get("/favicon.svg", favicon)
     app.router.add_get("/health", health)
     app.router.add_get("/metrics", metrics)
+    app.router.add_get("/transport", transport_mode)
+    app.router.add_get("/local-stream", local_stream)
     app.router.add_post("/start", start_runtime)
     app.router.add_post("/settings", update_settings)
     app.router.add_post("/heartbeat", heartbeat)
+    app.router.add_post("/pause", pause_runtime)
     app.router.add_post("/offer", offer)
     app.router.add_post("/stop", stop_runtime)
     app.on_startup.append(on_startup)
