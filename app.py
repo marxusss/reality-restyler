@@ -5,7 +5,9 @@ import json
 import os
 import shutil
 import socket
+import ssl
 import subprocess
+import sys
 import time
 import traceback
 from datetime import datetime, timedelta, timezone
@@ -23,8 +25,11 @@ ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "web"
 RUNTIME_DIR = ROOT / ".runtime"
 LIFECYCLE_LOCK_KEY = web.AppKey("lifecycle_lock", asyncio.Lock)
+TLS_CONTEXT_KEY = web.AppKey("tls_context", ssl.SSLContext)
+TLS_RENEW_TASK_KEY = web.AppKey("tls_renew_task", asyncio.Task)
 PORT = int(os.environ.get("REALITY_RESTYLE_PORT", "8781"))
 IDLE_SECONDS = min(3600, max(5, int(os.environ.get("REALITY_RESTYLE_IDLE_SECONDS", "30"))))
+TLS_RENEW_SECONDS = 6 * 60 * 60
 ALLOW_LAN = os.environ.get("REALITY_RESTYLE_ALLOW_LAN", "").strip().lower() in {"1", "true", "yes", "on"}
 runtime = Runtime()
 sessions = {}
@@ -372,6 +377,9 @@ async def idle_reaper(_app):
 async def on_startup(app):
     global reaper_task
     reaper_task = asyncio.create_task(idle_reaper(app))
+    context = app.get(TLS_CONTEXT_KEY)
+    if context is not None:
+        app[TLS_RENEW_TASK_KEY] = asyncio.create_task(tls_renewal_loop(context))
 
 async def on_cleanup(_app):
     global reaper_task
@@ -379,6 +387,13 @@ async def on_cleanup(_app):
         reaper_task.cancel()
         try:
             await reaper_task
+        except asyncio.CancelledError:
+            pass
+    tls_task = _app.get(TLS_RENEW_TASK_KEY)
+    if tls_task and not tls_task.done():
+        tls_task.cancel()
+        try:
+            await tls_task
         except asyncio.CancelledError:
             pass
     await close_sessions()
@@ -460,36 +475,104 @@ def _certificate_is_self_signed(cert_path):
     except Exception:
         return True
 
+def _create_tailscale_certificate(dns_name, cert_path, key_path):
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    next_cert = RUNTIME_DIR / "tls.next.crt"
+    next_key = RUNTIME_DIR / "tls.next.key"
+    next_cert.unlink(missing_ok=True)
+    next_key.unlink(missing_ok=True)
+    executable = shutil.which("tailscale")
+    if not executable:
+        raise RuntimeError("The Tailscale command is unavailable.")
+    subprocess.run(
+        [executable, "cert", f"--cert-file={next_cert}", f"--key-file={next_key}", dns_name],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
+    if not next_cert.is_file() or not next_key.is_file() or not _certificate_covers(next_cert, dns_name) or _certificate_is_self_signed(next_cert):
+        raise RuntimeError("Tailscale did not return a valid certificate for this device.")
+    validation_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    validation_context.load_cert_chain(str(next_cert), str(next_key))
+    os.replace(next_cert, cert_path)
+    os.replace(next_key, key_path)
+
+def _refresh_tailscale_certificate(context):
+    if os.environ.get("REALITY_RESTYLE_CERT") or os.environ.get("REALITY_RESTYLE_KEY"):
+        return False
+    dns_name = _tailscale_dns_name()
+    if not dns_name:
+        return False
+    cert_path = RUNTIME_DIR / "tls.crt"
+    key_path = RUNTIME_DIR / "tls.key"
+    if cert_path.is_file() and key_path.is_file() and _certificate_covers(cert_path, dns_name, timedelta(days=30)) and not _certificate_is_self_signed(cert_path):
+        return False
+    _create_tailscale_certificate(dns_name, cert_path, key_path)
+    context.load_cert_chain(str(cert_path), str(key_path))
+    print("Tailscale HTTPS certificate renewed.", flush=True)
+    return True
+
+async def tls_renewal_loop(context):
+    while True:
+        await asyncio.sleep(TLS_RENEW_SECONDS)
+        try:
+            await asyncio.to_thread(_refresh_tailscale_certificate, context)
+        except Exception as exc:
+            detail = " ".join(str(exc).split())[:400]
+            print(f"Tailscale HTTPS renewal failed: {detail or type(exc).__name__}", flush=True)
+
 def _tls_context():
     configured_cert = os.environ.get("REALITY_RESTYLE_CERT", "")
     configured_key = os.environ.get("REALITY_RESTYLE_KEY", "")
-    if configured_cert and configured_key and Path(configured_cert).is_file() and Path(configured_key).is_file():
+    dns_name = _tailscale_dns_name()
+    if configured_cert and configured_key:
         cert_path, key_path = Path(configured_cert), Path(configured_key)
+        if not cert_path.is_file() or not key_path.is_file():
+            raise RuntimeError("The configured HTTPS certificate or key file is missing.")
+        if dns_name and (not _certificate_covers(cert_path, dns_name) or _certificate_is_self_signed(cert_path)):
+            raise RuntimeError("The configured HTTPS certificate is not trusted for this Tailscale device.")
     else:
         RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
         cert_path, key_path = RUNTIME_DIR / "tls.crt", RUNTIME_DIR / "tls.key"
-        dns_name = _tailscale_dns_name()
         usable_certificate = cert_path.is_file() and key_path.is_file() and _certificate_covers(cert_path, dns_name)
-        renew_certificate = not usable_certificate or not _certificate_covers(cert_path, dns_name, timedelta(days=30)) or _certificate_is_self_signed(cert_path)
+        if dns_name and usable_certificate and _certificate_is_self_signed(cert_path):
+            usable_certificate = False
+        renew_certificate = not usable_certificate or (bool(dns_name) and not _certificate_covers(cert_path, dns_name, timedelta(days=30)))
         if dns_name and renew_certificate:
             try:
-                executable = shutil.which("tailscale")
-                subprocess.run(
-                    [executable, "cert", f"--cert-file={cert_path}", f"--key-file={key_path}", dns_name],
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                    check=True,
-                )
+                _create_tailscale_certificate(dns_name, cert_path, key_path)
             except Exception as exc:
                 detail = getattr(exc, "stderr", None) or getattr(exc, "stdout", None) or str(exc)
                 detail = " ".join(str(detail).split())[:500]
                 print(f"Tailscale certificate unavailable: {detail or type(exc).__name__}", flush=True)
+                usable_certificate = cert_path.is_file() and key_path.is_file() and _certificate_covers(cert_path, dns_name) and not _certificate_is_self_signed(cert_path)
+                if not usable_certificate:
+                    raise RuntimeError("Enable MagicDNS and HTTPS Certificates in Tailscale Admin → DNS, then restart. https://login.tailscale.com/admin/dns") from None
         if not cert_path.is_file() or not key_path.is_file() or not _certificate_covers(cert_path, dns_name):
-            _self_signed(cert_path, key_path, dns_name)
-    context = __import__("ssl").SSLContext(__import__("ssl").PROTOCOL_TLS_SERVER)
+            if dns_name:
+                raise RuntimeError("A trusted Tailscale HTTPS certificate is required. Enable HTTPS Certificates in Tailscale Admin → DNS, then restart: https://login.tailscale.com/admin/dns")
+            _self_signed(cert_path, key_path)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(str(cert_path), str(key_path))
     return context
+
+def _print_access_info():
+    dns_name = _tailscale_dns_name()
+    if not dns_name:
+        print("Phone access requires Tailscale on this PC. Sign in, enable MagicDNS and HTTPS Certificates, then restart.", flush=True)
+        print("Tailscale Admin → DNS: https://login.tailscale.com/admin/dns", flush=True)
+        return
+    url = f"https://{dns_name}:{PORT}/"
+    print(f"Phone: {url}", flush=True)
+    try:
+        import qrcode
+        qr = qrcode.QRCode(border=1)
+        qr.add_data(url)
+        qr.make(fit=True)
+        qr.print_ascii(out=sys.stdout, invert=True)
+    except Exception as exc:
+        print(f"Phone QR unavailable: {type(exc).__name__}", flush=True)
 
 def create_app():
     app = web.Application(middlewares=[boundary], client_max_size=2 * 1024 * 1024)
@@ -513,4 +596,8 @@ def create_app():
     return app
 
 if __name__ == "__main__":
-    web.run_app(create_app(), host="0.0.0.0", port=PORT, ssl_context=_tls_context(), access_log=None)
+    tls = _tls_context()
+    application = create_app()
+    application[TLS_CONTEXT_KEY] = tls
+    _print_access_info()
+    web.run_app(application, host="0.0.0.0", port=PORT, ssl_context=tls, access_log=None)

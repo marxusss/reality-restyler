@@ -1,14 +1,16 @@
 import gc
+import os
 import threading
 import time
 from pathlib import Path
 
 from PIL import Image
+from model_setup import missing_files, model_directory, normalize_root, transformer_file
 
 ROOT = Path(__file__).resolve().parent
-MODELS = ROOT / "models"
-BASE_DIR = MODELS / "FLUX.2-klein-9B"
-TRANSFORMER_FILE = MODELS / "FLUX.2-klein-9B-Nunchaku" / "svdq-fp4_r32-FLUX.2-klein-9B-Nunchaku.safetensors"
+MODELS = normalize_root(os.environ.get("REALITY_RESTYLE_MODELS_DIR", ROOT / "models"))
+BASE_DIR = model_directory(MODELS)
+TRANSFORMER_FILE = transformer_file(MODELS, BASE_DIR)
 UPSCALER_FILE = MODELS / "upscalers" / "2xNomosUni_compact_multijpg.safetensors"
 RESOLUTIONS = (512, 640, 768, 896, 1024)
 DEFAULT_SETTINGS = {
@@ -123,6 +125,9 @@ class Runtime:
             if self._pipe is not None:
                 self._last_heartbeat = time.monotonic()
                 return {"ok": True, "low_vram": False, "upscaler_available": UPSCALER_FILE.is_file()}
+            _, _, missing = missing_files(MODELS)
+            if missing:
+                raise RuntimeError("Required files are missing or invalid. Close and rerun run.bat to set them up.")
             import torch
             if not torch.cuda.is_available():
                 raise RuntimeError("CUDA is unavailable on this computer.")
@@ -135,19 +140,6 @@ class Runtime:
                     "free_vram_gb": round(free / 1024 ** 3, 1),
                     "total_vram_gb": round(total / 1024 ** 3, 1),
                 }
-            if not BASE_DIR.is_dir() or not TRANSFORMER_FILE.is_file():
-                raise RuntimeError("Required model files are missing or invalid.")
-            required = (
-                "model_index.json",
-                "scheduler/scheduler_config.json",
-                "text_encoder/config.json",
-                "tokenizer/tokenizer.json",
-                "transformer/config.json",
-                "vae/config.json",
-                "vae/diffusion_pytorch_model.safetensors",
-            )
-            if any(not (BASE_DIR / item).is_file() for item in required):
-                raise RuntimeError("Required model files are missing or invalid.")
             torch.set_float32_matmul_precision("high")
             torch.backends.cudnn.benchmark = False
             try:

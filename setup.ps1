@@ -62,8 +62,27 @@ if ($venvValid) {
 
 if (-not $venvValid) {
     if (Test-Path -LiteralPath $venv) { Remove-Item -LiteralPath $venv -Recurse -Force }
-    $launcher = Get-Command py -ErrorAction Stop
-    Invoke-CheckedNative -FilePath $launcher.Source -Arguments @('-3.11', '-m', 'venv', $venv) -Failure 'Could not create the Python 3.11 environment.'
+    $launcher = Get-Command py -ErrorAction SilentlyContinue
+    if (-not $launcher) {
+        $winget = Get-Command winget -ErrorAction SilentlyContinue
+        if (-not $winget) { throw 'Python 3.11 is required. Install it from https://www.python.org/downloads/windows/ and rerun run.bat.' }
+        Write-Host 'Installing Python 3.11.'
+        Invoke-CheckedNative -FilePath $winget.Source -Arguments @('install', '--id', 'Python.Python.3.11', '--exact', '--accept-source-agreements', '--accept-package-agreements') -Failure 'Could not install Python 3.11.'
+        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+        $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+        $env:Path = "$userPath;$machinePath"
+        $launcher = Get-Command py -ErrorAction SilentlyContinue
+    }
+    if ($launcher) {
+        Invoke-CheckedNative -FilePath $launcher.Source -Arguments @('-3.11', '-m', 'venv', $venv) -Failure 'Could not create the Python 3.11 environment.'
+    } else {
+        $python311 = @(
+            (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311\python.exe'),
+            (Join-Path $env:ProgramFiles 'Python311\python.exe')
+        ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+        if (-not $python311) { throw 'Python 3.11 was installed but could not be located. Restart run.bat.' }
+        Invoke-CheckedNative -FilePath $python311 -Arguments @('-m', 'venv', $venv) -Failure 'Could not create the Python 3.11 environment.'
+    }
     $python = Join-Path $venv 'Scripts\python.exe'
 }
 

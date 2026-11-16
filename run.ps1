@@ -1,3 +1,6 @@
+param([switch]$InstallUpscaler)
+
+$installUpscaler = [bool]$InstallUpscaler
 $ErrorActionPreference = 'Stop'
 $setup = Join-Path $PSScriptRoot 'setup.ps1'
 try {
@@ -7,6 +10,134 @@ try {
     exit 1
 }
 $python = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+$runtimeDir = Join-Path $PSScriptRoot '.runtime'
+$modelsPathFile = Join-Path $runtimeDir 'models.path'
+$modelSetup = Join-Path $PSScriptRoot 'model_setup.py'
+$modelsRoot = Join-Path $PSScriptRoot 'models'
+$hasSavedModelsRoot = $false
+if (Test-Path -LiteralPath $modelsPathFile -PathType Leaf) {
+    $savedRoot = (Get-Content -LiteralPath $modelsPathFile -Raw).Trim()
+    if ($savedRoot -and (Test-Path -LiteralPath $savedRoot -PathType Container)) {
+        $modelsRoot = $savedRoot
+        $hasSavedModelsRoot = $true
+    }
+}
+
+function Normalize-ModelsRoot {
+    param([string]$Path)
+    $trimmedPath = $Path.TrimEnd([char[]]@([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar))
+    $leaf = Split-Path -Leaf $trimmedPath
+    if ($leaf -in @('FLUX.2-klein-9B', 'FLUX.2-klein-9B-Nunchaku')) { return Split-Path -Parent $trimmedPath }
+    return [IO.Path]::GetFullPath($trimmedPath)
+}
+
+$modelsRoot = Normalize-ModelsRoot -Path $modelsRoot
+
+function Save-ModelsRoot {
+    param([string]$Path)
+    New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+    [IO.File]::WriteAllText($modelsPathFile, $Path, [Text.UTF8Encoding]::new($false))
+}
+
+function Invoke-ModelSetup {
+    param([string[]]$Arguments)
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & $python $modelSetup @Arguments
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousPreference
+    return $exitCode
+}
+
+function Select-ModelsRoot {
+    Add-Type -AssemblyName System.Windows.Forms
+    $dialog = [System.Windows.Forms.FolderBrowserDialog]::new()
+    $dialog.Description = 'Select the model folder or its parent folder'
+    $dialog.ShowNewFolderButton = $false
+    if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { return $dialog.SelectedPath }
+    return ''
+}
+
+$env:REALITY_RESTYLE_MODELS_DIR = $modelsRoot
+$modelArguments = @('--root', $modelsRoot, '--check')
+$modelState = Invoke-ModelSetup -Arguments $modelArguments
+if ($modelState -ne 0) {
+    $selectedRoot = ''
+    if (-not $hasSavedModelsRoot) { $selectedRoot = Select-ModelsRoot }
+    if ($selectedRoot) {
+        $modelsRoot = Normalize-ModelsRoot -Path $selectedRoot
+        $env:REALITY_RESTYLE_MODELS_DIR = $modelsRoot
+        Save-ModelsRoot -Path $modelsRoot
+        $modelArguments = @('--root', $modelsRoot, '--check')
+        $modelState = Invoke-ModelSetup -Arguments $modelArguments
+    }
+}
+if ($modelState -ne 0) {
+    $answer = Read-Host 'Download the missing model files now? [Y/n]'
+    if (-not $answer -or $answer.Trim().ToLowerInvariant() -in @('y', 'yes')) {
+        $modelArguments = @('--root', $modelsRoot, '--download-required')
+        $modelState = Invoke-ModelSetup -Arguments $modelArguments
+    }
+}
+if ($modelState -eq 0 -or (Test-Path -LiteralPath $modelsRoot -PathType Container)) { Save-ModelsRoot -Path $modelsRoot }
+
+$upscalerState = Invoke-ModelSetup -Arguments @('--root', $modelsRoot, '--check-upscaler')
+if ($installUpscaler -or $upscalerState -ne 0) {
+    $upscalerState = Invoke-ModelSetup -Arguments @('--root', $modelsRoot, '--download-upscaler')
+    if ($upscalerState -ne 0) { Write-Host 'Compact 2x is unavailable. Run run.bat -InstallUpscaler to retry.' }
+}
+
+function Find-Tailscale {
+    $command = Get-Command tailscale -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+    $candidate = Join-Path $env:ProgramFiles 'Tailscale\tailscale.exe'
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    $candidate = Join-Path $env:LOCALAPPDATA 'Tailscale\tailscale.exe'
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    return ''
+}
+
+$tailscale = Find-Tailscale
+if (-not $tailscale) {
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if ($winget) {
+        $install = Read-Host 'Install Tailscale with winget for phone access? [y/N]'
+        if ($install.Trim().ToLowerInvariant() -in @('y', 'yes')) {
+            $previousPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            & $winget.Source install --id Tailscale.Tailscale --exact --accept-source-agreements --accept-package-agreements
+            $ErrorActionPreference = $previousPreference
+            $tailscale = Find-Tailscale
+        }
+    }
+}
+if ($tailscale) {
+    $env:Path = "$(Split-Path -Parent $tailscale);$env:Path"
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $statusOutput = & $tailscale status --json 2>$null
+    $ErrorActionPreference = $previousPreference
+    $tailscaleStatus = $null
+    try { $tailscaleStatus = ($statusOutput | ConvertFrom-Json) } catch { }
+    if (-not $tailscaleStatus -or $tailscaleStatus.BackendState -ne 'Running') {
+        Write-Host 'Opening Tailscale sign-in.'
+        $previousPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & $tailscale up
+        $ErrorActionPreference = $previousPreference
+        Read-Host 'Press Enter after Tailscale sign-in to continue' | Out-Null
+        $previousPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $statusOutput = & $tailscale status --json 2>$null
+        $ErrorActionPreference = $previousPreference
+        try { $tailscaleStatus = ($statusOutput | ConvertFrom-Json) } catch { $tailscaleStatus = $null }
+    } elseif (-not $tailscaleStatus.Self.DNSName) {
+        Write-Host 'Enable MagicDNS in Tailscale Admin → DNS for a phone link.'
+    }
+} else {
+    Write-Host 'Phone access requires Tailscale: https://tailscale.com/download/windows'
+}
+
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 & $python (Join-Path $PSScriptRoot 'app.py')
