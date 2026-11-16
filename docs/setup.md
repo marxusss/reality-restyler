@@ -19,6 +19,8 @@ Model files come from [FLUX.2 Klein 9B Nunchaku](https://huggingface.co/tonera/F
 
 The app requests and renews the HTTPS certificate automatically. It does not store Tailscale or Hugging Face credentials. If Hugging Face requests model access, approve it on the opened page. The graphical installer retries with a Hugging Face token already saved on this computer; if authentication still needs setup, save a read token locally and rerun the installer. From a source checkout, `run.bat` can open the Hugging Face CLI login flow.
 
+Anyone allowed by your tailnet policy to reach port 8781 can control the app and submit camera frames. Restrict access to trusted devices.
+
 ## Troubleshooting
 
 - `Required files are missing or invalid`: run the installer again and select or download the model files.
