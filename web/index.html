@@ -16,7 +16,10 @@
 <header class="topbar">
 <div id="latency" class="latency" hidden></div>
 </header>
-<div id="startup" class="startup" role="status" hidden></div>
+<div id="startup" class="startup" role="status" aria-live="polite" hidden>
+<span id="startupLabel"></span>
+<div id="startupProgress" class="startup-track" role="progressbar" aria-label="Startup progress" aria-valuemin="0" aria-valuemax="100"><span id="startupFill" class="startup-fill"></span></div>
+</div>
 <div class="actions">
 <button id="flashButton" class="icon-button" type="button" aria-label="Flash" aria-pressed="false" hidden>
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.3 2.5 5.8 13h5l-.5 8.5 7.9-11.1h-5.1l.2-7.9Z"/></svg>

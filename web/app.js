@@ -11,6 +11,9 @@ const stopModelButton = $("stopModelButton");
 const settingsPanel = $("settingsPanel");
 const errorBox = $("error");
 const startup = $("startup");
+const startupLabel = $("startupLabel");
+const startupProgress = $("startupProgress");
+const startupFill = $("startupFill");
 const latency = $("latency");
 const promptInput = $("promptInput");
 const stepsInput = $("stepsInput");
@@ -47,8 +50,13 @@ function showError(message) {
 }
 
 function showStartup(message) {
-  startup.textContent = message || "";
-  startup.hidden = !message;
+  const visible = Boolean(message);
+  startupLabel.textContent = message || "";
+  startup.hidden = !visible;
+  startup.classList.toggle("indeterminate", visible);
+  startupProgress.removeAttribute("aria-valuenow");
+  startupProgress.setAttribute("aria-valuetext", message || "");
+  startupFill.style.width = visible ? "34%" : "0%";
 }
 
 function currentRotation() {
