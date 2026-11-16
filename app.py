@@ -36,6 +36,8 @@ sessions = {}
 local_sessions = set()
 reaper_task = None
 local_peer_addresses = None
+local_peer_addresses_updated = 0.0
+LOCAL_ADDRESS_CACHE_SECONDS = 30.0
 
 def _trusted_peer(value):
     try:
@@ -65,7 +67,7 @@ def _local_addresses():
     return addresses
 
 def _is_local_peer(value):
-    global local_peer_addresses
+    global local_peer_addresses, local_peer_addresses_updated
     try:
         address = ipaddress.ip_address(str(value or "").split("%")[0])
     except ValueError:
@@ -74,8 +76,10 @@ def _is_local_peer(value):
         return True
     if getattr(address, "ipv4_mapped", None):
         address = address.ipv4_mapped
-    if local_peer_addresses is None:
+    now = time.monotonic()
+    if local_peer_addresses is None or (local_peer_addresses_updated and now - local_peer_addresses_updated >= LOCAL_ADDRESS_CACHE_SECONDS):
         local_peer_addresses = _local_addresses()
+        local_peer_addresses_updated = now
     return address.compressed in local_peer_addresses
 
 @web.middleware

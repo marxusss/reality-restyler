@@ -86,7 +86,7 @@ function Invoke-ModelTool {
     param([string[]]$Arguments, [string]$Step)
     $python = Join-Path $root '.venv\Scripts\python.exe'
     $script = Join-Path $root 'model_setup.py'
-    $argumentLine = (Quote-Argument $script) + ' --root ' + (Quote-Argument $ModelsPath) + ' ' + ($Arguments -join ' ')
+    $argumentLine = (Quote-Argument $script) + ' --root ' + (Quote-Argument $ModelsPath) + ' ' + ($Arguments -join ' ') + ' --non-interactive-auth'
     return Invoke-Child -FilePath $python -Arguments $argumentLine -Step $Step
 }
 

@@ -122,7 +122,7 @@ def _download_model(root, missing):
         )
 
 
-def _wait_for_hub_access(exc):
+def _wait_for_hub_access(exc, non_interactive=False):
     name = type(exc).__name__.lower()
     detail = str(exc).lower()
     gated = "gated" in name or "gated" in detail or "401" in detail or "403" in detail
@@ -130,6 +130,22 @@ def _wait_for_hub_access(exc):
         raise exc
     print(f"Open {MODEL_URL} and approve access if Hugging Face requests it.")
     webbrowser.open(MODEL_URL)
+    if non_interactive or not sys.stdin.isatty():
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(
+                None,
+                "Complete any access approval in the browser, then select OK to retry with a saved Hugging Face token.",
+                "Reality Restyling Setup",
+                0x40,
+            )
+        except Exception:
+            pass
+        from huggingface_hub import get_token
+        if not get_token():
+            webbrowser.open("https://huggingface.co/settings/tokens")
+            raise RuntimeError("Hugging Face authentication needs setup. Save a read token on this computer, then run setup again.") from exc
+        return
     input("Press Enter after approval or login to retry the download. ")
     from huggingface_hub import get_token
 
@@ -142,11 +158,11 @@ def _wait_for_hub_access(exc):
         subprocess.run([str(cli), "auth", "login"], check=True)
 
 
-def download_model(root, missing):
+def download_model(root, missing, non_interactive=False):
     try:
         _download_model(root, missing)
     except Exception as exc:
-        _wait_for_hub_access(exc)
+        _wait_for_hub_access(exc, non_interactive)
         _download_model(root, missing)
 
 
@@ -175,6 +191,7 @@ def main():
     parser.add_argument("--check-upscaler", action="store_true")
     parser.add_argument("--download-required", action="store_true")
     parser.add_argument("--download-upscaler", action="store_true")
+    parser.add_argument("--non-interactive-auth", action="store_true")
     args = parser.parse_args()
     root = normalize_root(args.root)
     base, transformer, missing = missing_files(root)
@@ -192,7 +209,7 @@ def main():
         size = _missing_bytes(missing)
         if size:
             print(f"Downloading about {size / 1_000_000_000:.1f} GB of missing model files.")
-        download_model(root, missing)
+        download_model(root, missing, args.non_interactive_auth)
         base, transformer, missing = missing_files(root)
         if missing:
             raise RuntimeError("Model download is incomplete: " + ", ".join(missing))
