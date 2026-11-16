@@ -15,7 +15,7 @@
 
 ## Tailscale
 
-Sign in on the PC and phone to the same tailnet. Enable MagicDNS and HTTPS certificates, then open `https://<host>.ts.net:8781`.
+Sign in on the PC and phone to the same tailnet. In Tailscale Admin → DNS, enable MagicDNS and HTTPS Certificates, then open `https://<host>.ts.net:8781`.
 
 ## Run
 
