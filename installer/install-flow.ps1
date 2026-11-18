@@ -59,10 +59,12 @@ function Set-Step {
     $label.Text = $Text
     $form.Refresh()
     [System.Windows.Forms.Application]::DoEvents()
+    if ($script:cancelRequested) { throw 'Setup canceled.' }
 }
 
 function Invoke-Child {
     param([string]$FilePath, [string]$Arguments, [string]$Step)
+    if ($script:cancelRequested) { throw 'Setup canceled.' }
     Set-Step -Text $Step
     Remove-Item -LiteralPath $logPath, $errorPath -Force -ErrorAction SilentlyContinue
     $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -PassThru -WindowStyle Hidden -RedirectStandardOutput $logPath -RedirectStandardError $errorPath
@@ -76,6 +78,7 @@ function Invoke-Child {
     $process.WaitForExit()
     $process.Refresh()
     $script:activeProcess = $null
+    if ($script:cancelRequested) { throw 'Setup canceled.' }
     return [int]$process.ExitCode
 }
 
@@ -128,6 +131,8 @@ try {
     $setupArgs = '-NoProfile -ExecutionPolicy Bypass -File ' + (Quote-Argument $setup)
     $setupExit = Invoke-Child -FilePath 'powershell.exe' -Arguments $setupArgs -Step 'Installing Python and the local AI runtime...'
     if ($setupExit -ne 0) { throw 'The local runtime could not be installed.' }
+    $python = Join-Path $root '.venv\Scripts\python.exe'
+    if (-not (Test-Path -LiteralPath $python -PathType Leaf)) { throw 'The local runtime setup finished without creating its Python environment.' }
 
     $modelState = Invoke-ModelTool -Arguments @('--check') -Step 'Checking model files...'
     if ($ModelMode -eq 'download' -or ($ModelMode -eq 'existing' -and $modelState -ne 0 -and [System.Windows.Forms.MessageBox]::Show('Some model files are missing. Download the missing files now?', 'Reality Restyling Setup', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question) -eq [System.Windows.Forms.DialogResult]::Yes)) {
@@ -175,12 +180,12 @@ try {
     if ($script:cancelRequested) {
         $script:allowClose = $true
         $form.Close()
-        [System.Windows.Forms.MessageBox]::Show('Setup canceled. Run the installer again to resume.', 'Reality Restyling Setup', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
-        exit 0
+        [System.Windows.Forms.MessageBox]::Show('Setup canceled. The local runtime may be incomplete, and Reality Restyling was not launched.', 'Reality Restyling Setup', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+        exit 130
     }
     $script:allowClose = $true
     $form.Close()
-    [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Reality Restyling Setup', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+    Show-LogError ($_.Exception.Message + "`nThe local runtime is not ready. Run setup again to retry.")
     exit 1
 }
 

@@ -17,7 +17,7 @@ Uninstall removes the generated Python environment and runtime files. Model file
 1. Install [Tailscale](https://tailscale.com/download) on the PC and phone. Sign in to the same tailnet.
 2. Give the PC a generic name in Tailscale. HTTPS certificate issuance publishes its full Tailscale hostname in a permanent public log.
 3. Enable **MagicDNS** and **HTTPS Certificates** in [Tailscale Admin → DNS](https://login.tailscale.com/admin/dns).
-4. Close the desktop session. Launch **Reality Restyling** and select **Phone access**, or run `run.bat -PhoneAccess` from source.
+4. To switch modes, close the server console window for the current session. Restart **Reality Restyling** and select **Phone access**, or run `run.bat -PhoneAccess` from source.
 5. Confirm the hostname, then scan the terminal QR code or open the phone link.
 
 If Hugging Face requests model access, approve it on the opened page. The installer retries with a locally saved Hugging Face token. If needed, save a read token and rerun the installer.

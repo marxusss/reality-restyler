@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 
 import av
 from aiohttp import WSMsgType, web
-from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
+from aiortc import RTCConfiguration, RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from PIL import Image
 
 from runtime import Runtime
@@ -254,7 +254,7 @@ async def offer(request):
     data = await _json(request)
     if set(data) != {"sdp", "type"} or data.get("type") != "offer" or not isinstance(data.get("sdp"), str) or not data["sdp"].strip():
         return web.json_response({"ok": False, "error": "Invalid WebRTC offer."}, status=422)
-    pc = RTCPeerConnection()
+    pc = RTCPeerConnection(RTCConfiguration(iceServers=[]))
     session_id = os.urandom(24).hex()
     sessions[session_id] = pc
 
@@ -408,18 +408,42 @@ async def on_cleanup(_app):
     await close_sessions()
     await asyncio.to_thread(runtime.unload)
 
-def _tailscale_dns_name():
+def _tailscale_status():
     executable = shutil.which("tailscale")
     if not executable:
-        return ""
+        return {}
     try:
         result = subprocess.run([executable, "status", "--json"], capture_output=True, text=True, timeout=5, check=True)
-        data = json.loads(result.stdout)
-        if data.get("BackendState") != "Running":
-            return ""
-        return str((data.get("Self") or {}).get("DNSName") or "").rstrip(".")
+        return json.loads(result.stdout)
     except Exception:
+        return {}
+
+def _tailscale_dns_name(status=None):
+    status = status if status is not None else _tailscale_status()
+    if status.get("BackendState") != "Running":
         return ""
+    return str((status.get("Self") or {}).get("DNSName") or "").rstrip(".")
+
+def _tailscale_addresses(status=None):
+    status = status if status is not None else _tailscale_status()
+    if status.get("BackendState") != "Running":
+        return []
+    addresses = []
+    seen = set()
+    for value in (status.get("Self") or {}).get("TailscaleIPs") or []:
+        try:
+            address = ipaddress.ip_address(str(value).split("%")[0])
+        except ValueError:
+            continue
+        tailscale_ip = (
+            address in ipaddress.ip_network("100.64.0.0/10")
+            if address.version == 4
+            else address in ipaddress.ip_network("fd7a:115c:a1e0::/48")
+        )
+        if tailscale_ip and not address.is_unspecified and not address.is_loopback and address.compressed not in seen:
+            addresses.append(address.compressed)
+            seen.add(address.compressed)
+    return addresses
 
 def _certificate_covers(cert_path, dns_name, minimum_validity=timedelta(0)):
     try:
@@ -570,9 +594,13 @@ def main():
     args = parser.parse_args()
     application = create_app()
     if args.phone_access:
-        dns_name = _tailscale_dns_name()
+        status = _tailscale_status()
+        dns_name = _tailscale_dns_name(status)
+        addresses = _tailscale_addresses(status)
         if not dns_name:
             print("Sign in to Tailscale before starting phone mode.", flush=True)
+        elif not addresses:
+            print("Phone access unavailable. Tailscale did not report a usable local IP address.", flush=True)
         elif not _confirm_phone_access(dns_name, args.launcher):
             return
         else:
@@ -584,7 +612,7 @@ def main():
                 application[TLS_CONTEXT_KEY] = tls
                 application[PHONE_DNS_NAME_KEY] = dns_name
                 _print_phone_link(dns_name)
-                web.run_app(application, host="0.0.0.0", port=PORT, ssl_context=tls, access_log=None)
+                web.run_app(application, host=addresses, port=PORT, ssl_context=tls, access_log=None)
                 return
 
     desktop_url = f"http://127.0.0.1:{PORT}/"

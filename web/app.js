@@ -514,18 +514,19 @@ async function stop(preserveError = false, sendRequest = true) {
   clearCameraSession();
   clearInterval(heartbeatTimer);
   heartbeatTimer = 0;
+  let failure = "";
   if (sendRequest) {
     try {
       await request("/stop", {});
       runtimeLoaded = false;
     } catch (error) {
-      if (!preserveError) showError(error.message);
+      failure = error.message;
     }
   } else {
     runtimeLoaded = false;
   }
   startButton.textContent = runtimeLoaded ? "Resume" : "Start";
-  if (!preserveError) showError("");
+  if (!preserveError) showError(failure);
 }
 
 async function heartbeat() {

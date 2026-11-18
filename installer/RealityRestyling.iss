@@ -43,7 +43,7 @@ Type: files; Name: "{group}\Reality Restyling (Phone).lnk"
 Type: files; Name: "{group}\Setup Guide.lnk"
 
 [Run]
-Filename: "{app}\run.bat"; Parameters: "-Launcher"; Description: "Launch Reality Restyling"; Flags: postinstall skipifsilent nowait
+Filename: "{app}\run.bat"; Parameters: "-Launcher"; Description: "Launch Reality Restyling"; Flags: postinstall skipifsilent nowait; Check: IsRuntimeSetupSucceeded
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\.runtime"
@@ -57,6 +57,25 @@ var
   ModelPage: TInputOptionWizardPage;
   ModelDirPage: TInputDirWizardPage;
   TailscalePage: TInputOptionWizardPage;
+  RuntimeSetupAttempted: Boolean;
+  RuntimeSetupSucceeded: Boolean;
+  RuntimeSetupCanceled: Boolean;
+
+function IsRuntimeSetupSucceeded: Boolean;
+begin
+  Result := RuntimeSetupSucceeded;
+end;
+
+function GetCustomSetupExitCode: Integer;
+begin
+  Result := 0;
+  if RuntimeSetupAttempted and not RuntimeSetupSucceeded then begin
+    if RuntimeSetupCanceled then
+      Result := 130
+    else
+      Result := 10;
+  end;
+end;
 
 procedure InitializeWizard;
 begin
@@ -73,6 +92,19 @@ begin
   TailscalePage := CreateInputOptionPage(ModelDirPage.ID, 'Phone connection', 'Tailscale (optional)', 'Install Tailscale if you plan to connect a phone.', False, False);
   TailscalePage.Add('Install Tailscale with winget if it is missing');
   TailscalePage.Values[0] := False;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpFinished) and RuntimeSetupAttempted and not RuntimeSetupSucceeded then begin
+    if RuntimeSetupCanceled then begin
+      WizardForm.FinishedHeadingLabel.Caption := 'Setup was canceled';
+      WizardForm.FinishedLabel.Caption := 'The local runtime is not ready, and Reality Restyling was not launched. Run the installer again to continue.';
+    end else begin
+      WizardForm.FinishedHeadingLabel.Caption := 'Setup needs attention';
+      WizardForm.FinishedLabel.Caption := 'The local runtime setup failed, and Reality Restyling was not launched. Run the installer again to retry.';
+    end;
+  end;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -115,12 +147,17 @@ var
   Parameters: String;
 begin
   if CurStep = ssPostInstall then begin
+    RuntimeSetupAttempted := not WizardSilent;
+    RuntimeSetupSucceeded := False;
+    RuntimeSetupCanceled := False;
     if not WizardSilent then begin
       Parameters := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\install-flow.ps1') + '" ' + GetInstallParameters('');
       if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode) then
         MsgBox('The setup wizard could not start the local runtime setup.', mbError, MB_OK)
-      else if ResultCode <> 0 then
-        MsgBox('Setup needs attention. Run RealityRestylingSetup.exe again to retry.', mbError, MB_OK);
+      else if ResultCode = 0 then
+        RuntimeSetupSucceeded := True
+      else if ResultCode = 130 then
+        RuntimeSetupCanceled := True;
     end;
   end;
 end;

@@ -42,12 +42,10 @@ $runtimeDir = Join-Path $PSScriptRoot '.runtime'
 $modelsPathFile = Join-Path $runtimeDir 'models.path'
 $modelSetup = Join-Path $PSScriptRoot 'model_setup.py'
 $modelsRoot = Join-Path $PSScriptRoot 'models'
-$hasSavedModelsRoot = $false
 if (Test-Path -LiteralPath $modelsPathFile -PathType Leaf) {
-    $savedRoot = (Get-Content -LiteralPath $modelsPathFile -Raw).Trim()
+    $savedRoot = [IO.File]::ReadAllText($modelsPathFile, [Text.Encoding]::UTF8).Trim()
     if ($savedRoot -and (Test-Path -LiteralPath $savedRoot -PathType Container)) {
         $modelsRoot = $savedRoot
-        $hasSavedModelsRoot = $true
     }
 }
 
@@ -82,6 +80,7 @@ function Select-ModelsRoot {
     $dialog = [System.Windows.Forms.FolderBrowserDialog]::new()
     $dialog.Description = 'Select the model folder or its parent folder'
     $dialog.ShowNewFolderButton = $false
+    if (Test-Path -LiteralPath $modelsRoot -PathType Container) { $dialog.SelectedPath = $modelsRoot }
     if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { return $dialog.SelectedPath }
     return ''
 }
@@ -89,15 +88,17 @@ function Select-ModelsRoot {
 $env:REALITY_RESTYLE_MODELS_DIR = $modelsRoot
 $modelArguments = @('--root', $modelsRoot, '--check')
 $modelState = Invoke-ModelSetup -Arguments $modelArguments
-if ($modelState -ne 0) {
-    $selectedRoot = ''
-    if (-not $hasSavedModelsRoot) { $selectedRoot = Select-ModelsRoot }
-    if ($selectedRoot) {
-        $modelsRoot = Normalize-ModelsRoot -Path $selectedRoot
-        $env:REALITY_RESTYLE_MODELS_DIR = $modelsRoot
-        Save-ModelsRoot -Path $modelsRoot
-        $modelArguments = @('--root', $modelsRoot, '--check')
-        $modelState = Invoke-ModelSetup -Arguments $modelArguments
+while ($modelState -ne 0) {
+    $selectedRoot = Select-ModelsRoot
+    if (-not $selectedRoot) { break }
+    $modelsRoot = Normalize-ModelsRoot -Path $selectedRoot
+    $env:REALITY_RESTYLE_MODELS_DIR = $modelsRoot
+    Save-ModelsRoot -Path $modelsRoot
+    $modelArguments = @('--root', $modelsRoot, '--check')
+    $modelState = Invoke-ModelSetup -Arguments $modelArguments
+    if ($modelState -ne 0) {
+        $browseAgain = [System.Windows.Forms.MessageBox]::Show('Required model files were not found in this folder. Browse another folder?', 'Reality Restyling', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Error)
+        if ($browseAgain -ne [System.Windows.Forms.DialogResult]::Yes) { break }
     }
 }
 if ($modelState -ne 0) {
