@@ -35,13 +35,15 @@ Source: "..\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs 
 Source: "install-flow.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Reality Restyling"; Filename: "{app}\run.bat"; WorkingDir: "{app}"
-Name: "{group}\Reality Restyling (Phone)"; Filename: "{app}\run.bat"; Parameters: "-PhoneAccess"; WorkingDir: "{app}"
-Name: "{autodesktop}\Reality Restyling"; Filename: "{app}\run.bat"; WorkingDir: "{app}"; Tasks: desktopicon
-Name: "{group}\Setup Guide"; Filename: "{app}\docs\setup.md"
+Name: "{group}\Reality Restyling"; Filename: "{app}\run.bat"; Parameters: "-Launcher"; WorkingDir: "{app}"
+Name: "{autodesktop}\Reality Restyling"; Filename: "{app}\run.bat"; Parameters: "-Launcher"; WorkingDir: "{app}"; Tasks: desktopicon
+
+[InstallDelete]
+Type: files; Name: "{group}\Reality Restyling (Phone).lnk"
+Type: files; Name: "{group}\Setup Guide.lnk"
 
 [Run]
-Filename: "{app}\run.bat"; Description: "Launch Reality Restyling"; Flags: postinstall skipifsilent
+Filename: "{app}\run.bat"; Parameters: "-Launcher"; Description: "Launch Reality Restyling"; Flags: postinstall skipifsilent nowait
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\.runtime"

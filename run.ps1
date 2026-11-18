@@ -1,8 +1,35 @@
-param([switch]$InstallUpscaler, [switch]$PhoneAccess)
+param([switch]$InstallUpscaler, [switch]$PhoneAccess, [switch]$Launcher)
 
 $installUpscaler = [bool]$InstallUpscaler
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
+if ($Launcher) {
+    [System.Windows.Forms.Application]::EnableVisualStyles()
+    $window = [System.Windows.Forms.Form]::new()
+    $window.Text = 'Reality Restyling'
+    $window.StartPosition = 'CenterScreen'
+    $window.FormBorderStyle = 'FixedDialog'
+    $window.MaximizeBox = $false
+    $window.MinimizeBox = $false
+    $window.ClientSize = [Drawing.Size]::new(320, 74)
+
+    $desktopButton = [System.Windows.Forms.Button]::new()
+    $desktopButton.Text = 'Open app'
+    $desktopButton.SetBounds(16, 16, 136, 42)
+    $desktopButton.DialogResult = 'OK'
+
+    $phoneButton = [System.Windows.Forms.Button]::new()
+    $phoneButton.Text = 'Phone access'
+    $phoneButton.SetBounds(168, 16, 136, 42)
+    $phoneButton.DialogResult = 'Yes'
+
+    $window.Controls.Add($desktopButton)
+    $window.Controls.Add($phoneButton)
+    $window.AcceptButton = $desktopButton
+    try { $choice = $window.ShowDialog() } finally { $window.Dispose() }
+    if ($choice -eq 'Cancel') { exit 0 }
+    $PhoneAccess = $choice -eq 'Yes'
+}
 $setup = Join-Path $PSScriptRoot 'setup.ps1'
 try {
     & $setup
@@ -99,6 +126,7 @@ function Find-Tailscale {
 }
 
 $serverArguments = @((Join-Path $PSScriptRoot 'app.py'))
+if ($Launcher) { $serverArguments += '--launcher' }
 if ($PhoneAccess) {
     $tailscale = Find-Tailscale
     if ($tailscale) { $env:Path = "$(Split-Path -Parent $tailscale);$env:Path" }

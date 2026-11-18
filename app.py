@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 import traceback
+import webbrowser
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -515,9 +516,15 @@ def _tls_context(dns_name):
     context.load_cert_chain(str(cert_path), str(key_path))
     return context
 
-def _confirm_phone_access(dns_name):
-    print(f"Phone access may publish {dns_name} in a permanent public certificate log.", flush=True)
-    print("Use a generic Tailscale device name before continuing.", flush=True)
+def _confirm_phone_access(dns_name, launcher):
+    disclosure = (
+        f"Phone access may publish {dns_name} in a permanent public certificate log.\n"
+        "Use a generic Tailscale device name before continuing."
+    )
+    if launcher:
+        from ctypes import windll
+        return windll.user32.MessageBoxW(None, f"{disclosure}\n\nEnable phone access?", "Phone access", 0x124) == 6
+    print(disclosure, flush=True)
     try:
         return input("Enable phone access? [y/N] ").strip().lower() in {"y", "yes"}
     except (EOFError, KeyboardInterrupt):
@@ -559,13 +566,16 @@ def create_app():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--phone-access", action="store_true")
+    parser.add_argument("--launcher", action="store_true")
     args = parser.parse_args()
     application = create_app()
     if args.phone_access:
         dns_name = _tailscale_dns_name()
         if not dns_name:
             print("Sign in to Tailscale before starting phone mode.", flush=True)
-        elif _confirm_phone_access(dns_name):
+        elif not _confirm_phone_access(dns_name, args.launcher):
+            return
+        else:
             try:
                 tls = _tls_context(dns_name)
             except (OSError, RuntimeError) as exc:
@@ -577,8 +587,15 @@ def main():
                 web.run_app(application, host="0.0.0.0", port=PORT, ssl_context=tls, access_log=None)
                 return
 
-    print(f"Desktop: http://127.0.0.1:{PORT}/", flush=True)
-    web.run_app(application, host="127.0.0.1", port=PORT, access_log=None)
+    desktop_url = f"http://127.0.0.1:{PORT}/"
+    print(f"Desktop: {desktop_url}", flush=True)
+
+    def ready(banner):
+        print(banner, flush=True)
+        if args.launcher:
+            webbrowser.open(desktop_url)
+
+    web.run_app(application, host="127.0.0.1", port=PORT, access_log=None, print=ready)
 
 if __name__ == "__main__":
     main()
