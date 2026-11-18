@@ -6,3 +6,5 @@
 - Run `RealityRestylingSetup.exe`. Select your model folder or download the files during setup.
 - Launch **Reality Restyling** and select **Open app**.
 - [Phone setup and troubleshooting](docs/setup.md)
+
+[License and notices](NOTICE.md)

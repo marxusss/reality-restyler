@@ -30,6 +30,8 @@ Source: "..\run.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\run.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\setup.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\NOTICE.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\web\*"; DestDir: "{app}\web"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "install-flow.ps1"; DestDir: "{app}"; Flags: ignoreversion
