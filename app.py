@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import ipaddress
 from io import BytesIO
@@ -27,6 +28,7 @@ RUNTIME_DIR = ROOT / ".runtime"
 LIFECYCLE_LOCK_KEY = web.AppKey("lifecycle_lock", asyncio.Lock)
 TLS_CONTEXT_KEY = web.AppKey("tls_context", ssl.SSLContext)
 TLS_RENEW_TASK_KEY = web.AppKey("tls_renew_task", asyncio.Task)
+PHONE_DNS_NAME_KEY = web.AppKey("phone_dns_name", str)
 PORT = int(os.environ.get("REALITY_RESTYLE_PORT", "8781"))
 IDLE_SECONDS = min(3600, max(5, int(os.environ.get("REALITY_RESTYLE_IDLE_SECONDS", "30"))))
 TLS_RENEW_SECONDS = 6 * 60 * 60
@@ -86,9 +88,11 @@ def _is_local_peer(value):
 async def boundary(request, handler):
     if not _trusted_peer(request.remote):
         raise web.HTTPForbidden()
+    host = request.headers.get("Host", "")
+    if request.scheme == "http" and host.lower().partition(":")[0] not in {"127.0.0.1", "localhost"}:
+        raise web.HTTPForbidden()
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         origin = request.headers.get("Origin")
-        host = request.headers.get("Host", "")
         if origin:
             try:
                 if urlsplit(origin).netloc.lower() != host.lower():
@@ -383,7 +387,7 @@ async def on_startup(app):
     reaper_task = asyncio.create_task(idle_reaper(app))
     context = app.get(TLS_CONTEXT_KEY)
     if context is not None:
-        app[TLS_RENEW_TASK_KEY] = asyncio.create_task(tls_renewal_loop(context))
+        app[TLS_RENEW_TASK_KEY] = asyncio.create_task(tls_renewal_loop(context, app[PHONE_DNS_NAME_KEY]))
 
 async def on_cleanup(_app):
     global reaper_task
@@ -410,52 +414,11 @@ def _tailscale_dns_name():
     try:
         result = subprocess.run([executable, "status", "--json"], capture_output=True, text=True, timeout=5, check=True)
         data = json.loads(result.stdout)
+        if data.get("BackendState") != "Running":
+            return ""
         return str((data.get("Self") or {}).get("DNSName") or "").rstrip(".")
     except Exception:
         return ""
-
-def _self_signed(cert_path, key_path, dns_name=""):
-    import ipaddress as ip
-    from cryptography import x509
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa
-    from cryptography.x509.oid import NameOID
-    addresses = {"127.0.0.1", "::1"}
-    names = {"localhost", socket.gethostname(), dns_name.rstrip(".")}
-    try:
-        for info in socket.getaddrinfo(socket.gethostname(), None):
-            value = info[4][0].split("%")[0]
-            try:
-                parsed = ip.ip_address(value)
-                tailscale_address = parsed.version == 4 and parsed in ip.ip_network("100.64.0.0/10") or parsed.version == 6 and parsed in ip.ip_network("fd7a:115c:a1e0::/48")
-                if parsed.is_private or parsed.is_loopback or tailscale_address:
-                    addresses.add(value)
-            except ValueError:
-                pass
-    except Exception:
-        pass
-    san = [x509.DNSName(name) for name in names if name]
-    san.extend(x509.IPAddress(ip.ip_address(value)) for value in addresses)
-    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, socket.gethostname())])
-    now = datetime.now(timezone.utc)
-    certificate = (
-        x509.CertificateBuilder()
-        .subject_name(name)
-        .issuer_name(name)
-        .public_key(key.public_key())
-        .serial_number(x509.random_serial_number())
-        .not_valid_before(now - timedelta(minutes=1))
-        .not_valid_after(now + timedelta(days=3650))
-        .add_extension(x509.SubjectAlternativeName(san), critical=False)
-        .sign(key, hashes.SHA256())
-    )
-    cert_path.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
-    key_path.write_bytes(key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption(),
-    ))
 
 def _certificate_covers(cert_path, dns_name, minimum_validity=timedelta(0)):
     try:
@@ -502,11 +465,10 @@ def _create_tailscale_certificate(dns_name, cert_path, key_path):
     os.replace(next_cert, cert_path)
     os.replace(next_key, key_path)
 
-def _refresh_tailscale_certificate(context):
+def _refresh_tailscale_certificate(context, dns_name):
     if os.environ.get("REALITY_RESTYLE_CERT") or os.environ.get("REALITY_RESTYLE_KEY"):
         return False
-    dns_name = _tailscale_dns_name()
-    if not dns_name:
+    if _tailscale_dns_name() != dns_name:
         return False
     cert_path = RUNTIME_DIR / "tls.crt"
     key_path = RUNTIME_DIR / "tls.key"
@@ -517,56 +479,51 @@ def _refresh_tailscale_certificate(context):
     print("Tailscale HTTPS certificate renewed.", flush=True)
     return True
 
-async def tls_renewal_loop(context):
+async def tls_renewal_loop(context, dns_name):
     while True:
         await asyncio.sleep(TLS_RENEW_SECONDS)
         try:
-            await asyncio.to_thread(_refresh_tailscale_certificate, context)
+            await asyncio.to_thread(_refresh_tailscale_certificate, context, dns_name)
         except Exception as exc:
             detail = " ".join(str(exc).split())[:400]
             print(f"Tailscale HTTPS renewal failed: {detail or type(exc).__name__}", flush=True)
 
-def _tls_context():
+def _tls_context(dns_name):
     configured_cert = os.environ.get("REALITY_RESTYLE_CERT", "")
     configured_key = os.environ.get("REALITY_RESTYLE_KEY", "")
-    dns_name = _tailscale_dns_name()
-    if configured_cert and configured_key:
+    if configured_cert or configured_key:
+        if not (configured_cert and configured_key):
+            raise RuntimeError("Set both the HTTPS certificate and key paths.")
         cert_path, key_path = Path(configured_cert), Path(configured_key)
         if not cert_path.is_file() or not key_path.is_file():
             raise RuntimeError("The configured HTTPS certificate or key file is missing.")
-        if dns_name and (not _certificate_covers(cert_path, dns_name) or _certificate_is_self_signed(cert_path)):
+        if not _certificate_covers(cert_path, dns_name) or _certificate_is_self_signed(cert_path):
             raise RuntimeError("The configured HTTPS certificate is not trusted for this Tailscale device.")
     else:
-        RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
         cert_path, key_path = RUNTIME_DIR / "tls.crt", RUNTIME_DIR / "tls.key"
-        usable_certificate = cert_path.is_file() and key_path.is_file() and _certificate_covers(cert_path, dns_name)
-        if dns_name and usable_certificate and _certificate_is_self_signed(cert_path):
-            usable_certificate = False
-        renew_certificate = not usable_certificate or (bool(dns_name) and not _certificate_covers(cert_path, dns_name, timedelta(days=30)))
-        if dns_name and renew_certificate:
+        usable_certificate = key_path.is_file() and _certificate_covers(cert_path, dns_name) and not _certificate_is_self_signed(cert_path)
+        if not usable_certificate or not _certificate_covers(cert_path, dns_name, timedelta(days=30)):
             try:
                 _create_tailscale_certificate(dns_name, cert_path, key_path)
             except Exception as exc:
                 detail = getattr(exc, "stderr", None) or getattr(exc, "stdout", None) or str(exc)
                 detail = " ".join(str(detail).split())[:500]
                 print(f"Tailscale certificate unavailable: {detail or type(exc).__name__}", flush=True)
-                usable_certificate = cert_path.is_file() and key_path.is_file() and _certificate_covers(cert_path, dns_name) and not _certificate_is_self_signed(cert_path)
                 if not usable_certificate:
                     raise RuntimeError("Enable MagicDNS and HTTPS Certificates in Tailscale Admin → DNS, then restart. https://login.tailscale.com/admin/dns") from None
-        if not cert_path.is_file() or not key_path.is_file() or not _certificate_covers(cert_path, dns_name):
-            if dns_name:
-                raise RuntimeError("A trusted Tailscale HTTPS certificate is required. Enable HTTPS Certificates in Tailscale Admin → DNS, then restart: https://login.tailscale.com/admin/dns")
-            _self_signed(cert_path, key_path)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(str(cert_path), str(key_path))
     return context
 
-def _print_access_info():
-    dns_name = _tailscale_dns_name()
-    if not dns_name:
-        print("Phone access requires Tailscale on this PC. Sign in, enable MagicDNS and HTTPS Certificates, then restart.", flush=True)
-        print("Tailscale Admin → DNS: https://login.tailscale.com/admin/dns", flush=True)
-        return
+def _confirm_phone_access(dns_name):
+    print(f"Phone access may publish {dns_name} in a permanent public certificate log.", flush=True)
+    print("Use a generic Tailscale device name before continuing.", flush=True)
+    try:
+        return input("Enable phone access? [y/N] ").strip().lower() in {"y", "yes"}
+    except (EOFError, KeyboardInterrupt):
+        return False
+
+def _print_phone_link(dns_name):
     url = f"https://{dns_name}:{PORT}/"
     print(f"Phone: {url}", flush=True)
     try:
@@ -599,9 +556,29 @@ def create_app():
     app.on_cleanup.append(on_cleanup)
     return app
 
-if __name__ == "__main__":
-    tls = _tls_context()
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--phone-access", action="store_true")
+    args = parser.parse_args()
     application = create_app()
-    application[TLS_CONTEXT_KEY] = tls
-    _print_access_info()
-    web.run_app(application, host="0.0.0.0", port=PORT, ssl_context=tls, access_log=None)
+    if args.phone_access:
+        dns_name = _tailscale_dns_name()
+        if not dns_name:
+            print("Sign in to Tailscale before starting phone mode.", flush=True)
+        elif _confirm_phone_access(dns_name):
+            try:
+                tls = _tls_context(dns_name)
+            except (OSError, RuntimeError) as exc:
+                print(f"Phone access unavailable. {exc}", flush=True)
+            else:
+                application[TLS_CONTEXT_KEY] = tls
+                application[PHONE_DNS_NAME_KEY] = dns_name
+                _print_phone_link(dns_name)
+                web.run_app(application, host="0.0.0.0", port=PORT, ssl_context=tls, access_log=None)
+                return
+
+    print(f"Desktop: http://127.0.0.1:{PORT}/", flush=True)
+    web.run_app(application, host="127.0.0.1", port=PORT, access_log=None)
+
+if __name__ == "__main__":
+    main()

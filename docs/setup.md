@@ -6,20 +6,21 @@
 2. If Python 3.11 is missing, setup installs it with winget.
 3. Choose whether you already have the model, want it downloaded, or want to add it later. Existing files can be selected with the folder picker. Downloads resume if interrupted.
 4. Compact 2x downloads automatically when absent.
-5. The installer can install Tailscale with winget and open sign-in.
+5. Launch **Reality Restyling** and open [localhost:8781](http://127.0.0.1:8781/). From a source checkout, launch with `run.bat`.
 
 Model files come from [FLUX.2 Klein 9B Nunchaku](https://huggingface.co/tonera/FLUX.2-klein-9B-Nunchaku) and are stored outside the application folder. The selected path is saved in `.runtime/models.path`. Compact 2x comes from [Phips/2xNomosUni_compact_multijpg](https://huggingface.co/Phips/2xNomosUni_compact_multijpg). To add it later, run the installer again.
 
 Uninstall removes the generated Python environment and runtime files. Model files remain in their selected folder; Python and Tailscale are not removed.
 
-## Tailscale
+## Phone access
 
-1. Sign in on the PC and phone to the same tailnet.
-2. In [Tailscale Admin → DNS](https://login.tailscale.com/admin/dns), enable **MagicDNS** and **HTTPS Certificates**.
-3. Device and tailnet DNS names enter the public Certificate Transparency log.
-4. Run Reality Restyling and scan the printed QR code or open its phone link.
+1. Install [Tailscale](https://tailscale.com/download) on the PC and phone. Sign in to the same tailnet.
+2. Give the PC a generic name in Tailscale. HTTPS certificate issuance publishes its full Tailscale hostname in a permanent public log.
+3. Enable **MagicDNS** and **HTTPS Certificates** in [Tailscale Admin → DNS](https://login.tailscale.com/admin/dns).
+4. Close the desktop session. Launch **Reality Restyling (Phone)** or run `run.bat -PhoneAccess` from source.
+5. Confirm the hostname shown in the terminal, then scan the QR code or open the phone link.
 
-The app requests and renews the HTTPS certificate automatically. It does not store Tailscale or Hugging Face credentials. If Hugging Face requests model access, approve it on the opened page. The graphical installer retries with a Hugging Face token already saved on this computer; if authentication still needs setup, save a read token locally and rerun the installer. From a source checkout, `run.bat` can open the Hugging Face CLI login flow.
+If Hugging Face requests model access, approve it on the opened page. The installer retries with a locally saved Hugging Face token. If needed, save a read token and rerun the installer.
 
 Anyone allowed by your tailnet policy to reach port 8781 can control the app and submit camera frames. Restrict access to trusted devices.
 

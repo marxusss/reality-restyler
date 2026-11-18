@@ -1,4 +1,4 @@
-param([switch]$InstallUpscaler)
+param([switch]$InstallUpscaler, [switch]$PhoneAccess)
 
 $installUpscaler = [bool]$InstallUpscaler
 $ErrorActionPreference = 'Stop'
@@ -98,50 +98,16 @@ function Find-Tailscale {
     return ''
 }
 
-$tailscale = Find-Tailscale
-if (-not $tailscale) {
-    $winget = Get-Command winget -ErrorAction SilentlyContinue
-    if ($winget) {
-        $install = [System.Windows.Forms.MessageBox]::Show('Install Tailscale with winget for phone access?', 'Reality Restyling', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
-        if ($install -eq [System.Windows.Forms.DialogResult]::Yes) {
-            $previousPreference = $ErrorActionPreference
-            $ErrorActionPreference = 'Continue'
-            & $winget.Source install --id Tailscale.Tailscale --exact --accept-source-agreements --accept-package-agreements
-            $ErrorActionPreference = $previousPreference
-            $tailscale = Find-Tailscale
-        }
-    }
-}
-if ($tailscale) {
-    $env:Path = "$(Split-Path -Parent $tailscale);$env:Path"
-    $previousPreference = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    $statusOutput = & $tailscale status --json 2>$null
-    $ErrorActionPreference = $previousPreference
-    $tailscaleStatus = $null
-    try { $tailscaleStatus = ($statusOutput | ConvertFrom-Json) } catch { }
-    if (-not $tailscaleStatus -or $tailscaleStatus.BackendState -ne 'Running') {
-        Write-Host 'Opening Tailscale sign-in.'
-        $previousPreference = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        & $tailscale up
-        $ErrorActionPreference = $previousPreference
-        [System.Windows.Forms.MessageBox]::Show('Complete Tailscale sign-in in the browser, then continue.', 'Reality Restyling', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
-        $previousPreference = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        $statusOutput = & $tailscale status --json 2>$null
-        $ErrorActionPreference = $previousPreference
-        try { $tailscaleStatus = ($statusOutput | ConvertFrom-Json) } catch { $tailscaleStatus = $null }
-    } elseif (-not $tailscaleStatus.Self.DNSName) {
-        Write-Host 'Enable MagicDNS in Tailscale Admin > DNS for a phone link.'
-    }
-} else {
-    Write-Host 'Phone access requires Tailscale: https://tailscale.com/download/windows'
+$serverArguments = @((Join-Path $PSScriptRoot 'app.py'))
+if ($PhoneAccess) {
+    $tailscale = Find-Tailscale
+    if ($tailscale) { $env:Path = "$(Split-Path -Parent $tailscale);$env:Path" }
+    $serverArguments += '--phone-access'
 }
 
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
-& $python (Join-Path $PSScriptRoot 'app.py')
+& $python @serverArguments
 $exitCode = $LASTEXITCODE
 $ErrorActionPreference = $previousPreference
 exit $exitCode

@@ -36,6 +36,7 @@ Source: "install-flow.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Reality Restyling"; Filename: "{app}\run.bat"; WorkingDir: "{app}"
+Name: "{group}\Reality Restyling (Phone)"; Filename: "{app}\run.bat"; Parameters: "-PhoneAccess"; WorkingDir: "{app}"
 Name: "{autodesktop}\Reality Restyling"; Filename: "{app}\run.bat"; WorkingDir: "{app}"; Tasks: desktopicon
 Name: "{group}\Setup Guide"; Filename: "{app}\docs\setup.md"
 
@@ -67,9 +68,9 @@ begin
   ModelDirPage.Add('Model files folder:');
   ModelDirPage.Values[0] := ExpandConstant('{localappdata}\Reality Restyling\Models');
 
-  TailscalePage := CreateInputOptionPage(ModelDirPage.ID, 'Phone connection', 'Tailscale', 'Tailscale connects the phone to this PC. You can install it now; sign-in and one-time tailnet settings remain yours.', False, False);
+  TailscalePage := CreateInputOptionPage(ModelDirPage.ID, 'Phone connection', 'Tailscale (optional)', 'Install Tailscale if you plan to connect a phone.', False, False);
   TailscalePage.Add('Install Tailscale with winget if it is missing');
-  TailscalePage.Values[0] := True;
+  TailscalePage.Values[0] := False;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
