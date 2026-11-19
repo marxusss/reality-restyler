@@ -21,6 +21,9 @@ def process_frame(payload, runtime):
     rendered = time.perf_counter()
     buffer = BytesIO()
     result.convert("RGB").save(buffer, format="JPEG", quality=OUTPUT_QUALITY, optimize=False)
-    return buffer.getvalue(), {"decode_ms": (decoded-started)*1000,
-                               "render_ms": (rendered-decoded)*1000,
-                               "encode_ms": (time.perf_counter()-rendered)*1000}
+    payload = buffer.getvalue()
+    finished = time.perf_counter()
+    return payload, {"decode_ms": (decoded-started)*1000,
+                     "render_ms": (rendered-decoded)*1000,
+                     "encode_ms": (finished-rendered)*1000,
+                     "worker_ms": (finished-started)*1000}

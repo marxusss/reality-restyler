@@ -73,6 +73,8 @@ class RestyleTrack(VideoStreamTrack):
                     if error != self.last_error:
                         detail = "".join(traceback.format_exception_only(type(exc), exc)).strip()
                         print(f"Frame processing failed: {detail}", flush=True)
+                        if isinstance(exc, RuntimeError):
+                            print(traceback.format_exc().rstrip(), flush=True)
                         await asyncio.to_thread(self.runtime.report_error, f"Frame processing failed: {detail}")
                         self.last_error = error
                     output = self.last_image.copy() if self.last_image is not None else Image.new("RGB", (frame.width, frame.height))

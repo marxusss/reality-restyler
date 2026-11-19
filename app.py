@@ -10,6 +10,7 @@ import ssl
 import subprocess
 import time
 import traceback
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -27,6 +28,12 @@ from log_retention import enable_logging, prune_logs
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "web"
 RUNTIME_DIR = ROOT / ".runtime"
+if os.name == "nt":
+    USER_DATA_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Reality Restyling"
+else:
+    USER_DATA_ROOT = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "reality-restyling"
+USER_STYLES_PATH = USER_DATA_ROOT / "user_styles.json"
+USER_STYLES_LOCK = threading.Lock()
 REAPER_TASK_KEY = web.AppKey("reaper_task", asyncio.Task)
 STARTUP_PROGRESS_KEY = web.AppKey("startup_progress", dict)
 TLS_CONTEXT_KEY = web.AppKey("tls_context", ssl.SSLContext)
@@ -146,6 +153,106 @@ async def combine_styles(request):
         return web.json_response({"error": "Could not check the style prompt. Check the model files."}, status=503)
     return web.json_response({"prompt": prompt, "tokens": tokens})
 
+def _legacy_style_id(name, prompt):
+    value = 2166136261
+    for byte in (name + "\0" + prompt).encode("utf-8"):
+        value = ((value ^ byte) * 16777619) & 0xFFFFFFFF
+    return f"legacy-{value:08x}"
+
+def _normalize_user_styles(styles):
+    if not isinstance(styles, list) or len(styles) > 100:
+        raise ValueError("The style list is invalid.")
+    normalized = []
+    seen = set()
+    for item in styles:
+        if not isinstance(item, dict):
+            raise ValueError("A style is invalid.")
+        name = item.get("name")
+        prompt = item.get("prompt")
+        if not isinstance(name, str) or not name.strip() or len(name) > 120:
+            raise ValueError("A style name is invalid.")
+        if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 12000:
+            raise ValueError("A style prompt is invalid.")
+        style_id = item.get("id")
+        if not isinstance(style_id, str) or not style_id or len(style_id) > 100:
+            style_id = _legacy_style_id(name, prompt)
+        if style_id in seen:
+            continue
+        seen.add(style_id)
+        thumbnail = item.get("thumbnail")
+        if thumbnail is not None and (
+            not isinstance(thumbnail, str)
+            or len(thumbnail) > 600000
+            or not thumbnail.startswith("data:image/webp;base64,")
+        ):
+            raise ValueError("A style thumbnail is invalid.")
+        updated_at = item.get("updatedAt", 0)
+        if isinstance(updated_at, bool) or not isinstance(updated_at, (int, float)):
+            updated_at = 0
+        updated_at = max(0, min(int(updated_at), 9007199254740991))
+        normalized.append({
+            "id": style_id,
+            "name": name.strip(),
+            "prompt": prompt,
+            "thumbnail": thumbnail,
+            "updatedAt": updated_at,
+        })
+    return normalized
+
+def _read_user_styles():
+    with USER_STYLES_LOCK:
+        if not USER_STYLES_PATH.exists():
+            return []
+        data = json.loads(USER_STYLES_PATH.read_text(encoding="utf-8"))
+        return _normalize_user_styles(data)
+
+def _merge_user_styles(existing, incoming):
+    merged = {}
+    for style in existing + incoming:
+        previous = merged.get(style["id"])
+        if previous is None or style["updatedAt"] >= previous["updatedAt"]:
+            merged[style["id"]] = style
+    return sorted(merged.values(), key=lambda style: style["updatedAt"], reverse=True)
+
+def _write_user_styles(styles):
+    incoming = _normalize_user_styles(styles)
+    with USER_STYLES_LOCK:
+        existing = []
+        if USER_STYLES_PATH.exists():
+            try:
+                existing = _normalize_user_styles(json.loads(USER_STYLES_PATH.read_text(encoding="utf-8")))
+            except Exception as exc:
+                raise RuntimeError("The custom style store is invalid.") from exc
+        normalized = _merge_user_styles(existing, incoming)
+        payload = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
+        USER_STYLES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        pending = USER_STYLES_PATH.with_name(USER_STYLES_PATH.name + ".tmp")
+        with pending.open("w", encoding="utf-8", newline="") as output:
+            output.write(payload)
+            output.flush()
+            os.fsync(output.fileno())
+        pending.replace(USER_STYLES_PATH)
+    return normalized
+
+async def get_user_styles(_request):
+    try:
+        styles = await asyncio.to_thread(_read_user_styles)
+    except Exception as exc:
+        print(f"Could not read custom styles: {type(exc).__name__}: {exc}", flush=True)
+        return web.json_response({"error": "Could not load custom styles."}, status=500)
+    return web.json_response({"styles": styles})
+
+async def save_user_styles(request):
+    data = await _json(request)
+    try:
+        styles = await asyncio.to_thread(_write_user_styles, data.get("styles"))
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=422)
+    except Exception as exc:
+        print(f"Could not save custom styles: {type(exc).__name__}: {exc}", flush=True)
+        return web.json_response({"error": "Could not save custom styles."}, status=500)
+    return web.json_response({"styles": styles})
+
 async def health(_request):
     return web.json_response({"ok": True, "loaded": await asyncio.to_thread(runtime.loaded)})
 
@@ -203,13 +310,17 @@ async def local_stream(request):
                 await socket.send_json({"error": "The model stopped. Press Start to retry."})
                 break
             try:
+                worker_started = time.perf_counter()
                 payload, measurements = await asyncio.to_thread(process_frame, message.data, runtime)
+                worker_wait_ms = (time.perf_counter()-worker_started)*1000 - measurements["worker_ms"]
             except Exception as exc:
                 if manager.transport is not socket:
                     break
                 detail = "".join(traceback.format_exception_only(type(exc), exc)).strip()
                 await asyncio.to_thread(runtime.report_error, f"Frame processing failed: {detail}")
                 print(f"Local frame processing failed: {detail}", flush=True)
+                if isinstance(exc, RuntimeError):
+                    print(traceback.format_exc().rstrip(), flush=True)
                 try:
                     await socket.send_json({"error": f"Frame processing failed: {detail}"})
                 except Exception:
@@ -220,7 +331,8 @@ async def local_stream(request):
             try:
                 send_started = time.perf_counter()
                 await socket.send_bytes(payload)
-                timing.record(**measurements, send_ms=(time.perf_counter()-send_started)*1000,
+                timing.record(**measurements, worker_wait_ms=max(0.0, worker_wait_ms),
+                              send_ms=(time.perf_counter()-send_started)*1000,
                               total_ms=(time.perf_counter()-frame_started)*1000,
                               input_kb=len(message.data)/1024, output_kb=len(payload)/1024)
             except Exception:
@@ -574,7 +686,7 @@ def _tls_context(dns_name):
     return context
 
 def create_app():
-    app = web.Application(middlewares=[boundary], client_max_size=2 * 1024 * 1024)
+    app = web.Application(middlewares=[boundary], client_max_size=8 * 1024 * 1024)
     app[SESSION_KEY] = SessionManager()
     app[STARTUP_PROGRESS_KEY] = {}
     app.router.add_get("/", index)
@@ -584,6 +696,8 @@ def create_app():
     app.router.add_get("/favicon.svg", favicon)
     app.router.add_get("/styles/{asset:catalog\\.json|[a-zA-Z0-9_-]+\\.webp}", style_asset)
     app.router.add_post("/styles/combine", combine_styles)
+    app.router.add_get("/styles/user", get_user_styles)
+    app.router.add_post("/styles/user", save_user_styles)
     app.router.add_get("/health", health)
     app.router.add_get("/metrics", metrics)
     app.router.add_get("/transport", transport_mode)

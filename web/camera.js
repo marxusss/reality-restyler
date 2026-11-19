@@ -1,4 +1,15 @@
+function recordCameraOpen(startedAt, result) {
+  const endedAt = performance.now();
+  const timing = { durationMs: endedAt - startedAt, result };
+  try {
+    performance.clearMeasures("camera.open");
+    performance.measure("camera.open", { start: startedAt, end: endedAt, detail: { result } });
+  } catch (_) {}
+  return timing;
+}
+
 export async function cameraStream(deviceId = "", facingMode = "environment") {
+  const startedAt = performance.now();
   if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     throw new Error("Camera access requires a secure HTTPS page.");
   }
@@ -11,8 +22,11 @@ export async function cameraStream(deviceId = "", facingMode = "environment") {
     ? { ...camera, deviceId: { exact: deviceId } }
     : { ...camera, facingMode: { ideal: facingMode } };
   try {
-    return await navigator.mediaDevices.getUserMedia({ video, audio: false });
+    const stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+    stream.cameraOpenTiming = { ...recordCameraOpen(startedAt, "success") };
+    return stream;
   } catch (error) {
+    recordCameraOpen(startedAt, "failure");
     if (["NotAllowedError", "PermissionDeniedError", "SecurityError"].includes(error.name)) {
       throw new Error("Allow camera access in browser settings, then retry.");
     }

@@ -12,7 +12,8 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
 
   let styleSelection = null;
   let appliedStyleSelection = { prompt: "", styles: [] };
-  let editingStyleIndex = -1;
+  let editingStyleId = null;
+  let customStylesSync = Promise.resolve();
   const maxStyles = 5;
 
   function setStyleError(element, message = "") {
@@ -20,12 +21,69 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     element.hidden = !message;
   }
 
+  function legacyStyleId(style) {
+    let value = 2166136261;
+    for (const byte of new TextEncoder().encode(`${style.name}\0${style.prompt}`)) {
+      value = Math.imul(value ^ byte, 16777619) >>> 0;
+    }
+    return `legacy-${value.toString(16).padStart(8, "0")}`;
+  }
+
+  function normalizeStyles(styles) {
+    if (!Array.isArray(styles)) return [];
+    return styles.filter(style => style && typeof style.name === "string" && style.name.trim() &&
+      typeof style.prompt === "string" && style.prompt.trim()).map(style => ({
+      id: typeof style.id === "string" && style.id ? style.id : legacyStyleId(style),
+      name: style.name.trim(),
+      prompt: style.prompt,
+      thumbnail: typeof style.thumbnail === "string" && style.thumbnail.startsWith("data:image/webp;base64,") ? style.thumbnail : null,
+      updatedAt: Number.isFinite(style.updatedAt) ? Math.max(0, Math.trunc(style.updatedAt)) : 0
+    }));
+  }
+
   function customStyles() {
     try {
-      const styles = JSON.parse(localStorage.getItem(customStyleStorageKey) || "[]");
-      if (Array.isArray(styles)) return styles;
+      return normalizeStyles(JSON.parse(localStorage.getItem(customStyleStorageKey) || "[]"));
     } catch (_) {}
     return [];
+  }
+
+  function saveLocalCustomStyles(styles) {
+    try {
+      localStorage.setItem(customStyleStorageKey, JSON.stringify(styles));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function mergeCustomStyles(remote, local) {
+    const merged = new Map();
+    for (const style of [...normalizeStyles(remote), ...normalizeStyles(local)]) {
+      const previous = merged.get(style.id);
+      if (!previous || style.updatedAt >= previous.updatedAt) merged.set(style.id, style);
+    }
+    return [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  function syncCustomStyles(localOverride = null) {
+    const operation = customStylesSync.then(async () => {
+      const local = normalizeStyles(localOverride || customStyles());
+      const remote = await request("/styles/user");
+      let styles = mergeCustomStyles(remote.styles, local);
+      saveLocalCustomStyles(styles);
+      const saved = await request("/styles/user", { styles });
+      styles = mergeCustomStyles(saved.styles, styles);
+      saveLocalCustomStyles(styles);
+      setStyleError($("styleStorageError"));
+      renderCustomStyles();
+      return styles;
+    }).catch(error => {
+      setStyleError($("styleStorageError"), "Could not sync custom styles.");
+      throw error;
+    });
+    customStylesSync = operation.catch(() => {});
+    return operation;
   }
 
   function updateStyleSelection() {
@@ -115,7 +173,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       edit.className = "style-edit-button";
       edit.setAttribute("aria-label", `Edit ${style.name}`);
       edit.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4.5-1 10.2-10.2a2.1 2.1 0 0 0-3-3L5.5 16 4 20Z"/></svg>';
-      edit.addEventListener("click", () => openStyleEditor(style, index));
+      edit.addEventListener("click", () => openStyleEditor(style));
       card.append(button, edit);
       return card;
     });
@@ -135,6 +193,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     setStyleSelection(null);
     renderCustomStyles();
     stylesDialog.showModal();
+    void syncCustomStyles().catch(() => {});
     if (presetStyles.hasChildNodes()) return;
     setStyleError(catalogError);
     try {
@@ -146,8 +205,8 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     }
   }
 
-  function openStyleEditor(style = null, index = -1) {
-    editingStyleIndex = index;
+  function openStyleEditor(style = null) {
+    editingStyleId = style?.id || null;
     styleForm.reset();
     $("styleEditorTitle").textContent = style ? "Edit style" : "Add style";
     styleName.value = style?.name || "";
@@ -188,7 +247,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     }
   }
 
-  function saveStyle(event) {
+  async function saveStyle(event) {
     event.preventDefault();
     const name = styleName.value.trim();
     const prompt = stylePrompt.value;
@@ -197,29 +256,34 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       return;
     }
     const styles = customStyles();
-    const style = { name, prompt, thumbnail: styleCapturePreview.getAttribute("src") };
-    const savedIndex = editingStyleIndex;
+    const savedIndex = editingStyleId ? styles.findIndex(item => item.id === editingStyleId) : -1;
     const previous = savedIndex >= 0 ? styles[savedIndex] : null;
+    const style = {
+      id: editingStyleId || (crypto.randomUUID ? crypto.randomUUID() : `style-${Date.now()}-${Math.random().toString(16).slice(2)}`),
+      name,
+      prompt,
+      thumbnail: styleCapturePreview.getAttribute("src"),
+      updatedAt: Date.now()
+    };
     if (savedIndex < 0) styles.unshift(style);
-    else if (previous) styles[savedIndex] = style;
-    else {
-      setStyleError(styleEditorError, "Could not find the style to update.");
-      return;
-    }
+    else styles[savedIndex] = style;
+    editingStyleId = style.id;
     if (previous && styleSelection?.includes(previous.prompt)) {
       styleSelection = styleSelection.map(selected => selected === previous.prompt ? prompt : selected);
     }
+    saveLocalCustomStyles(styles);
+    renderCustomStyles();
     try {
-      localStorage.setItem(customStyleStorageKey, JSON.stringify(styles));
+      await syncCustomStyles(styles);
     } catch (_) {
-      setStyleError(styleEditorError, "Could not save the style on this device.");
+      setStyleError(styleEditorError, "Could not save the style.");
       return;
     }
     styleEditor.close();
     renderCustomStyles();
-    if (savedIndex < 0) $("styleList").scrollTop = 0;
-    const savedCard = $("customStyles").querySelectorAll(".custom-style-card")[savedIndex < 0 ? 0 : savedIndex];
-    savedCard?.querySelector(savedIndex < 0 ? ".style-card" : ".style-edit-button")?.focus();
+    const finalIndex = customStyles().findIndex(item => item.id === style.id);
+    const savedCard = $("customStyles").querySelectorAll(".custom-style-card")[finalIndex];
+    savedCard?.querySelector(finalIndex < 0 ? ".style-card" : ".style-edit-button")?.focus();
   }
 
 
@@ -230,5 +294,6 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   $("addStyleButton").addEventListener("click", () => openStyleEditor());
   $("closeStyleEditorButton").addEventListener("click", () => styleEditor.close());
   $("captureStyleButton").addEventListener("click", captureStyle);
-  styleForm.addEventListener("submit", saveStyle);
+  styleForm.addEventListener("submit", event => { void saveStyle(event); });
+  void syncCustomStyles().catch(() => {});
 }

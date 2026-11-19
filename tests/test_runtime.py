@@ -2,11 +2,13 @@ from pathlib import Path
 import random
 import sys
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from runtime import DEFAULT_SETTINGS, RESOLUTIONS, Runtime, normalize_settings
+from runtime import DEFAULT_SETTINGS, PROMPT_CACHE_SIZE, RESOLUTIONS, Runtime, TimingWindow, normalize_settings
 
 class RuntimeSettingsTests(unittest.TestCase):
     def test_defaults_keep_optional_upscaler_enabled(self):
@@ -36,6 +38,55 @@ class RuntimeSettingsTests(unittest.TestCase):
         runtime = Runtime()
         self.assertFalse(runtime.loaded())
         self.assertFalse(runtime.metrics()["loaded"])
+
+    def test_cold_prompt_encode_uses_inference_mode(self):
+        import torch
+
+        class FakePipe:
+            def __init__(self):
+                self.calls = 0
+                self.inference_mode = False
+                self.transformer = type("Transformer", (), {"dtype": torch.bfloat16})()
+
+            def encode_prompt(self, **kwargs):
+                self.calls += 1
+                self.inference_mode = torch.is_inference_mode_enabled()
+                return torch.ones((1, 1), dtype=torch.float16), None
+
+        runtime = Runtime()
+        runtime._pipe = FakePipe()
+        with patch("torch.cuda.is_available", return_value=True), patch("torch.cuda.synchronize") as synchronize:
+            embeds, _ = runtime._encode_prompt("test prompt")
+            cached, _ = runtime._encode_prompt("test prompt")
+        self.assertTrue(runtime._pipe.inference_mode)
+        self.assertTrue(torch.is_inference(embeds))
+        self.assertEqual(embeds.dtype, torch.bfloat16)
+        self.assertIs(embeds, cached)
+        self.assertEqual(runtime._pipe.calls, 1)
+        synchronize.assert_called_once_with()
+
+    def test_prompt_cache_is_bounded_and_keeps_recent_prompts(self):
+        import torch
+
+        class FakePipe:
+            def __init__(self):
+                self.calls = 0
+                self.transformer = type("Transformer", (), {"dtype": torch.bfloat16})()
+
+            def encode_prompt(self, **kwargs):
+                self.calls += 1
+                return torch.full((1, 1), self.calls, dtype=torch.bfloat16), None
+
+        runtime = Runtime()
+        runtime._pipe = FakePipe()
+        for index in range(PROMPT_CACHE_SIZE):
+            runtime._encode_prompt(f"prompt {index}")
+        runtime._encode_prompt("prompt 0")
+        self.assertEqual(runtime._pipe.calls, PROMPT_CACHE_SIZE)
+        runtime._encode_prompt("new prompt")
+        self.assertEqual(len(runtime._prompt_cache), PROMPT_CACHE_SIZE)
+        runtime._encode_prompt("prompt 1")
+        self.assertEqual(runtime._pipe.calls, PROMPT_CACHE_SIZE + 2)
 
     def test_status_reads_do_not_wait_for_inference_lock(self):
         from concurrent.futures import ThreadPoolExecutor
@@ -87,6 +138,36 @@ class RuntimeSettingsFuzzTests(unittest.TestCase):
             self.assertIn(settings["resolution"], RESOLUTIONS)
             self.assertGreaterEqual(settings["steps"], 1)
             self.assertLessEqual(settings["steps"], 12)
+
+class TimingWindowTests(unittest.TestCase):
+    def test_p95_is_hidden_for_small_windows(self):
+        window = TimingWindow("test", size=30)
+        for value in range(1, 20):
+            window.record(value_ms=value)
+        output = StringIO()
+        with redirect_stdout(output):
+            window.flush()
+        self.assertIn("frames=19", output.getvalue())
+        self.assertIn("value_ms_p95=n/a", output.getvalue())
+        self.assertIn("value_ms_avg=10.0", output.getvalue())
+
+    def test_p95_is_reported_with_twenty_samples(self):
+        window = TimingWindow("test", size=30)
+        for value in range(1, 21):
+            window.record(value_ms=value)
+        output = StringIO()
+        with redirect_stdout(output):
+            window.flush()
+        self.assertIn("frames=20", output.getvalue())
+        self.assertIn("value_ms_p95=19.0", output.getvalue())
+
+    def test_prompt_encoding_window_reports_prompt_samples(self):
+        window = TimingWindow("prompt_encode_cold", sample_label="prompts")
+        window.record(prompt_encode_wall_ms=123)
+        output = StringIO()
+        with redirect_stdout(output):
+            window.flush()
+        self.assertIn("path=prompt_encode_cold prompts=1", output.getvalue())
 
 if __name__ == "__main__":
     unittest.main()

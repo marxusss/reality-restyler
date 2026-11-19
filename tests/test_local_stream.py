@@ -17,8 +17,9 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
         self.render_patch = patch.object(app.runtime, "render", side_effect=lambda image: image.copy())
         self.unload_patch = patch.object(app.runtime, "unload")
         self.print_patch = patch("builtins.print")
-        for item in (self.loaded_patch, self.render_patch, self.unload_patch, self.print_patch):
+        for item in (self.loaded_patch, self.render_patch, self.unload_patch):
             item.start()
+        self.print_mock = self.print_patch.start()
         self.client = TestClient(TestServer(app.create_app()))
         await self.client.start_server()
         response = await self.client.post('/session', json={})
@@ -71,6 +72,10 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
         message = await socket.receive(timeout=5)
         self.assertEqual(message.type, WSMsgType.TEXT)
         self.assertIn("Frame processing failed", json.loads(message.data)["error"])
+        self.assertTrue(any(
+            "Traceback (most recent call last)" in str(call.args[0])
+            for call in self.print_mock.call_args_list
+        ))
         await socket.close()
 
     async def test_unsupported_frame_format_is_rejected(self):

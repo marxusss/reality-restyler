@@ -2,6 +2,7 @@ import gc
 import os
 import threading
 import time
+from collections import OrderedDict
 from functools import lru_cache
 from pathlib import Path
 
@@ -14,6 +15,7 @@ MODELS = normalize_root(os.environ.get("REALITY_RESTYLE_MODELS_DIR", ROOT / "mod
 BASE_DIR = model_directory(MODELS)
 TRANSFORMER_FILE = transformer_file(MODELS, BASE_DIR)
 UPSCALER_FILE = MODELS / "upscalers" / "2xNomosUni_compact_multijpg.safetensors"
+PROMPT_CACHE_SIZE = 5
 from runtime_settings import DEFAULT_SETTINGS, RESOLUTIONS, PROMPT_TOKEN_LIMIT, normalize_settings
 from timing import TimingWindow
 
@@ -60,9 +62,7 @@ class Runtime:
         self._pipe = None
         self._upscaler = None
         self._upscaler_attempted = False
-        self._prompt = None
-        self._prompt_embeds = None
-        self._prompt_ids = None
+        self._prompt_cache = OrderedDict()
         self._last_heartbeat = 0.0
         self._metrics = {
             "loaded": False,
@@ -73,6 +73,8 @@ class Runtime:
             "upscaler_available": UPSCALER_FILE.is_file(),
         }
         self._timing = TimingWindow("inference")
+        self._cold_prompt_timing = TimingWindow("prompt_encode_cold", sample_label="prompts")
+        self._warm_timing = TimingWindow("inference_warm")
 
     def settings(self):
         with self._settings_lock:
@@ -93,6 +95,8 @@ class Runtime:
     def flush_timings(self):
         with self._lock:
             self._timing.flush()
+            self._cold_prompt_timing.flush()
+            self._warm_timing.flush()
 
     def loaded(self):
         with self._status_lock:
@@ -162,7 +166,7 @@ class Runtime:
                     str(BASE_DIR),
                     subfolder="text_encoder",
                     quantization_config=BitsAndBytesConfig(load_in_8bit=True),
-                    torch_dtype=torch.bfloat16,
+                    torch_dtype=torch.float16,
                     local_files_only=True,
                     device_map={"": 0},
                 )
@@ -197,9 +201,7 @@ class Runtime:
                 self._pipe = pipe
                 self._upscaler = None
                 self._upscaler_attempted = False
-                self._prompt = None
-                self._prompt_embeds = None
-                self._prompt_ids = None
+                self._prompt_cache.clear()
                 self._last_heartbeat = time.monotonic()
                 self._metrics.update({
                     "loaded": True,
@@ -217,15 +219,15 @@ class Runtime:
 
     def _unload_locked(self):
         self._timing.flush()
+        self._cold_prompt_timing.flush()
+        self._warm_timing.flush()
         pipe = self._pipe
         upscaler = self._upscaler
         with self._status_lock:
             self._pipe = None
             self._upscaler = None
             self._upscaler_attempted = False
-            self._prompt = None
-            self._prompt_embeds = None
-            self._prompt_ids = None
+            self._prompt_cache.clear()
             self._last_heartbeat = 0.0
             self._metrics.update({
                 "loaded": False,
@@ -244,17 +246,27 @@ class Runtime:
             print(f"CUDA cache release failed: {type(exc).__name__}: {exc}", flush=True)
 
     def _encode_prompt(self, prompt):
-        if self._prompt == prompt and self._prompt_embeds is not None:
-            return self._prompt_embeds, self._prompt_ids
-        embeds, ids = self._pipe.encode_prompt(
-            prompt=prompt,
-            device="cuda",
-            num_images_per_prompt=1,
-            max_sequence_length=PROMPT_TOKEN_LIMIT,
-        )
-        self._prompt = prompt
-        self._prompt_embeds = embeds
-        self._prompt_ids = ids
+        cached = self._prompt_cache.get(prompt)
+        if cached is not None:
+            self._prompt_cache.move_to_end(prompt)
+            return cached
+        import torch
+        with torch.inference_mode():
+            embeds, ids = self._pipe.encode_prompt(
+                prompt=prompt,
+                device="cuda",
+                num_images_per_prompt=1,
+                max_sequence_length=PROMPT_TOKEN_LIMIT,
+            )
+            target_dtype = getattr(self._pipe.transformer, "dtype", embeds.dtype)
+            if embeds.dtype != target_dtype:
+                embeds = embeds.to(dtype=target_dtype)
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+        self._prompt_cache[prompt] = (embeds, ids)
+        self._prompt_cache.move_to_end(prompt)
+        while len(self._prompt_cache) > PROMPT_CACHE_SIZE:
+            self._prompt_cache.popitem(last=False)
         return embeds, ids
 
     def _load_upscaler(self):
@@ -313,7 +325,7 @@ class Runtime:
             preprocess_ms = (time.perf_counter() - preprocess_started) * 1000.0
             import torch
             generation_started = time.perf_counter()
-            prompt_cache_miss = self._prompt != settings["prompt"] or self._prompt_embeds is None
+            prompt_cache_miss = settings["prompt"] not in self._prompt_cache
             prompt_started = time.perf_counter()
             embeds, ids = self._encode_prompt(settings["prompt"])
             prompt_encode_ms = (time.perf_counter() - prompt_started) * 1000.0
@@ -390,13 +402,25 @@ class Runtime:
                     "upscale_ms": round(upscale_ms, 1),
                     "total_ms": round(total_ms, 1),
                 })
+            timing_context = {
+                "input": f"{width}x{height}",
+                "output": f"{target_width}x{target_height}",
+                "steps": settings["steps"],
+                "upscale": int(settings["upscale"]),
+            }
+            if prompt_cache_miss:
+                self._cold_prompt_timing.record(
+                    context={"token_limit": PROMPT_TOKEN_LIMIT},
+                    prompt_encode_wall_ms=prompt_encode_ms,
+                )
+            else:
+                self._warm_timing.record(
+                    context=timing_context,
+                    pipeline_wall_ms=pipeline_ms,
+                    total_ms=model_ms,
+                )
             self._timing.record(
-                context={
-                    "input": f"{width}x{height}",
-                    "output": f"{target_width}x{target_height}",
-                    "steps": settings["steps"],
-                    "upscale": int(settings["upscale"]),
-                },
+                context=timing_context,
                 preprocess_ms=preprocess_ms,
                 prompt_encode_wall_ms=prompt_encode_ms,
                 prompt_cache_miss=prompt_cache_miss,

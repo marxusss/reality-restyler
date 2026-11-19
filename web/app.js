@@ -53,6 +53,11 @@ let localFramePending = false;
 let localFrameTimer = 0;
 let localFrameSentAt = 0;
 let localRoundTripMs = 0;
+let localCaptureMs = 0;
+let localEncodeMs = 0;
+let localImageDecodeMs = 0;
+let localDrawMs = 0;
+let localFrameTimingSamples = [];
 let previousStats = null;
 let jitterMs = 0;
 let decodeMs = 0;
@@ -365,13 +370,18 @@ async function handleLocalMessage(event, sourceSocket) {
     return;
   }
   try {
+    const decodeStartedAt = performance.now();
     const bitmap = await createImageBitmap(event.data);
+    localImageDecodeMs = performance.now() - decodeStartedAt;
     if (sourceSocket !== localSocket || !started) { bitmap.close(); return; }
-    localOutput.width = bitmap.width;
-    localOutput.height = bitmap.height;
+    if (localOutput.width !== bitmap.width) localOutput.width = bitmap.width;
+    if (localOutput.height !== bitmap.height) localOutput.height = bitmap.height;
+    const drawStartedAt = performance.now();
     localContext.drawImage(bitmap, 0, 0);
+    localDrawMs = performance.now() - drawStartedAt;
     bitmap.close();
     localRoundTripMs = performance.now() - localFrameSentAt;
+    recordLocalFrameTiming();
     localOutput.hidden = false;
     showFirstFrame();
     output.hidden = false;
@@ -379,7 +389,6 @@ async function handleLocalMessage(event, sourceSocket) {
     latency.hidden = false;
     localFailures = 0;
     showError("", "camera");
-    void updateMetrics();
   } catch (error) {
     if (sourceSocket === localSocket) retryFrame(error);
     return;
@@ -387,7 +396,27 @@ async function handleLocalMessage(event, sourceSocket) {
   if (sourceSocket === localSocket) scheduleLocalFrame();
 }
 
-function scheduleLocalFrame(delay = 8) {
+function recordLocalFrameTiming() {
+  localFrameTimingSamples.push({
+    capture: localCaptureMs,
+    encode: localEncodeMs,
+    decode: localImageDecodeMs,
+    draw: localDrawMs,
+    roundTrip: localRoundTripMs
+  });
+  if (localFrameTimingSamples.length < 30) return;
+  const fields = [];
+  for (const name of ["capture", "encode", "decode", "draw", "roundTrip"]) {
+    const values = localFrameTimingSamples.map(sample => sample[name]).sort((a, b) => a - b);
+    const p95 = values[Math.ceil(values.length * 0.95) - 1];
+    fields.push(`${name}_avg_ms=${(values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1)}`);
+    fields.push(`${name}_p95_ms=${p95.toFixed(1)}`);
+  }
+  console.debug(`FRAME_TIMING local frames=${localFrameTimingSamples.length} ${fields.join(" ")}`);
+  localFrameTimingSamples = [];
+}
+
+function scheduleLocalFrame(delay = 0) {
   if (!started || document.visibilityState !== "visible" || localFramePending || localFrameTimer) return;
   localFrameTimer = setTimeout(() => {
     localFrameTimer = 0;
@@ -415,7 +444,9 @@ async function sendLocalFrame() {
     const frame = await encodeCameraFrame(output, localInputCanvas, localInputContext, Number(resolutionInput.value));
     if (!started || localSocket !== socket || current !== generation) return;
     if (socket.readyState !== WebSocket.OPEN) throw new Error("Camera connection closed.");
-    socket.send(frame);
+    localCaptureMs = frame.captureMs;
+    localEncodeMs = frame.encodeMs;
+    socket.send(frame.data);
     localFrameDeadline = setTimeout(() => {
       if (socket !== localSocket || !started) return;
       showError("Frame processing timed out. Resume to reconnect.", "camera");
@@ -478,6 +509,11 @@ async function start() {
   quitModelButton.disabled = true;
   cameraInput.disabled = true;
   localRoundTripMs = 0;
+  localCaptureMs = 0;
+  localEncodeMs = 0;
+  localImageDecodeMs = 0;
+  localDrawMs = 0;
+  localFrameTimingSamples = [];
   try {
     sessionToken = (await request("/session", {})).token;
     runtimeLoaded = Boolean((await request("/health")).loaded);
@@ -552,6 +588,11 @@ function clearCameraSession() {
   localFrameTimer = 0;
   localFramePending = false;
   localRoundTripMs = 0;
+  localCaptureMs = 0;
+  localEncodeMs = 0;
+  localImageDecodeMs = 0;
+  localDrawMs = 0;
+  localFrameTimingSamples = [];
   if (localSocket) {
     const socket = localSocket;
     localSocket = null;
