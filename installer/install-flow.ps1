@@ -10,8 +10,13 @@ Add-Type -AssemblyName System.Windows.Forms
 $root = $PSScriptRoot
 $runtimeDir = Join-Path $root '.runtime'
 New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
-$logPath = Join-Path $runtimeDir 'install.log'
-$errorPath = Join-Path $runtimeDir 'install-error.log'
+$logDir = Join-Path $runtimeDir 'logs'
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+& (Join-Path $root 'python\python.exe') -B (Join-Path $root 'log_retention.py') --prune
+$stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmss') + '-' + $PID
+$script:logSequence = 0
+$script:logPath = $null
+$script:errorPath = $null
 $pending = Join-Path $runtimeDir 'setup.pending'
 $form = [System.Windows.Forms.Form]::new()
 $form.Text = 'Reality Restyling Setup'
@@ -159,7 +164,9 @@ function Invoke-Child {
     param([string]$FilePath, [string]$Arguments, [int]$Number, [string]$Step)
     if ($script:cancelRequested) { throw 'Setup canceled.' }
     Set-Step -Number $Number -Text $Step
-    Remove-Item -LiteralPath $logPath, $errorPath -Force -ErrorAction SilentlyContinue
+    $script:logSequence++
+    $script:logPath = Join-Path $logDir "install-$stamp-$script:logSequence.log"
+    $script:errorPath = Join-Path $logDir "install-$stamp-$script:logSequence-error.log"
     $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -PassThru -WindowStyle Hidden -RedirectStandardOutput $logPath -RedirectStandardError $errorPath
     $script:activeProcess = $process
     $stream = [IO.File]::Open($logPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
@@ -220,8 +227,8 @@ function Show-LogError {
     param([string]$Message)
     $choice = [System.Windows.Forms.MessageBox]::Show($Message + "`n`nOpen the setup log?", 'Reality Restyling Setup', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Error)
     if ($choice -eq [System.Windows.Forms.DialogResult]::Yes) {
-        if (Test-Path -LiteralPath $logPath) { Start-Process notepad.exe -ArgumentList (Quote-Argument $logPath) }
-        if (Test-Path -LiteralPath $errorPath) { Start-Process notepad.exe -ArgumentList (Quote-Argument $errorPath) }
+        if ($logPath -and (Test-Path -LiteralPath $logPath)) { Start-Process notepad.exe -ArgumentList (Quote-Argument $logPath) }
+        if ($errorPath -and (Test-Path -LiteralPath $errorPath)) { Start-Process notepad.exe -ArgumentList (Quote-Argument $errorPath) }
     }
 }
 
@@ -262,7 +269,9 @@ try {
     $modelState = Invoke-ModelTool -Arguments @('--check') -Number 7 -Step 'Checking model files'
     if ($ModelMode -eq 'download' -or ($ModelMode -eq 'existing' -and $modelState -ne 0 -and [System.Windows.Forms.MessageBox]::Show('Some model files are missing. Download the missing files now?', 'Reality Restyling Setup', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question) -eq [System.Windows.Forms.DialogResult]::Yes)) {
         $downloadState = Invoke-ModelTool -Arguments @('--download-required') -Number 7 -Step 'Downloading model files'
-        if ($downloadState -ne 0) { Show-LogError 'The model download did not finish. It can be resumed by running setup again.' }
+        if ($downloadState -ne 0) { throw 'The requested model download did not finish. Open the launcher to resume it.' }
+        $modelState = Invoke-ModelTool -Arguments @('--check') -Number 7 -Step 'Verifying model files'
+        if ($modelState -ne 0) { throw 'The required model files are still incomplete.' }
     }
 
     $upscalerState = Invoke-ModelTool -Arguments @('--check-upscaler') -Number 8 -Step 'Checking upscaler'
@@ -300,7 +309,7 @@ try {
     if (Test-Path -LiteralPath $pending) { Remove-Item -LiteralPath $pending -Force -ErrorAction Stop }
     Reset-Transfer
     $bar.Value = $bar.Maximum
-    $label.Text = 'Setup complete'
+    $label.Text = if ($modelState -eq 0) { 'Setup complete. Ready to use.' } else { 'Installed. Model files required before use.' }
     $form.Refresh()
     $script:allowClose = $true
     Start-Sleep -Milliseconds 500

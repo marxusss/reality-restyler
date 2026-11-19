@@ -1,3 +1,8 @@
+import { cameraStream, currentRotation } from "./camera.js";
+import { encodeCameraFrame } from "./transport.js";
+import { mountStyles } from "./styles.js";
+import { ErrorState } from "./errors.js";
+
 const $ = id => document.getElementById(id);
 const output = $("output");
 const localOutput = $("localOutput");
@@ -15,14 +20,6 @@ const startupLabel = $("startupLabel");
 const startupProgress = $("startupProgress");
 const latency = $("latency");
 const promptInput = $("promptInput");
-const stylesDialog = $("stylesDialog");
-const styleEditor = $("styleEditor");
-const styleForm = $("styleForm");
-const styleName = $("styleName");
-const stylePrompt = $("stylePrompt");
-const styleCapturePreview = $("styleCapturePreview");
-const styleEditorError = $("styleEditorError");
-const customStyleStorageKey = "reality-restyle-custom-styles";
 const stepsInput = $("stepsInput");
 const stepsValue = $("stepsValue");
 const resolutionInput = $("resolutionInput");
@@ -33,7 +30,13 @@ const mirrorButton = $("mirrorButton");
 let peer = null;
 let stream = null;
 let localSocket = null;
-let sessionId = "";
+let sessionToken = "";
+let generation = 0;
+let localFrameDeadline = 0;
+let localFailures = 0;
+let metricsPending = false;
+let heartbeatPending = false;
+let disconnectTimer = 0;
 let started = false;
 let busy = false;
 let runtimeLoaded = false;
@@ -44,9 +47,6 @@ let heartbeatTimer = 0;
 let metricsTimer = 0;
 let promptApplyTimer = 0;
 let settingsApplyQueue = Promise.resolve();
-let styleSelection = null;
-let appliedStyleSelection = { prompt: "", styles: [] };
-const maxStyles = 5;
 let cameraSwitchQueue = Promise.resolve();
 let cameraSwitchSequence = 0;
 let localFramePending = false;
@@ -65,10 +65,13 @@ const modelStartupStages = {
   gpu: ["Preparing the model on the GPU", 5]
 };
 
-function showError(message) {
-  errorBox.textContent = message || "";
-  errorBox.hidden = !message;
+const errors = new ErrorState();
+function showError(message, source = "action") {
+  const text = errors.set(message, source);
+  errorBox.textContent = text;
+  errorBox.hidden = !text;
 }
+function clearErrors() { errors.clear(); showError(""); }
 
 function showStartup(message, completed = 0) {
   if (startupLabel.textContent !== message) startupLabel.textContent = message;
@@ -80,13 +83,6 @@ function showFirstFrame() {
   if (firstFrameReceived) return;
   firstFrameReceived = true;
   if (started) showStartup("");
-}
-
-function currentRotation() {
-  let angle = Number(screen.orientation && screen.orientation.angle);
-  if (!Number.isFinite(angle) && Number.isFinite(Number(window.orientation))) angle = Number(window.orientation);
-  if (!Number.isFinite(angle)) angle = 0;
-  return ((Math.round(angle / 90) * 90) % 360 + 360) % 360;
 }
 
 function readSettings() {
@@ -125,21 +121,35 @@ function restoreSettings() {
 }
 
 async function request(path, body) {
-  const response = await fetch(path, {
-    method: body === undefined ? "GET" : "POST",
-    headers: body === undefined ? {} : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: "no-store"
-  });
-  let result = {};
-  try { result = await response.json(); } catch (_) {}
-  if (!response.ok) {
-    const failure = new Error(result.error || "Request failed (" + response.status + ").");
-    failure.status = response.status;
-    failure.data = result;
-    throw failure;
-  }
-  return result;
+  const headers = body === undefined ? {} : {"Content-Type": "application/json"};
+  if (sessionToken) headers["X-Restyle-Session"] = sessionToken;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), path === "/start" ? 600000 : 30000);
+  try {
+    const response = await fetch(path, {
+      method: body === undefined ? "GET" : "POST", headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: "no-store", signal: controller.signal
+    });
+    const raw = await response.text();
+    let result = {};
+    try { result = JSON.parse(raw); } catch (_) {}
+    if (!response.ok) {
+      const failure = new Error(result.error || raw || "Request failed (" + response.status + ").");
+      failure.status = response.status; failure.data = result;
+      throw failure;
+    }
+    return result;
+  } finally { clearTimeout(timer); }
+}
+
+function loseOwnership(message) {
+  sessionToken = "";
+  runtimeLoaded = false;
+  clearInterval(heartbeatTimer); heartbeatTimer = 0;
+  clearCameraSession();
+  startButton.textContent = "Start";
+  showError(message || "Camera control moved to another device. Press Start to take over.", "camera");
 }
 
 async function requestRuntimeStart(allowLowVram) {
@@ -174,7 +184,7 @@ async function startRuntime() {
     if (error.status === 409 && error.data && error.data.low_vram) {
       const free = Number(error.data.free_vram_gb) || 0;
       const total = Number(error.data.total_vram_gb) || 0;
-      const proceed = window.confirm(`Low VRAM: ${free.toFixed(1)} GB free of ${total.toFixed(1)} GB. Start anyway?`);
+      const proceed = window.confirm(`Low VRAM: ${free.toFixed(1)} GB free of ${total.toFixed(1)} GB. Start anyway? This does not activate a low-memory mode.`);
       if (!proceed) throw new Error("Start cancelled.");
       result = await requestRuntimeStart(true);
     } else {
@@ -183,37 +193,6 @@ async function startRuntime() {
   }
   if (!result.ok) throw new Error("Could not start the local runtime.");
   runtimeLoaded = true;
-}
-
-async function cameraStream(deviceId = "", facingMode = "environment") {
-  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    throw new Error("Camera access requires a secure HTTPS page.");
-  }
-  const camera = {
-    width: { ideal: 1920, max: 1920 },
-    height: { ideal: 1080, max: 1080 },
-    frameRate: { ideal: 30, max: 30 }
-  };
-  const video = deviceId
-    ? { ...camera, deviceId: { exact: deviceId } }
-    : { ...camera, facingMode: { ideal: facingMode } };
-  try {
-    return await navigator.mediaDevices.getUserMedia({ video, audio: false });
-  } catch (error) {
-    if (["NotAllowedError", "PermissionDeniedError", "SecurityError"].includes(error.name)) {
-      throw new Error("Allow camera access in browser settings, then retry.");
-    }
-    if (["NotFoundError", "DevicesNotFoundError"].includes(error.name)) {
-      throw new Error("No camera is available.");
-    }
-    if (["NotReadableError", "TrackStartError", "AbortError"].includes(error.name) || error.message === "Load failed") {
-      throw new Error("The selected camera could not be opened. It may be busy or unavailable.");
-    }
-    if (error.name === "OverconstrainedError") {
-      throw new Error("The selected camera is unavailable. Choose another camera.");
-    }
-    throw error;
-  }
 }
 
 function applyCameraMirror(track) {
@@ -272,10 +251,14 @@ async function startPeer() {
     output.play().catch(() => {});
   });
   peer.addEventListener("connectionstatechange", () => {
-    if (!started || !peer) return;
-    if (peer.connectionState === "failed") {
-      showError("Camera connection failed.");
-      void pause(true);
+    if (peer !== activePeer) return;
+    clearTimeout(disconnectTimer);
+    if (["failed", "closed", "disconnected"].includes(activePeer.connectionState)) {
+      disconnectTimer = setTimeout(() => {
+        if (peer !== activePeer || !started || busy || activePeer.connectionState === "connected") return;
+        showError("Camera connection lost. Resume to reconnect.", "camera");
+        void pause(true);
+      }, activePeer.connectionState === "disconnected" ? 3000 : 0);
     }
   });
   for (const track of stream.getTracks()) peer.addTrack(track, stream);
@@ -294,62 +277,59 @@ async function startPeer() {
     peer.addEventListener("icegatheringstatechange", check);
   });
   const answer = await request("/offer", { sdp: peer.localDescription.sdp, type: peer.localDescription.type });
-  sessionId = answer.session_id;
-  await peer.setRemoteDescription({ sdp: answer.sdp, type: answer.type });
+  await activePeer.setRemoteDescription({ sdp: answer.sdp, type: answer.type });
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => finish(new Error("Camera connection timed out.")), 18000);
+    function finish(error) {
+      clearTimeout(timer);
+      activePeer.removeEventListener("connectionstatechange", check);
+      if (error) reject(error); else resolve();
+    }
+    function check() {
+      if (peer !== activePeer || ["failed", "closed"].includes(activePeer.connectionState)) finish(new Error("Camera connection failed."));
+      else if (activePeer.connectionState === "connected") finish();
+    }
+    activePeer.addEventListener("connectionstatechange", check);
+    check();
+  });
 }
 
 function openLocalStream() {
   const url = new URL("/local-stream", window.location.href);
   url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const socket = new WebSocket(url);
+  const socket = new WebSocket(url, ["restyle." + sessionToken]);
   socket.binaryType = "blob";
   localSocket = socket;
   socket.addEventListener("message", event => void handleLocalMessage(event, socket));
-  socket.addEventListener("close", async () => {
-    if (localSocket !== socket) return;
-    localSocket = null;
-    if (started) {
-      try {
-        const result = await request("/health");
-        if (!result.loaded) {
-          runtimeLoaded = false;
-          clearInterval(heartbeatTimer);
-          heartbeatTimer = 0;
-          clearCameraSession();
-          startButton.textContent = "Start";
-          showError("");
-          return;
-        }
-      } catch (_) {}
-      showError("Camera connection closed.");
-      void pause(true);
-    }
+  socket.addEventListener("close", () => {
+    if (localSocket !== socket || !started) return;
+    showError("Camera connection closed. Resume to reconnect.", "camera");
+    void pause(true);
   });
   return new Promise((resolve, reject) => {
-    socket.addEventListener("open", resolve, { once: true });
-    socket.addEventListener("error", () => reject(new Error("Local camera connection failed.")), { once: true });
+    const timer = setTimeout(() => { socket.close(); reject(new Error("Local connection timed out.")); }, 10000);
+    const failed = () => { clearTimeout(timer); reject(new Error("Local camera connection failed.")); };
+    socket.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
+    socket.addEventListener("error", failed, { once: true });
+    socket.addEventListener("close", failed, { once: true });
   });
 }
 
 async function handleLocalMessage(event, sourceSocket) {
   if (sourceSocket !== localSocket) return;
+  clearTimeout(localFrameDeadline);
+  localFrameDeadline = 0;
   if (typeof event.data === "string") {
     try {
       const result = JSON.parse(event.data);
-      if (result.error) {
-        showError(result.error);
-        if (started) void pause(true);
-      }
-    } catch (_) {}
+      if (result.error) { showError(result.error, "camera"); if (started) void pause(true); }
+    } catch (_) { retryFrame(new Error("Invalid camera response.")); }
     localFramePending = false;
     return;
   }
   try {
     const bitmap = await createImageBitmap(event.data);
-    if (sourceSocket !== localSocket || !started) {
-      bitmap.close();
-      return;
-    }
+    if (sourceSocket !== localSocket || !started) { bitmap.close(); return; }
     localOutput.width = bitmap.width;
     localOutput.height = bitmap.height;
     localContext.drawImage(bitmap, 0, 0);
@@ -360,63 +340,60 @@ async function handleLocalMessage(event, sourceSocket) {
     output.hidden = false;
     output.classList.add("camera-source");
     latency.hidden = false;
-    showError("");
+    localFailures = 0;
+    showError("", "camera");
     void updateMetrics();
   } catch (error) {
-    showError(error.message);
-  } finally {
-    localFramePending = false;
-    if (started) scheduleLocalFrame();
-  }
+    if (sourceSocket === localSocket) retryFrame(error);
+    return;
+  } finally { if (sourceSocket === localSocket) localFramePending = false; }
+  if (sourceSocket === localSocket) scheduleLocalFrame();
 }
 
-function scheduleLocalFrame() {
+function scheduleLocalFrame(delay = 8) {
   if (!started || document.visibilityState !== "visible" || localFramePending || localFrameTimer) return;
   localFrameTimer = setTimeout(() => {
     localFrameTimer = 0;
     void sendLocalFrame();
-  }, 8);
+  }, delay);
+}
+
+function retryFrame(error) {
+  localFramePending = false;
+  localFailures += 1;
+  showError(error.message, "camera");
+  if (localFailures >= 3) void pause(true);
+  else scheduleLocalFrame(250 * localFailures);
 }
 
 async function sendLocalFrame() {
   const socket = localSocket;
   const track = stream && stream.getVideoTracks()[0];
   if (!started || !socket || socket.readyState !== WebSocket.OPEN || localFramePending || !track || document.visibilityState !== "visible") return;
-  if (output.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-    scheduleLocalFrame();
-    return;
-  }
+  if (output.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) { scheduleLocalFrame(50); return; }
+  const current = generation;
   localFramePending = true;
   try {
-    const settings = track.getSettings();
-    const sourceWidth = settings.width || output.videoWidth;
-    const sourceHeight = settings.height || output.videoHeight;
-    const scale = Math.min(1, Number(resolutionInput.value) / Math.max(sourceWidth, sourceHeight));
-    const width = Math.max(1, Math.round(sourceWidth * scale));
-    const height = Math.max(1, Math.round(sourceHeight * scale));
-    localInputCanvas.width = width;
-    localInputCanvas.height = height;
-    localInputContext.drawImage(output, 0, 0, width, height);
-    const image = await new Promise(resolve => localInputCanvas.toBlob(resolve, "image/jpeg", 0.88));
-    if (!started || localSocket !== socket || socket.readyState !== WebSocket.OPEN) return;
-    if (!image || image.type !== "image/jpeg") throw new Error("Could not capture a camera frame.");
-    const frame = await image.arrayBuffer();
-    if (!started || localSocket !== socket || socket.readyState !== WebSocket.OPEN) return;
     localFrameSentAt = performance.now();
+    const frame = await encodeCameraFrame(output, localInputCanvas, localInputContext, Number(resolutionInput.value));
+    if (!started || localSocket !== socket || current !== generation) return;
+    if (socket.readyState !== WebSocket.OPEN) throw new Error("Camera connection closed.");
     socket.send(frame);
-  } catch (error) {
-    if (!started || localSocket !== socket) return;
-    localFramePending = false;
-    showError(error.message);
-  }
+    localFrameDeadline = setTimeout(() => {
+      if (socket !== localSocket || !started) return;
+      showError("Frame processing timed out. Resume to reconnect.", "camera");
+      void pause(true);
+    }, 30000);
+  } catch (error) { if (socket === localSocket && current === generation) retryFrame(error); }
 }
 
 async function sendRotation() {
   if (!runtimeLoaded) return;
   try {
     await request("/settings", { settings: { rotation: currentRotation() } });
+    showError("", "rotation");
   } catch (error) {
-    showError(error.message);
+    showError(error.message, "rotation");
   }
 }
 
@@ -424,13 +401,14 @@ async function applySettings() {
   saveSettings();
   if (!runtimeLoaded) return Promise.resolve();
   const settings = readSettings();
+  const token = sessionToken;
   const pending = settingsApplyQueue.catch(() => {}).then(async () => {
-    if (!runtimeLoaded || pending !== settingsApplyQueue) return;
+    if (!runtimeLoaded || token !== sessionToken || pending !== settingsApplyQueue) return;
     try {
       await request("/settings", { settings });
-      showError("");
+      if (token === sessionToken) showError("", "settings");
     } catch (error) {
-      showError(error.message);
+      if (token === sessionToken) showError(error.message, "settings");
     }
   });
   settingsApplyQueue = pending;
@@ -452,199 +430,10 @@ function applyPromptNow() {
   void applySettings();
 }
 
-function setStyleError(element, message = "") {
-  element.textContent = message;
-  element.hidden = !message;
-}
-
-function customStyles() {
-  try {
-    const styles = JSON.parse(localStorage.getItem(customStyleStorageKey) || "[]");
-    if (Array.isArray(styles)) return styles;
-  } catch (_) {}
-  return [];
-}
-
-function updateStyleSelection() {
-  const combining = styleSelection !== null;
-  $("combineStylesButton").setAttribute("aria-pressed", String(combining));
-  $("addStyleButton").hidden = combining;
-  $("useStylesButton").hidden = !combining;
-  $("useStylesButton").disabled = !styleSelection?.length;
-  for (const card of stylesDialog.querySelectorAll(".style-card")) {
-    const selected = styleSelection?.includes(card.dataset.prompt) ?? false;
-    if (combining) card.setAttribute("aria-pressed", String(selected));
-    else card.removeAttribute("aria-pressed");
-    card.disabled = styleSelection?.length === maxStyles && !selected;
-  }
-}
-
-function setStyleSelection(selection) {
-  styleSelection = selection;
-  setStyleError($("styleCombineError"));
-  updateStyleSelection();
-}
-
-function startStyleSelection() {
-  return promptInput.value === appliedStyleSelection.prompt ? [...appliedStyleSelection.styles] : [];
-}
-
-function applyStyleSelection(prompt, styles) {
-  appliedStyleSelection = { prompt, styles };
-  promptInput.value = prompt;
-  applyPromptNow();
-  stylesDialog.close();
-}
-
-async function useStyleSelection() {
-  const selection = styleSelection;
-  if (!selection?.length) return;
-  $("useStylesButton").disabled = true;
-  setStyleError($("styleCombineError"));
-  try {
-    const { prompt } = await request("/styles/combine", { prompts: selection });
-    if (stylesDialog.open && styleSelection === selection) applyStyleSelection(prompt, selection);
-  } catch (error) {
-    if (styleSelection === selection) setStyleError($("styleCombineError"), error.message);
-  } finally {
-    if (styleSelection === selection) updateStyleSelection();
-  }
-}
-
-function renderStyleCards(container, styles) {
-  const cards = styles.map(style => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "style-card";
-    button.dataset.prompt = style.prompt;
-    const thumbnail = document.createElement("span");
-    thumbnail.className = "style-thumbnail";
-    if (style.thumbnail) {
-      const image = document.createElement("img");
-      image.alt = "";
-      image.loading = "lazy";
-      image.decoding = "async";
-      image.src = style.thumbnail;
-      thumbnail.append(image);
-    }
-    const label = document.createElement("span");
-    label.textContent = style.name;
-    button.append(thumbnail, label);
-    button.addEventListener("click", event => {
-      if (styleSelection === null && !event.shiftKey) {
-        applyStyleSelection(style.prompt, [style.prompt]);
-        return;
-      }
-      const selected = styleSelection ?? startStyleSelection();
-      if (selected.includes(style.prompt)) {
-        setStyleSelection(selected.filter(prompt => prompt !== style.prompt));
-      } else if (selected.length < maxStyles) {
-        setStyleSelection([...selected, style.prompt]);
-      } else {
-        setStyleSelection(selected);
-      }
-    });
-    return button;
-  });
-  container.replaceChildren(...cards);
-  updateStyleSelection();
-}
-
-function renderCustomStyles() {
-  const styles = customStyles();
-  $("customStyleSection").hidden = !styles.length;
-  renderStyleCards($("customStyles"), styles);
-}
-
-async function openStyles() {
-  const presetStyles = $("presetStyles");
-  const catalogError = $("catalogError");
-  setStyleSelection(null);
-  renderCustomStyles();
-  stylesDialog.showModal();
-  if (presetStyles.hasChildNodes()) return;
-  setStyleError(catalogError);
-  try {
-    const response = await fetch("/styles/catalog.json");
-    if (!response.ok) throw new Error();
-    renderStyleCards(presetStyles, await response.json());
-  } catch (_) {
-    setStyleError(catalogError, "Could not load styles.");
-  }
-}
-
-function openStyleEditor() {
-  styleForm.reset();
-  stylePrompt.value = promptInput.value;
-  styleCapturePreview.removeAttribute("src");
-  styleCapturePreview.hidden = true;
-  setStyleError(styleEditorError);
-  styleEditor.showModal();
-}
-
-function captureStyle() {
-  setStyleError(styleEditorError);
-  let frame;
-  if (started && firstFrameReceived) {
-    if (!localOutput.hidden) {
-      frame = localOutput;
-    } else if (peer && !output.hidden && !output.classList.contains("camera-source") &&
-        output.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      frame = output;
-    }
-  }
-  const width = frame === output ? output.videoWidth : frame?.width;
-  const height = frame === output ? output.videoHeight : frame?.height;
-  if (!width || !height) {
-    setStyleError(styleEditorError, "No AI frame available to capture.");
-    return;
-  }
-  try {
-    const thumbnail = document.createElement("canvas");
-    const scale = Math.min(1, 320 / Math.max(width, height));
-    thumbnail.width = Math.max(1, Math.round(width * scale));
-    thumbnail.height = Math.max(1, Math.round(height * scale));
-    const context = thumbnail.getContext("2d", { alpha: false });
-    if (mirror) {
-      context.translate(thumbnail.width, 0);
-      context.scale(-1, 1);
-    }
-    context.drawImage(frame, 0, 0, thumbnail.width, thumbnail.height);
-    styleCapturePreview.src = thumbnail.toDataURL("image/webp", 0.78);
-    styleCapturePreview.hidden = false;
-  } catch (_) {
-    setStyleError(styleEditorError, "Could not capture the AI frame.");
-  }
-}
-
-function saveStyle(event) {
-  event.preventDefault();
-  const name = styleName.value.trim();
-  const prompt = stylePrompt.value;
-  if (!name || !prompt.trim()) {
-    setStyleError(styleEditorError, "Enter a name and prompt.");
-    return;
-  }
-  const styles = customStyles();
-  styles.unshift({ name, prompt, thumbnail: styleCapturePreview.getAttribute("src") });
-  try {
-    localStorage.setItem(customStyleStorageKey, JSON.stringify(styles));
-  } catch (_) {
-    setStyleError(styleEditorError, "Could not save the style on this device.");
-    return;
-  }
-  styleEditor.close();
-  renderCustomStyles();
-  $("styleList").scrollTop = 0;
-  $("customStyles").firstElementChild.focus();
-}
-
 async function start() {
   if (busy || started) return;
-  const runtimeWasLoaded = runtimeLoaded;
-  let loadedDuringStart = false;
   busy = true;
-  showError("");
+  clearErrors();
   clearTimeout(promptApplyTimer);
   promptApplyTimer = 0;
   showStartup("Opening camera");
@@ -653,6 +442,9 @@ async function start() {
   cameraInput.disabled = true;
   localRoundTripMs = 0;
   try {
+    sessionToken = (await request("/session", {})).token;
+    runtimeLoaded = Boolean((await request("/health")).loaded);
+    if (runtimeLoaded && !heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
     stream = await cameraStream(cameraInput.value);
     const cameraTrack = stream.getVideoTracks()[0];
     if (!cameraTrack) throw new Error("The selected camera returned no video.");
@@ -667,7 +459,6 @@ async function start() {
     const connection = await request("/transport");
     transportMode = connection.mode;
     await startRuntime();
-    loadedDuringStart = !runtimeWasLoaded && runtimeLoaded;
     if (!heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
     if (!(await heartbeat())) throw new Error("The model stopped during startup. Press Start to retry.");
     await request("/settings", { settings: readSettings() });
@@ -683,16 +474,16 @@ async function start() {
     if (transportMode === "local") scheduleLocalFrame();
     await updateMetrics();
   } catch (error) {
-    if (loadedDuringStart) {
-      await stop(true, true);
-    } else {
-      clearCameraSession();
-      if (!runtimeLoaded) {
-        clearInterval(heartbeatTimer);
-        heartbeatTimer = 0;
+    clearCameraSession();
+    if (error.status === 409 && !error.data?.low_vram) loseOwnership(error.message);
+    else if (sessionToken && runtimeLoaded) {
+      // Release only the camera, never unload a warm model on a connection failure.
+      try { await request("/pause", {}); } catch (failure) {
+        if (failure.status === 409) loseOwnership(failure.message);
       }
-      startButton.textContent = runtimeLoaded ? "Resume" : "Start";
     }
+    if (!runtimeLoaded) { clearInterval(heartbeatTimer); heartbeatTimer = 0; }
+    startButton.textContent = runtimeLoaded ? "Resume" : "Start";
     if (error.message !== "Start cancelled.") showError(error.message);
   } finally {
     busy = false;
@@ -708,7 +499,14 @@ function clearCameraSession() {
   const currentStream = stream;
   peer = null;
   stream = null;
-  sessionId = "";
+  generation += 1;
+  clearTimeout(disconnectTimer);
+  clearTimeout(localFrameDeadline);
+  localFrameDeadline = 0;
+  localFailures = 0;
+  previousStats = null;
+  jitterMs = 0;
+  decodeMs = 0;
   started = false;
   firstFrameReceived = false;
   clearInterval(metricsTimer);
@@ -742,74 +540,73 @@ function clearCameraSession() {
 
 async function pause(preserveError = false) {
   if (busy || !started) return;
-  busy = true;
-  startButton.disabled = true;
+  busy = true; startButton.disabled = true; quitModelButton.disabled = true;
   clearCameraSession();
   try {
     const result = await request("/pause", {});
     runtimeLoaded = Boolean(result.loaded);
-    if (!runtimeLoaded) {
-      clearInterval(heartbeatTimer);
-      heartbeatTimer = 0;
-    }
+    showError("", "pause");
+    if (!preserveError) showError("", "camera");
+    if (!runtimeLoaded) { clearInterval(heartbeatTimer); heartbeatTimer = 0; }
   } catch (error) {
-    if (!preserveError) showError(error.message);
+    if (error.status === 409) loseOwnership(error.message);
+    else showError(error.message, "pause");
+  } finally {
+    startButton.textContent = runtimeLoaded ? "Resume" : "Start";
+    startButton.disabled = false; quitModelButton.disabled = false; busy = false;
   }
-  startButton.textContent = runtimeLoaded ? "Resume" : "Start";
-  startButton.disabled = false;
-  busy = false;
-  if (!preserveError) showError("");
 }
 
-async function stop(preserveError = false, sendRequest = true) {
-  clearTimeout(promptApplyTimer);
-  promptApplyTimer = 0;
+async function stop() {
+  if (busy || !sessionToken) return;
+  busy = true; startButton.disabled = true;
+  clearTimeout(promptApplyTimer); promptApplyTimer = 0;
   clearCameraSession();
-  clearInterval(heartbeatTimer);
-  heartbeatTimer = 0;
-  let failure = "";
-  if (sendRequest) {
-    try {
-      await request("/stop", {});
-      runtimeLoaded = false;
-    } catch (error) {
-      failure = error.message;
-    }
-  } else {
-    runtimeLoaded = false;
+  try {
+    await request("/stop", {});
+    sessionToken = ""; runtimeLoaded = false;
+    clearInterval(heartbeatTimer); heartbeatTimer = 0;
+    clearErrors();
+  } catch (error) {
+    if (error.status === 409) loseOwnership(error.message);
+    else showError(error.message, "stop");
+  } finally {
+    startButton.textContent = runtimeLoaded ? "Resume" : "Start";
+    startButton.disabled = false; busy = false;
   }
-  startButton.textContent = runtimeLoaded ? "Resume" : "Start";
-  if (!preserveError) showError(failure);
 }
 
 async function heartbeat() {
-  if (!runtimeLoaded || document.visibilityState !== "visible") return true;
+  if (!runtimeLoaded || !sessionToken || document.visibilityState !== "visible") return true;
+  if (heartbeatPending) return true;
+  heartbeatPending = true;
+  const token = sessionToken;
   try {
     const result = await request("/heartbeat", {});
+    if (token !== sessionToken) return false;
+    showError("", "heartbeat");
     if (!result.loaded) {
-      runtimeLoaded = false;
-      clearInterval(heartbeatTimer);
-      heartbeatTimer = 0;
-      if (started) {
-        clearCameraSession();
-        showError("The model unloaded after inactivity.");
-      }
-      startButton.textContent = "Start";
+      loseOwnership("The model unloaded after inactivity. Press Start.");
       return false;
     }
     return true;
   } catch (error) {
-    showError(error.message);
+    if (token !== sessionToken) return false;
+    if (error.status === 409) loseOwnership(error.message);
+    else showError(error.message, "heartbeat");
     return false;
-  }
+  } finally { heartbeatPending = false; }
 }
 
 async function updateMetrics() {
-  if (!started || document.visibilityState !== "visible") return;
+  if (!started || metricsPending || document.visibilityState !== "visible") return;
+  metricsPending = true;
+  const current = generation;
   try {
     const metrics = await request("/metrics");
-    if (metrics.error) showError(metrics.error);
-    else showError("");
+    if (!started || current !== generation) return;
+    showError(metrics.error || "", "model");
+    showError("", "metrics");
     let roundTrip = 0;
     if (peer) {
       const stats = await peer.getStats();
@@ -843,10 +640,10 @@ async function updateMetrics() {
     const modelMs = Number(metrics.model_ms) || 0;
     const totalMs = Number(metrics.total_ms) || modelMs;
     const clientMs = transportMode === "local" ? localRoundTripMs : totalMs + roundTrip + jitterMs + decodeMs;
-    latency.textContent = "Model " + Math.round(modelMs) + " ms · End-to-end " + Math.round(clientMs) + " ms";
-  } catch (error) {
-    showError(error.message);
-  }
+    if (!started || current !== generation) return;
+    latency.textContent = "Model " + Math.round(modelMs) + " ms · " + (transportMode === "local" ? "Frame round trip " : "Estimated latency ") + Math.round(clientMs) + " ms";
+  } catch (error) { if (current === generation) showError(error.message, "metrics"); }
+  finally { metricsPending = false; }
 }
 
 async function switchCamera(deviceId, sequence) {
@@ -854,7 +651,7 @@ async function switchCamera(deviceId, sequence) {
   const previous = stream;
   const previousTrack = previous.getVideoTracks()[0];
   if (!previousTrack) {
-    showError("The current camera is unavailable.");
+    showError("The current camera is unavailable.", "camera-switch");
     return;
   }
   if (previousTrack.getSettings?.().deviceId === deviceId) return;
@@ -888,13 +685,13 @@ async function switchCamera(deviceId, sequence) {
     }
     if (previous) for (const track of previous.getTracks()) track.stop();
     if (transportMode === "local") scheduleLocalFrame();
-    showError("");
+    showError("", "camera-switch");
   } catch (error) {
     if (next) for (const track of next.getTracks()) track.stop();
     if (sequence !== cameraSwitchSequence) return;
     const previousId = previousTrack.getSettings?.().deviceId;
     if (previousId && [...cameraInput.options].some(option => option.value === previousId)) cameraInput.value = previousId;
-    showError(error.message || "Could not switch camera.");
+    showError(error.message || "Could not switch camera.", "camera-switch");
   }
 }
 
@@ -908,16 +705,16 @@ async function toggleFlash() {
   const track = stream.getVideoTracks()[0];
   const capabilities = track.getCapabilities ? track.getCapabilities() : {};
   if (!capabilities.torch) {
-    showError("Flash is unavailable on this camera.");
+    showError("Flash is unavailable on this camera.", "flash");
     return;
   }
   const enabled = flashButton.getAttribute("aria-pressed") === "true";
   try {
     await track.applyConstraints({ advanced: [{ torch: !enabled }] });
     flashButton.setAttribute("aria-pressed", String(!enabled));
-    showError("");
+    showError("", "flash");
   } catch (_) {
-    showError("Could not change flash.");
+    showError("Could not change flash.", "flash");
   }
 }
 
@@ -927,14 +724,19 @@ function setPanel(open) {
 }
 
 settingsButton.addEventListener("click", () => setPanel(settingsPanel.hidden));
-$("stylesButton").addEventListener("click", () => void openStyles());
-$("combineStylesButton").addEventListener("click", () => setStyleSelection(styleSelection === null ? startStyleSelection() : null));
-$("useStylesButton").addEventListener("click", () => void useStyleSelection());
-$("closeStylesButton").addEventListener("click", () => stylesDialog.close());
-$("addStyleButton").addEventListener("click", openStyleEditor);
-$("closeStyleEditorButton").addEventListener("click", () => styleEditor.close());
-$("captureStyleButton").addEventListener("click", captureStyle);
-styleForm.addEventListener("submit", saveStyle);
+mountStyles({
+  promptInput, applyPromptNow, request,
+  isMirrored: () => mirror,
+  getRenderedFrame() {
+    if (!started || !firstFrameReceived) return null;
+    if (!localOutput.hidden) return {frame: localOutput, width: localOutput.width, height: localOutput.height};
+    if (peer && !output.hidden && !output.classList.contains("camera-source") &&
+        output.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      return {frame: output, width: output.videoWidth, height: output.videoHeight};
+    }
+    return null;
+  }
+});
 startButton.addEventListener("click", () => started ? void pause() : void start());
 clearPromptButton.addEventListener("click", () => {
   promptInput.value = "";
@@ -993,18 +795,6 @@ document.addEventListener("visibilitychange", async () => {
   if (runtimeLoaded && transportMode === "local") scheduleLocalFrame();
 });
 
-async function syncRuntime() {
-  try {
-    const result = await request("/health");
-    if (busy || started) return;
-    runtimeLoaded = Boolean(result.loaded);
-    if (runtimeLoaded) {
-      startButton.textContent = "Resume";
-      if (!heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
-      void heartbeat();
-    }
-  } catch (_) {}
-}
-
+// A passive page never acquires or extends ownership of another camera.
 restoreSettings();
-void syncRuntime();
+

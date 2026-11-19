@@ -21,6 +21,9 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
             item.start()
         self.client = TestClient(TestServer(app.create_app()))
         await self.client.start_server()
+        response = await self.client.post('/session', json={})
+        self.token = (await response.json())['token']
+        self.headers = {'X-Restyle-Session': self.token}
 
     async def asyncTearDown(self):
         await self.client.close()
@@ -29,7 +32,7 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
 
     async def open_socket(self):
         origin = str(self.client.make_url("/").origin())
-        return await self.client.ws_connect("/local-stream", origin=origin)
+        return await self.client.ws_connect("/local-stream", origin=origin, protocols=["restyle." + self.token])
 
     async def test_loopback_uses_local_transport_and_returns_full_image(self):
         response = await self.client.get("/transport")
@@ -80,6 +83,40 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("format is not supported", json.loads(message.data)["error"])
         await socket.close()
 
+    async def test_start_transfers_control_without_unloading(self):
+        socket = await self.open_socket()
+        response = await self.client.post("/session", json={})
+        new_token = (await response.json())["token"]
+        self.assertNotEqual(new_token, self.token)
+        self.assertIn((await socket.receive(timeout=2)).type, (WSMsgType.CLOSE, WSMsgType.CLOSED, WSMsgType.CLOSING))
+        for path, body in (("/stop", {}), ("/pause", {}), ("/heartbeat", {}),
+                           ("/settings", {"settings": {"prompt": "stale"}}),
+                           ("/start", {"settings": {}}), ("/offer", {"sdp": "fake", "type": "offer"})):
+            response = await self.client.post(path, json=body, headers=self.headers)
+            self.assertEqual(response.status, 409, path)
+        response = await self.client.post("/heartbeat", json={}, headers={"X-Restyle-Session": new_token})
+        self.assertEqual(response.status, 200)
+        app.runtime.unload.assert_not_called()
+        self.token = new_token
+        new_socket = await self.open_socket()
+        await new_socket.close()
+
+    async def test_same_client_start_rotates_token(self):
+        response = await self.client.post("/session", json={}, headers=self.headers)
+        token = (await response.json())["token"]
+        self.assertNotEqual(token, self.token)
+        stale = await self.client.post("/stop", json={}, headers=self.headers)
+        self.assertEqual(stale.status, 409)
+        app.runtime.unload.assert_not_called()
+
+    async def test_duplicate_transports_are_rejected(self):
+        from aiohttp import WSServerHandshakeError
+        socket = await self.open_socket()
+        with self.assertRaises(WSServerHandshakeError) as error:
+            await self.open_socket()
+        self.assertEqual(error.exception.status, 409)
+        await socket.close()
+
     async def test_transport_is_local_for_the_host_tailscale_address(self):
         original = app.local_peer_addresses
         app.local_peer_addresses = {"100.64.0.1", "fd7a:115c:a1e0::1"}
@@ -99,7 +136,7 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status, 200)
             await response.json()
         with patch.object(app.runtime, "heartbeat", side_effect=lambda: (observed_threads.append(threading.get_ident()), True)[1]):
-            response = await self.client.post("/heartbeat", json={})
+            response = await self.client.post("/heartbeat", json={}, headers=self.headers)
             self.assertEqual(response.status, 200)
             self.assertTrue((await response.json())["loaded"])
         self.assertEqual(len(observed_threads), 2)

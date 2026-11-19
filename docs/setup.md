@@ -22,7 +22,7 @@ Uninstall removes the app's bundled Python, environment, and runtime files. Mode
 
 If Hugging Face requests model access, approve it on the opened page. The installer retries with a locally saved Hugging Face token. If needed, save a read token and rerun the installer.
 
-Anyone allowed by your tailnet policy to reach the phone port shown in the launcher can control the app and submit camera frames. Restrict access to trusted devices.
+Anyone allowed by your tailnet policy to reach the phone port can press Start and take control. Only the active controller can change settings, pause, or unload the model. Restrict access to trusted devices.
 
 ## Troubleshooting
 
@@ -30,4 +30,4 @@ Anyone allowed by your tailnet policy to reach the phone port shown in the launc
 - `Runtime module unavailable`: run the installer again to repair the local Python environment.
 - Tailscale HTTPS startup error: enable HTTPS Certificates in Tailscale Admin → DNS, then restart Reality Restyling.
 - Phone camera access: allow camera access in the browser when prompted.
-- Timing summaries are in `output.log`, opened with **View logs** in the launcher.
+- Timing summaries and startup/setup diagnostics are in `.runtime/logs`, opened with **View logs** in the launcher. Logs are retained for four days.

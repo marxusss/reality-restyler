@@ -8,6 +8,9 @@ if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
     $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
     if ($command) { $compiler = $command.Source }
 }
+if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
+    $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+}
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) { throw 'Inno Setup 6 is required to build the installer.' }
 
 $dist = Join-Path $root 'dist'
@@ -39,3 +42,8 @@ try {
 $installer = Join-Path $root 'RealityRestylingSetup.exe'
 $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
 [IO.File]::WriteAllText($installer + '.sha256', "$hash  RealityRestylingSetup.exe`n", [Text.UTF8Encoding]::new($false))
+
+# Archive exactly the tracked source for the compiled checkout.
+$sourceArchive = Join-Path $root 'RealityRestylingSource.zip'
+& git -C $root archive --format=zip --output $sourceArchive HEAD
+if ($LASTEXITCODE -ne 0) { throw 'Could not archive the corresponding source.' }

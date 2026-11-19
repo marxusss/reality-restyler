@@ -1,8 +1,9 @@
 RESOLUTIONS = (512, 640, 768, 896, 1024)
+PROMPT_TOKEN_LIMIT = 512
 DEFAULT_SETTINGS = {
     "prompt": "",
     "steps": 4,
-    "resolution": 1024,
+    "resolution": 512,
     "upscale": True,
     "rotation": 0,
 }
@@ -38,3 +39,4 @@ def normalize_settings(raw, previous=None):
         "upscale": upscale,
         "rotation": rotation,
     }
+
