@@ -723,7 +723,7 @@ def main():
         parser.error("Start Reality Restyling from its launcher.")
     if not args.launcher_process_id:
         parser.error("--launcher-process-id is required with --launcher-session")
-    enable_logging()
+    enable_logging(echo=False)
     _run_from_launcher(args.launcher_session, args.launcher_process_id, args.phone_access)
 
 if __name__ == "__main__":

@@ -159,7 +159,20 @@ $qr = Add-Control $phoneCard PictureBox '' 314 14 120 120
 $qr.SizeMode = 'Zoom'
 $qr.AccessibleName = 'Phone access QR code'
 
-$state = @{ Worker = $null; Directory = $null; Name = 'stopped'; Closing = $false; PhonePrompted = $false; UpdateWorker = $null; UpdateDirectory = $null; UpdateMode = ''; PendingUpdate = $null; UpdateTag = '' }
+$logDirectory = Join-Path $PSScriptRoot '.runtime\logs'
+[void][IO.Directory]::CreateDirectory($logDirectory)
+$logPython = Join-Path $PSScriptRoot 'python\python.exe'
+function Invoke-LogPrune {
+    if (Test-Path -LiteralPath $logPython -PathType Leaf) {
+        Start-Process -FilePath $logPython -ArgumentList @('-B', ('"{0}"' -f (Join-Path $PSScriptRoot 'log_retention.py')), '--prune') -WindowStyle Hidden | Out-Null
+    }
+}
+Invoke-LogPrune
+$logTimer = [Windows.Forms.Timer]::new()
+$logTimer.Interval = 3600000
+$logTimer.Add_Tick({ Invoke-LogPrune })
+$logTimer.Start()
+$state = @{ Worker = $null; Directory = $null; StopStarted = $null; Name = 'stopped'; Closing = $false; PhonePrompted = $false; UpdateWorker = $null; UpdateDirectory = $null; UpdateMode = ''; PendingUpdate = $null; UpdateTag = '' }
 $timer = [Windows.Forms.Timer]::new()
 $timer.Interval = 250
 
@@ -218,6 +231,7 @@ function Set-ClipboardUrl($Url) {
 }
 
 function Request-Stop {
+    $state.StopStarted = [DateTime]::UtcNow
     [IO.File]::WriteAllText((Join-Path $state.Directory 'stop'), '')
     Show-State 'stopping' 'Stopping server' 'Waiting for current work to finish and releasing the server.'
 }
@@ -312,7 +326,9 @@ function Handle-UpdateCheck {
 $start.Add_Click({
     try {
         $state.PhonePrompted = $false
-        $state.Directory = Join-Path ([IO.Path]::GetTempPath()) ('RealityRestyling-' + [guid]::NewGuid().ToString('N'))
+        $state.StopStarted = $null
+        $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfff') + '-' + $PID
+        $state.Directory = Join-Path ([IO.Path]::GetTempPath()) ('RealityRestyling-Session-' + [guid]::NewGuid().ToString('N'))
         [void][IO.Directory]::CreateDirectory($state.Directory)
         $arguments = @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f (Join-Path $PSScriptRoot 'run.ps1')),
             '-LauncherSession', ('"{0}"' -f $state.Directory), '-LauncherProcessId', $PID)
@@ -323,8 +339,8 @@ $start.Add_Click({
             WorkingDirectory = $PSScriptRoot
             WindowStyle = 'Hidden'
             PassThru = $true
-            RedirectStandardOutput = (Join-Path $state.Directory 'output.log')
-            RedirectStandardError = (Join-Path $state.Directory 'error.log')
+            RedirectStandardOutput = (Join-Path $logDirectory "launcher-$stamp-output.log")
+            RedirectStandardError = (Join-Path $logDirectory "launcher-$stamp-error.log")
         }
         $state.Worker = Start-Process @workerOptions
         $log.Enabled = $true
@@ -341,7 +357,7 @@ $open.Add_Click({
 })
 $copyDesktop.Add_Click({ Set-ClipboardUrl $desktopUrl.Text })
 $copyPhone.Add_Click({ Set-ClipboardUrl $phoneUrl.Text })
-$log.Add_Click({ Start-Process explorer.exe -ArgumentList ('"{0}"' -f $state.Directory) })
+$log.Add_Click({ Start-Process explorer.exe -ArgumentList ('"{0}"' -f $logDirectory) })
 $phone.Add_CheckedChanged({ Sync-PhoneCard })
 $window.Add_Shown({
     Sync-PhoneCard
@@ -392,6 +408,12 @@ $timer.Add_Tick({
             }
         }
     }
+    if ($state.Worker -and $state.StopStarted -and -not $state.Worker.HasExited -and
+        ([DateTime]::UtcNow - $state.StopStarted).TotalSeconds -gt 30) {
+        $killArgs = '/PID ' + $state.Worker.Id + ' /T /F'
+        Start-Process -FilePath (Join-Path $env:WINDIR 'System32\taskkill.exe') -ArgumentList $killArgs -WindowStyle Hidden -Wait
+        $state.StopStarted = [DateTime]::UtcNow
+    }
     if ($state.Worker -and $state.Worker.HasExited) {
         $timer.Stop()
         $exitCode = $null
@@ -401,6 +423,21 @@ $timer.Add_Tick({
         } catch { }
         $state.Worker.Dispose()
         $state.Worker = $null
+        $failure = Read-SessionJson 'error.json'
+        # Completed session IPC is separate from persistent logs.
+        if ($state.Directory) {
+            $item = Get-Item -LiteralPath $state.Directory -Force -ErrorAction SilentlyContinue
+            if ($item -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                $known = @('stage.txt', 'stop', 'phone.json', 'phone.json.tmp', 'phone.png', 'phone.approved', 'phone.pending', 'ready.json', 'ready.json.tmp', 'error.json', 'error.json.tmp')
+                Get-ChildItem -LiteralPath $state.Directory -File -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -in $known -and -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) } |
+                    Remove-Item -Force -ErrorAction SilentlyContinue
+                if (-not (Get-ChildItem -LiteralPath $state.Directory -Force -ErrorAction SilentlyContinue)) {
+                    Remove-Item -LiteralPath $state.Directory -ErrorAction SilentlyContinue
+                }
+            }
+            $state.Directory = $null
+        }
         if ($state.Closing) { $window.Close(); return }
         if ($state.PendingUpdate) {
             $state.PendingUpdate = $null
@@ -410,7 +447,6 @@ $timer.Add_Tick({
         if ($state.Name -eq 'stopping' -and $exitCode -eq 0) {
             Show-State 'stopped' 'Server stopped' ''
         } else {
-            $failure = Read-SessionJson 'error.json'
             if ($failure -and $failure.message) {
                 $detail = [string]$failure.message
             } elseif ($null -ne $exitCode) {
@@ -477,6 +513,7 @@ Show-State 'stopped' 'Server stopped' ''
 try { [void]$window.ShowDialog() }
 finally {
     $timer.Dispose()
+    $logTimer.Dispose()
     if ($qr.Image) { $qr.Image.Dispose() }
     $window.Dispose()
     if ($ownsLauncherMutex) { $launcherMutex.ReleaseMutex() }
