@@ -212,7 +212,7 @@
   {
     "id": "tenebrism",
     "name": "Tenebrism",
-    "prompt": "Use deep, enveloping shadow interrupted by one concentrated pool of light, with warm highlights and deliberate tonal contrast. Preserve identity, pose, expression and scene; keep scene intact",
+    "prompt": "Build the image around deep enveloping shadow interrupted by one concentrated pool of light. Let forms emerge abruptly from darkness with strong warm highlights and deliberate tonal contrast, while preserving readable structure and carefully composed edges., keep scene intact",
     "thumbnail": "/styles/tenebrism.webp"
   },
   {
