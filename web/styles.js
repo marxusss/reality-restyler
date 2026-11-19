@@ -12,6 +12,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
 
   let styleSelection = null;
   let appliedStyleSelection = { prompt: "", styles: [] };
+  let editingStyleIndex = -1;
   const maxStyles = 5;
 
   function setStyleError(element, message = "") {
@@ -73,8 +74,8 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     }
   }
 
-  function renderStyleCards(container, styles) {
-    const cards = styles.map(style => {
+  function renderStyleCards(container, styles, editable = false) {
+    const cards = styles.map((style, index) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "style-card";
@@ -106,7 +107,17 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
           setStyleSelection(selected);
         }
       });
-      return button;
+      if (!editable) return button;
+      const card = document.createElement("div");
+      card.className = "custom-style-card";
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "style-edit-button";
+      edit.setAttribute("aria-label", `Edit ${style.name}`);
+      edit.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4.5-1 10.2-10.2a2.1 2.1 0 0 0-3-3L5.5 16 4 20Z"/></svg>';
+      edit.addEventListener("click", () => openStyleEditor(style, index));
+      card.append(button, edit);
+      return card;
     });
     container.replaceChildren(...cards);
     updateStyleSelection();
@@ -115,7 +126,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   function renderCustomStyles() {
     const styles = customStyles();
     $("customStyleSection").hidden = !styles.length;
-    renderStyleCards($("customStyles"), styles);
+    renderStyleCards($("customStyles"), styles, true);
   }
 
   async function openStyles() {
@@ -135,11 +146,19 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     }
   }
 
-  function openStyleEditor() {
+  function openStyleEditor(style = null, index = -1) {
+    editingStyleIndex = index;
     styleForm.reset();
-    stylePrompt.value = promptInput.value;
-    styleCapturePreview.removeAttribute("src");
-    styleCapturePreview.hidden = true;
+    $("styleEditorTitle").textContent = style ? "Edit style" : "Add style";
+    styleName.value = style?.name || "";
+    stylePrompt.value = style?.prompt ?? promptInput.value;
+    if (style?.thumbnail) {
+      styleCapturePreview.src = style.thumbnail;
+      styleCapturePreview.hidden = false;
+    } else {
+      styleCapturePreview.removeAttribute("src");
+      styleCapturePreview.hidden = true;
+    }
     setStyleError(styleEditorError);
     styleEditor.showModal();
   }
@@ -178,7 +197,18 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       return;
     }
     const styles = customStyles();
-    styles.unshift({ name, prompt, thumbnail: styleCapturePreview.getAttribute("src") });
+    const style = { name, prompt, thumbnail: styleCapturePreview.getAttribute("src") };
+    const savedIndex = editingStyleIndex;
+    const previous = savedIndex >= 0 ? styles[savedIndex] : null;
+    if (savedIndex < 0) styles.unshift(style);
+    else if (previous) styles[savedIndex] = style;
+    else {
+      setStyleError(styleEditorError, "Could not find the style to update.");
+      return;
+    }
+    if (previous && styleSelection?.includes(previous.prompt)) {
+      styleSelection = styleSelection.map(selected => selected === previous.prompt ? prompt : selected);
+    }
     try {
       localStorage.setItem(customStyleStorageKey, JSON.stringify(styles));
     } catch (_) {
@@ -187,8 +217,9 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     }
     styleEditor.close();
     renderCustomStyles();
-    $("styleList").scrollTop = 0;
-    $("customStyles").firstElementChild.focus();
+    if (savedIndex < 0) $("styleList").scrollTop = 0;
+    const savedCard = $("customStyles").querySelectorAll(".custom-style-card")[savedIndex < 0 ? 0 : savedIndex];
+    savedCard?.querySelector(savedIndex < 0 ? ".style-card" : ".style-edit-button")?.focus();
   }
 
 
@@ -196,7 +227,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   $("combineStylesButton").addEventListener("click", () => setStyleSelection(styleSelection === null ? startStyleSelection() : null));
   $("useStylesButton").addEventListener("click", () => void useStyleSelection());
   $("closeStylesButton").addEventListener("click", () => stylesDialog.close());
-  $("addStyleButton").addEventListener("click", openStyleEditor);
+  $("addStyleButton").addEventListener("click", () => openStyleEditor());
   $("closeStyleEditorButton").addEventListener("click", () => styleEditor.close());
   $("captureStyleButton").addEventListener("click", captureStyle);
   styleForm.addEventListener("submit", saveStyle);

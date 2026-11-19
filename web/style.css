@@ -375,6 +375,10 @@ textarea:focus, select:focus {
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 120px), 1fr));
   gap: 10px;
 }
+.custom-style-card {
+  position: relative;
+  min-width: 0;
+}
 .style-card {
   display: grid;
   grid-template-rows: auto 1fr;
@@ -389,6 +393,37 @@ textarea:focus, select:focus {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+}
+.custom-style-card > .style-card {
+  height: 100%;
+  padding-bottom: 34px;
+}
+.style-edit-button {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 5px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 8px;
+  background: #25282e;
+  color: #f4f5f6;
+  cursor: pointer;
+}
+.style-edit-button:hover, .style-edit-button:focus-visible {
+  background: #383c44;
+}
+.style-edit-button svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 .style-card:hover, .style-card:focus-visible {
   border-color: rgba(255,255,255,.45);
