@@ -1,9 +1,13 @@
+export function cameraFrameSize(width, height, resolution) {
+  if (![width, height, resolution].every(value => Number.isFinite(value) && value > 0)) {
+    throw new Error("Camera frame is not ready.");
+  }
+  const scale = Math.min(1, resolution / Math.max(width, height));
+  return [Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale))];
+}
+
 export async function encodeCameraFrame(video, canvas, context, resolution) {
-  const width = video.videoWidth, height = video.videoHeight;
-  const longest = Math.max(width, height);
-  if (!longest) throw new Error("Camera frame is not ready.");
-  const scale = Math.min(1, resolution / longest);
-  const w = Math.max(1, Math.round(width * scale)), h = Math.max(1, Math.round(height * scale));
+  const [w, h] = cameraFrameSize(video.videoWidth, video.videoHeight, resolution);
   if (canvas.width !== w) canvas.width = w;
   if (canvas.height !== h) canvas.height = h;
   context.drawImage(video, 0, 0, w, h);

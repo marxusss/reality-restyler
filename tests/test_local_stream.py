@@ -84,6 +84,38 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("format is not supported", json.loads(message.data)["error"])
         await socket.close()
 
+    async def test_webp_input_is_supported(self):
+        socket = await self.open_socket()
+        encoded = BytesIO()
+        Image.new("RGB", (48, 32)).save(encoded, format="WEBP")
+        await socket.send_bytes(encoded.getvalue())
+        message = await socket.receive(timeout=5)
+        self.assertEqual(message.type, WSMsgType.BINARY)
+        self.assertEqual(Image.open(BytesIO(message.data)).format, "JPEG")
+        await socket.close()
+
+    async def test_concurrent_claims_admit_only_one_controller(self):
+        import asyncio
+        await self.client.post("/stop", json={}, headers=self.headers)
+        results = await asyncio.gather(*(self.client.post("/session", json={}) for _ in range(4)))
+        self.assertEqual(sorted(response.status for response in results), [200, 409, 409, 409])
+
+    async def test_lease_expiration_releases_controller(self):
+        from sessions import SESSION_KEY
+        manager = self.client.server.app[SESSION_KEY]
+        manager.last_seen -= app.IDLE_SECONDS + 1
+        self.assertTrue(manager.expired(app.IDLE_SECONDS))
+        # Run a dedicated short reaper interval without sleeping the production timeout.
+        import asyncio
+        with patch.object(app, "IDLE_SECONDS", 5):
+            for _ in range(30):
+                if manager.token is None:
+                    break
+                await asyncio.sleep(0.2)
+        self.assertIsNone(manager.token)
+        response = await self.client.post("/session", json={})
+        self.assertEqual(response.status, 200)
+
     async def test_second_controller_cannot_mutate_or_claim(self):
         for path, body in (("/session", {}), ("/settings", {"settings": {"prompt": "other"}}),
                            ("/pause", {}), ("/stop", {}), ("/heartbeat", {}),

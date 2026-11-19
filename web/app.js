@@ -230,7 +230,20 @@ async function startPeer() {
   });
   const answer = await request("/offer", { sdp: peer.localDescription.sdp, type: peer.localDescription.type });
   await active.setRemoteDescription({ sdp: answer.sdp, type: answer.type });
-  if (["failed", "closed"].includes(active.connectionState)) throw new Error("Camera connection failed.");
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => finish(new Error("Camera connection timed out.")), 18000);
+    function finish(error) {
+      clearTimeout(timeout);
+      active.removeEventListener("connectionstatechange", check);
+      if (error) reject(error); else resolve();
+    }
+    function check() {
+      if (peer !== active || ["failed", "closed"].includes(active.connectionState)) finish(new Error("Camera connection failed."));
+      else if (active.connectionState === "connected") finish();
+    }
+    active.addEventListener("connectionstatechange", check);
+    check();
+  });
 }
 
 function openLocalStream() {
@@ -252,7 +265,7 @@ function openLocalStream() {
           heartbeatTimer = 0;
           clearCameraSession();
           startButton.textContent = "Start";
-          showError("");
+          showError("The model stopped. Press Start to retry.", "camera");
           return;
         }
       } catch (_) {}
@@ -289,6 +302,7 @@ async function handleLocalMessage(event, sourceSocket) {
     bitmap.close();
     localRoundTripMs = performance.now() - localFrameSentAt;
     localOutput.hidden = false; output.hidden = false; output.classList.add("camera-source");
+    showStartup("");
     latency.hidden = false; localFrameFailures = 0;
     showError("", "camera");
     void updateMetrics();
@@ -344,13 +358,14 @@ async function applySettings() {
   saveSettings();
   if (!runtimeLoaded) return Promise.resolve();
   const settings = readSettings();
+  const token = sessionToken;
   settingsApplyQueue = settingsApplyQueue.catch(() => {}).then(async () => {
-    if (!runtimeLoaded) return;
+    if (!runtimeLoaded || token !== sessionToken) return;
     try {
       await request("/settings", { settings });
-      showError("", "settings");
+      if (token === sessionToken) showError("", "settings");
     } catch (error) {
-      showError(error.message, "settings");
+      if (token === sessionToken) showError(error.message, "settings");
     }
   });
   return settingsApplyQueue;
@@ -403,7 +418,7 @@ async function start() {
     started = true;
     startButton.textContent = "Pause";
     latency.hidden = false;
-    showStartup("");
+    showStartup(transportMode === "local" ? "Generating first frame" : "");
     metricsTimer = setInterval(() => void updateMetrics(), 1000);
     if (transportMode === "local") scheduleLocalFrame();
     await updateMetrics();
@@ -472,19 +487,22 @@ async function pause(preserveError = false) {
   if (busy || !started) return;
   busy = true;
   startButton.disabled = true;
+  quitModelButton.disabled = true;
   clearCameraSession();
   try {
     const result = await request("/pause", {});
+    showError("", "pause");
     runtimeLoaded = Boolean(result.loaded);
     if (!runtimeLoaded) {
       clearInterval(heartbeatTimer);
       heartbeatTimer = 0;
     }
   } catch (error) {
-    if (!preserveError) showError(error.message);
+    showError(error.message, "pause");
   }
   startButton.textContent = runtimeLoaded ? "Resume" : "Start";
   startButton.disabled = false;
+  quitModelButton.disabled = false;
   busy = false;
 }
 
@@ -521,8 +539,10 @@ async function heartbeat() {
   if (!runtimeLoaded || !sessionToken || document.visibilityState !== "visible") return true;
   if (heartbeatPending) return true;
   heartbeatPending = true;
+  const token = sessionToken;
   try {
     const result = await request("/heartbeat", {});
+    if (token !== sessionToken) return false;
     showError("", "heartbeat");
     if (!result.loaded) {
       runtimeLoaded = false;
@@ -533,6 +553,7 @@ async function heartbeat() {
     }
     return true;
   } catch (error) {
+    if (token !== sessionToken) return false;
     if (error.status === 409) {
       runtimeLoaded = false; sessionToken = "";
       clearInterval(heartbeatTimer); heartbeatTimer = 0;
