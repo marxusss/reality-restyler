@@ -17,17 +17,20 @@ class SessionManager:
         self.last_seen = 0.0
         self.transport = None
 
-    def claim(self, supplied=None):
-        if self.token is not None:
-            self.require(supplied)
+    async def claim(self, supplied=None):
+        """Explicit Start transfers ownership. Caller holds the lifecycle lock."""
+        if supplied and self.token and supplied.isascii() and hmac.compare_digest(self.token, supplied):
+            self.last_seen = time.monotonic()
+            await self.close_transport()
             return self.token
         self.token = secrets.token_urlsafe(32)
         self.last_seen = time.monotonic()
+        await self.close_transport()
         return self.token
 
     def require(self, supplied, *, touch=True):
         if not self.token or not supplied or not supplied.isascii() or not hmac.compare_digest(self.token, supplied):
-            raise web.HTTPConflict(text="Another controller owns the session. Close it or wait for the idle timeout.")
+            raise web.HTTPConflict(text="Camera control moved to another device. Press Start to take over.")
         if touch:
             self.last_seen = time.monotonic()
 

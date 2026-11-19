@@ -26,6 +26,7 @@ Source: "..\launcher_ipc.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\log_retention.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\runtime.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\runtime_settings.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\timing.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\sessions.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\local_frames.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\webrtc_track.py"; DestDir: "{app}"; Flags: ignoreversion
