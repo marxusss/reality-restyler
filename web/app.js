@@ -398,10 +398,14 @@ async function sendLocalFrame() {
     localInputCanvas.height = height;
     localInputContext.drawImage(output, 0, 0, width, height);
     const image = await new Promise(resolve => localInputCanvas.toBlob(resolve, "image/jpeg", 0.88));
-    if (!image || image.type !== "image/jpeg" || !localSocket || localSocket.readyState !== WebSocket.OPEN) throw new Error("Could not capture a camera frame.");
+    if (!started || localSocket !== socket || socket.readyState !== WebSocket.OPEN) return;
+    if (!image || image.type !== "image/jpeg") throw new Error("Could not capture a camera frame.");
+    const frame = await image.arrayBuffer();
+    if (!started || localSocket !== socket || socket.readyState !== WebSocket.OPEN) return;
     localFrameSentAt = performance.now();
-    localSocket.send(await image.arrayBuffer());
+    socket.send(frame);
   } catch (error) {
+    if (!started || localSocket !== socket) return;
     localFramePending = false;
     showError(error.message);
   }
