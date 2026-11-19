@@ -61,20 +61,28 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     const merged = new Map();
     for (const style of [...normalizeStyles(remote), ...normalizeStyles(local)]) {
       const previous = merged.get(style.id);
-      if (!previous || style.updatedAt >= previous.updatedAt) merged.set(style.id, style);
+      if (!previous || style.updatedAt > previous.updatedAt) merged.set(style.id, style);
     }
     return [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  function sameCustomStyles(left, right) {
+    const stable = styles => normalizeStyles(styles)
+      .sort((a, b) => a.id.localeCompare(b.id));
+    return JSON.stringify(stable(left)) === JSON.stringify(stable(right));
   }
 
   function syncCustomStyles(localOverride = null) {
     const operation = customStylesSync.then(async () => {
       const local = normalizeStyles(localOverride || customStyles());
-      const remote = await request("/styles/user");
-      let styles = mergeCustomStyles(remote.styles, local);
+      const remote = normalizeStyles((await request("/styles/user")).styles);
+      let styles = mergeCustomStyles(remote, local);
       saveLocalCustomStyles(styles);
-      const saved = await request("/styles/user", { styles });
-      styles = mergeCustomStyles(saved.styles, styles);
-      saveLocalCustomStyles(styles);
+      if (!sameCustomStyles(styles, remote)) {
+        const saved = await request("/styles/user", { styles });
+        styles = mergeCustomStyles(saved.styles, styles);
+        saveLocalCustomStyles(styles);
+      }
       setStyleError($("styleStorageError"));
       renderCustomStyles();
       return styles;
@@ -263,7 +271,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       name,
       prompt,
       thumbnail: styleCapturePreview.getAttribute("src"),
-      updatedAt: Date.now()
+      updatedAt: Math.max(Date.now(), (previous?.updatedAt || 0) + 1)
     };
     if (savedIndex < 0) styles.unshift(style);
     else styles[savedIndex] = style;

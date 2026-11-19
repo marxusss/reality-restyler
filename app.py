@@ -210,7 +210,7 @@ def _merge_user_styles(existing, incoming):
     merged = {}
     for style in existing + incoming:
         previous = merged.get(style["id"])
-        if previous is None or style["updatedAt"] >= previous["updatedAt"]:
+        if previous is None or style["updatedAt"] > previous["updatedAt"]:
             merged[style["id"]] = style
     return sorted(merged.values(), key=lambda style: style["updatedAt"], reverse=True)
 
@@ -224,14 +224,21 @@ def _write_user_styles(styles):
             except Exception as exc:
                 raise RuntimeError("The custom style store is invalid.") from exc
         normalized = _merge_user_styles(existing, incoming)
+        if {style["id"]: style for style in normalized} == {style["id"]: style for style in existing}:
+            return existing
         payload = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
         USER_STYLES_PATH.parent.mkdir(parents=True, exist_ok=True)
-        pending = USER_STYLES_PATH.with_name(USER_STYLES_PATH.name + ".tmp")
-        with pending.open("w", encoding="utf-8", newline="") as output:
-            output.write(payload)
-            output.flush()
-            os.fsync(output.fileno())
-        pending.replace(USER_STYLES_PATH)
+        pending = USER_STYLES_PATH.with_name(
+            f".{USER_STYLES_PATH.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+        )
+        try:
+            with pending.open("w", encoding="utf-8", newline="") as output:
+                output.write(payload)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(pending, USER_STYLES_PATH)
+        finally:
+            pending.unlink(missing_ok=True)
     return normalized
 
 async def get_user_styles(_request):

@@ -38,11 +38,31 @@ class UserStylePersistenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(next(style["prompt"] for style in saved if style["id"] == "one"), "current")
         self.assertEqual(json.loads(self.styles_path.read_text(encoding="utf-8")), saved)
 
-        response = await self.client.post("/styles/user", json={"styles": []})
+        same_time_stale = {"id": "one", "name": "First", "prompt": "same-time stale", "thumbnail": None, "updatedAt": 200}
+        response = await self.client.post("/styles/user", json={"styles": [same_time_stale]})
         self.assertEqual(response.status, 200)
+        self.assertEqual(next(style["prompt"] for style in (await response.json())["styles"] if style["id"] == "one"), "current")
         response = await self.client.get("/styles/user")
         self.assertEqual(response.status, 200)
         self.assertEqual(len((await response.json())["styles"]), 2)
+
+    async def test_read_and_empty_sync_do_not_rewrite_user_config(self):
+        saved = {"id": "one", "name": "First", "prompt": "current", "thumbnail": None, "updatedAt": 100}
+        response = await self.client.post("/styles/user", json={"styles": [saved]})
+        self.assertEqual(response.status, 200)
+        before = self.styles_path.read_bytes()
+
+        with patch("app.os.replace") as replace:
+            response = await self.client.get("/styles/user")
+            self.assertEqual(response.status, 200)
+            response = await self.client.post("/styles/user", json={"styles": []})
+            self.assertEqual(response.status, 200)
+
+        replace.assert_not_called()
+        self.assertEqual(self.styles_path.read_bytes(), before)
+
+    async def test_user_config_is_outside_install_directory(self):
+        self.assertNotIn(app.ROOT.resolve(), app.USER_STYLES_PATH.resolve().parents)
 
     async def test_invalid_save_does_not_replace_saved_styles(self):
         valid = {"id": "one", "name": "First", "prompt": "current", "thumbnail": None, "updatedAt": 1}
