@@ -21,8 +21,6 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 
 [Files]
 Source: "..\app.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\launcher.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\launcher_ipc.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\log_retention.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\runtime.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\runtime_settings.py"; DestDir: "{app}"; Flags: ignoreversion
@@ -53,6 +51,8 @@ Name: "{autodesktop}\Reality Restyling"; Filename: "{sys}\WindowsPowerShell\v1.0
 
 [InstallDelete]
 Type: files; Name: "{app}\run.bat"
+Type: files; Name: "{app}\launcher.py"
+Type: files; Name: "{app}\launcher_ipc.py"
 Type: files; Name: "{group}\Reality Restyling (Phone).lnk"
 Type: files; Name: "{group}\Setup Guide.lnk"
 

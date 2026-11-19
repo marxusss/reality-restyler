@@ -25,7 +25,7 @@ jobs:
           python -m pip install -r /tmp/test-requirements.txt
       - name: Compile Python and run targeted tests
         run: |
-          python -m compileall -q app.py runtime.py runtime_settings.py sessions.py local_frames.py webrtc_track.py launcher.py launcher_ipc.py log_retention.py model_setup.py tests
+          python -m compileall -q -x '/(\.git|\.venv|dist)/' .
           python -m unittest discover -s tests -v
       - uses: actions/setup-node@v4
         with:
@@ -49,13 +49,9 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count) { throw "$($_.Name): $($errors -join '; ')" }
           }
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
       - name: Compile Windows installer
         shell: pwsh
-        run: |
-          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
-          if (-not (Test-Path $compiler)) {
-            choco install innosetup --yes --no-progress
-            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup install failed' }
-          }
-          & $compiler /Qp installer/RealityRestyling.iss
-          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+        run: .\installer\build-installer.ps1
