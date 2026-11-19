@@ -10,7 +10,7 @@ from tkinter import messagebox, ttk
 import uuid
 import webbrowser
 
-from PIL import ImageTk
+from PIL import Image, ImageTk
 import qrcode
 from log_retention import ROOT, LOG_DIR, prune_logs
 
@@ -99,7 +99,8 @@ class Launcher:
         ident = uuid.uuid4().hex
         self.status_file = ROOT / f"launcher-{ident}.json"
         self.stop_file = ROOT / f"launcher-{ident}.stop"
-        cmd = [sys.executable, "-u", str(Path(__file__).with_name("app.py")), "--launcher",
+        python = Path(sys.executable).with_name("python.exe")
+        cmd = [str(python if python.is_file() else sys.executable), "-u", str(Path(__file__).with_name("app.py")), "--launcher",
                "--status-file", str(self.status_file), "--stop-file", str(self.stop_file)]
         if mode == "phone":
             cmd.append("--phone-access")
@@ -180,7 +181,7 @@ class Launcher:
             self.link.set(url)
             self.copy.configure(state="normal")
             if self.mode == "phone":
-                image = qrcode.make(url).convert("RGB").resize((180, 180))
+                image = qrcode.make(url).convert("RGB").resize((180, 180), Image.Resampling.NEAREST)
                 self.qr = ImageTk.PhotoImage(image)
                 self.qr_label.configure(image=self.qr)
             if self.open_when_ready:

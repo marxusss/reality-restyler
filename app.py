@@ -357,6 +357,11 @@ async def on_startup(app):
         app[TLS_RENEW_TASK_KEY] = asyncio.create_task(tls_renewal_loop(context, app[PHONE_DNS_NAME_KEY]))
 
 
+async def on_shutdown(app):
+    async with app[SESSION_KEY].lock:
+        await app[SESSION_KEY].close_transport()
+
+
 async def on_cleanup(app):
     for key in (REAPER_TASK_KEY, TLS_RENEW_TASK_KEY, MANAGED_TASK_KEY):
         task = app.get(key)
@@ -550,6 +555,7 @@ def create_app():
     app.router.add_post("/offer", offer)
     app.router.add_post("/stop", stop_runtime)
     app.on_startup.append(on_startup)
+    app.on_shutdown.append(on_shutdown)
     app.on_cleanup.append(on_cleanup)
     return app
 
