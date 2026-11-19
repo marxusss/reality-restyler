@@ -66,12 +66,49 @@ const modelStartupStages = {
 };
 
 const errors = new ErrorState();
+function positionError() {
+  if (errorBox.hidden) {
+    errorBox.style.removeProperty("position");
+    errorBox.style.removeProperty("top");
+    errorBox.style.removeProperty("bottom");
+    return;
+  }
+  const dialogs = document.querySelectorAll("dialog[open]");
+  const obstacle = dialogs.length ? dialogs[dialogs.length - 1] : settingsPanel.hidden ? null : settingsPanel;
+  if (!obstacle) {
+    errorBox.style.removeProperty("position");
+    errorBox.style.removeProperty("top");
+    errorBox.style.removeProperty("bottom");
+    return;
+  }
+  const obstacleTop = obstacle.getBoundingClientRect().top;
+  const errorHeight = errorBox.getBoundingClientRect().height;
+  errorBox.style.position = "fixed";
+  errorBox.style.top = `${Math.max(8, obstacleTop - errorHeight - 12)}px`;
+  errorBox.style.bottom = "auto";
+}
+
+function scheduleErrorPosition() {
+  requestAnimationFrame(() => {
+    positionError();
+    setTimeout(positionError, 80);
+  });
+}
+
 function showError(message, source = "action") {
   const text = errors.set(message, source);
   errorBox.textContent = text;
   errorBox.hidden = !text;
+  scheduleErrorPosition();
 }
 function clearErrors() { errors.clear(); showError(""); }
+
+const errorLayoutObserver = new MutationObserver(scheduleErrorPosition);
+for (const element of [settingsPanel, ...document.querySelectorAll("dialog")]) {
+  errorLayoutObserver.observe(element, { attributes: true, attributeFilter: ["hidden", "open"] });
+}
+window.addEventListener("resize", scheduleErrorPosition);
+window.visualViewport?.addEventListener("resize", scheduleErrorPosition);
 
 function showStartup(message, completed = 0) {
   if (startupLabel.textContent !== message) startupLabel.textContent = message;
@@ -721,6 +758,7 @@ async function toggleFlash() {
 function setPanel(open) {
   settingsPanel.hidden = !open;
   settingsButton.setAttribute("aria-expanded", String(open));
+  scheduleErrorPosition();
 }
 
 settingsButton.addEventListener("click", () => setPanel(settingsPanel.hidden));
