@@ -34,6 +34,7 @@ Source: "..\requirements.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\version.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\updates.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\updater.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#LauncherExe}"; DestDir: "{app}"; DestName: "RealityRestyling.exe"; Flags: ignoreversion
 Source: "{#BundledPythonDir}\*"; DestDir: "{app}\python"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\run.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\launcher.ps1"; DestDir: "{app}"; Flags: ignoreversion
@@ -47,8 +48,8 @@ Source: "..\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs 
 Source: "install-flow.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Reality Restyling"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\launcher.ps1"""; WorkingDir: "{app}"
-Name: "{autodesktop}\Reality Restyling"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\launcher.ps1"""; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\Reality Restyling"; Filename: "{app}\RealityRestyling.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\Reality Restyling"; Filename: "{app}\RealityRestyling.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [InstallDelete]
 Type: files; Name: "{app}\run.bat"
@@ -58,7 +59,7 @@ Type: files; Name: "{group}\Reality Restyling (Phone).lnk"
 Type: files; Name: "{group}\Setup Guide.lnk"
 
 [Run]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\launcher.ps1"""; Description: "Launch Reality Restyling"; WorkingDir: "{app}"; Flags: postinstall skipifsilent nowait runhidden; Check: IsRuntimeSetupSucceeded
+Filename: "{app}\RealityRestyling.exe"; Description: "Launch Reality Restyling"; WorkingDir: "{app}"; Flags: postinstall skipifsilent nowait runhidden; Check: IsRuntimeSetupSucceeded
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\.runtime"

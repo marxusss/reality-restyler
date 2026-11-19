@@ -14,11 +14,17 @@ if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) { throw 'Inno Setup 6 is required to build the installer.' }
 
 $dist = Join-Path $root 'dist'
+$launcherSource = Join-Path $root 'launcher_bootstrap.cs'
+$launcherExe = Join-Path $dist 'RealityRestylingLauncher.exe'
 $pythonCache = Join-Path $dist 'python-20261110'
 $pythonArchive = Join-Path $pythonCache 'python.tar.gz'
 $pythonDir = Join-Path $pythonCache 'python'
 $pythonSha = '5ca7e23bbcc8933a75f4ae9c3a5e5d1ffae5fd143aec9a9d77cf5124cc6e0eef'
 New-Item -ItemType Directory -Force -Path $dist, $pythonCache | Out-Null
+$csharpCompiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+if (-not (Test-Path -LiteralPath $csharpCompiler -PathType Leaf)) { throw 'The Windows .NET Framework compiler is required to build the launcher.' }
+& $csharpCompiler /nologo /target:winexe /optimize+ /reference:System.Windows.Forms.dll "/out:$launcherExe" $launcherSource
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $launcherExe -PathType Leaf)) { throw 'Could not build the windowless app launcher.' }
 if (-not (Test-Path -LiteralPath $pythonArchive -PathType Leaf) -or
     (Get-FileHash -LiteralPath $pythonArchive -Algorithm SHA256).Hash -ne $pythonSha) {
     $pythonUrl = 'https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.11.18%2B20261110-x86_64-pc-windows-msvc-install_only.tar.gz'
@@ -33,7 +39,7 @@ if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $pythonDir '
 }
 Push-Location $root
 try {
-    & $compiler /Qp "/DAppVersion=$version" "/DBundledPythonDir=$pythonDir" 'installer\RealityRestyling.iss'
+    & $compiler /Qp "/DAppVersion=$version" "/DBundledPythonDir=$pythonDir" "/DLauncherExe=$launcherExe" 'installer\RealityRestyling.iss'
     if ($LASTEXITCODE -ne 0) { throw 'Inno Setup could not compile RealityRestylingSetup.exe.' }
 } finally {
     Pop-Location

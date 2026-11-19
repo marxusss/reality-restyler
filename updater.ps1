@@ -142,10 +142,9 @@ function Remove-SafeSessionPath {
 }
 
 function Start-UpdatedLauncher {
-    $powershell = Join-Path ([Environment]::SystemDirectory) 'WindowsPowerShell\v1.0\powershell.exe'
-    $launcher = Join-Path $InstallRoot 'launcher.ps1'
+    $launcher = Join-Path $InstallRoot 'RealityRestyling.exe'
     if (Test-Path -LiteralPath $launcher -PathType Leaf) {
-        Start-Process -FilePath $powershell -ArgumentList @('-NoProfile', '-STA', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f $launcher)) -WorkingDirectory $InstallRoot -WindowStyle Hidden | Out-Null
+        Start-Process -FilePath $launcher -WorkingDirectory $InstallRoot | Out-Null
     }
 }
 
