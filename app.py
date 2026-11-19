@@ -22,6 +22,8 @@ from runtime import Runtime
 from sessions import SESSION_KEY, TOKEN_HEADER, PROTOCOL_PREFIX, SessionManager
 from local_frames import process_frame
 from webrtc_track import RestyleTrack
+from log_retention import enable_logging, prune_logs
+from launcher_ipc import write_status
 
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "web"
@@ -35,6 +37,8 @@ TLS_RENEW_SECONDS = 6 * 60 * 60
 ALLOW_LAN = os.environ.get("REALITY_RESTYLE_ALLOW_LAN", "").strip().lower() in {"1", "true", "yes", "on"}
 runtime = Runtime()
 REAPER_TASK_KEY = web.AppKey("reaper_task", asyncio.Task)
+MANAGED_TASK_KEY = web.AppKey("managed_task", asyncio.Task)
+MANAGED_KEY = web.AppKey("managed", dict)
 local_peer_addresses = None
 local_peer_addresses_updated = 0.0
 LOCAL_ADDRESS_CACHE_SECONDS = 30.0
@@ -316,8 +320,12 @@ async def offer(request):
 
 async def idle_reaper(app):
     manager = app[SESSION_KEY]
+    last_prune = time.monotonic()
     while True:
         await asyncio.sleep(min(5, max(1, IDLE_SECONDS / 6)))
+        if time.monotonic() - last_prune >= 3600:
+            await asyncio.to_thread(prune_logs)
+            last_prune = time.monotonic()
         async with manager.lock:
             if manager.expired(IDLE_SECONDS):
                 await manager.close_transport()
@@ -325,15 +333,32 @@ async def idle_reaper(app):
                 manager.release()
 
 
+async def managed_watch(app):
+    managed = app[MANAGED_KEY]
+    while True:
+        if managed["stop"].exists():
+            # Schedule the same graceful-exit signal aiohttp uses for SIGINT/SIGTERM.
+            def exit_server():
+                raise web.GracefulExit()
+            asyncio.get_running_loop().call_soon(exit_server)
+            return
+        if managed.get("ready"):
+            write_status(managed["status"], ready=True, url=managed["url"],
+                         loaded=runtime.loaded(), connected=app[SESSION_KEY].transport is not None)
+        await asyncio.sleep(1)
+
+
 async def on_startup(app):
     app[REAPER_TASK_KEY] = asyncio.create_task(idle_reaper(app))
+    if MANAGED_KEY in app:
+        app[MANAGED_TASK_KEY] = asyncio.create_task(managed_watch(app))
     context = app.get(TLS_CONTEXT_KEY)
     if context is not None:
         app[TLS_RENEW_TASK_KEY] = asyncio.create_task(tls_renewal_loop(context, app[PHONE_DNS_NAME_KEY]))
 
 
 async def on_cleanup(app):
-    for key in (REAPER_TASK_KEY, TLS_RENEW_TASK_KEY):
+    for key in (REAPER_TASK_KEY, TLS_RENEW_TASK_KEY, MANAGED_TASK_KEY):
         task = app.get(key)
         if task and not task.done():
             task.cancel()
@@ -532,39 +557,63 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--phone-access", action="store_true")
     parser.add_argument("--launcher", action="store_true")
+    parser.add_argument("--status-file", type=Path)
+    parser.add_argument("--stop-file", type=Path)
     args = parser.parse_args()
+    if bool(args.status_file) != bool(args.stop_file):
+        parser.error("Both launcher coordination paths are required.")
+    enable_logging()
     application = create_app()
+    managed = None
+    if args.status_file:
+        managed = {"status": args.status_file, "stop": args.stop_file, "ready": False}
+        application[MANAGED_KEY] = managed
+
+    def failure(message):
+        print(message, flush=True)
+        if managed:
+            write_status(managed["status"], ready=False, error=message)
+        return 1
+
+    def serve(url, hosts, tls=None):
+        def ready(banner):
+            print(banner, flush=True)
+            if managed:
+                managed.update(ready=True, url=url)
+                write_status(managed["status"], ready=True, url=url, loaded=False, connected=False)
+            elif args.launcher and not args.phone_access:
+                webbrowser.open(url)
+            if args.phone_access:
+                _print_phone_link(dns_name)
+        try:
+            web.run_app(application, host=hosts, port=PORT, ssl_context=tls, access_log=None,
+                        print=ready)
+        except OSError as exc:
+            return failure(f"Could not start server: {exc}")
+        return 0
+
     if args.phone_access:
         status = _tailscale_status()
         dns_name = _tailscale_dns_name(status)
         addresses = _tailscale_addresses(status)
         if not dns_name:
-            print("Sign in to Tailscale before starting phone mode.", flush=True)
-        elif not addresses:
-            print("Phone access unavailable. Tailscale did not report a usable local IP address.", flush=True)
-        elif not _confirm_phone_access(dns_name, args.launcher):
-            return
-        else:
-            try:
-                tls = _tls_context(dns_name)
-            except (OSError, RuntimeError) as exc:
-                print(f"Phone access unavailable. {exc}", flush=True)
-            else:
-                application[TLS_CONTEXT_KEY] = tls
-                application[PHONE_DNS_NAME_KEY] = dns_name
-                _print_phone_link(dns_name)
-                web.run_app(application, host=addresses, port=PORT, ssl_context=tls, access_log=None)
-                return
+            return failure("Sign in to Tailscale before starting phone mode.")
+        if not addresses:
+            return failure("Tailscale did not report a usable local IP address.")
+        if not _confirm_phone_access(dns_name, args.launcher):
+            return failure("Phone access cancelled.")
+        try:
+            tls = _tls_context(dns_name)
+        except (OSError, RuntimeError) as exc:
+            return failure(f"Phone access unavailable. {exc}")
+        application[TLS_CONTEXT_KEY] = tls
+        application[PHONE_DNS_NAME_KEY] = dns_name
+        return serve(f"https://{dns_name}:{PORT}/", addresses, tls)
 
     desktop_url = f"http://127.0.0.1:{PORT}/"
     print(f"Desktop: {desktop_url}", flush=True)
+    return serve(desktop_url, "127.0.0.1")
 
-    def ready(banner):
-        print(banner, flush=True)
-        if args.launcher:
-            webbrowser.open(desktop_url)
-
-    web.run_app(application, host="127.0.0.1", port=PORT, access_log=None, print=ready)
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

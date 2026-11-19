@@ -10,8 +10,19 @@ Add-Type -AssemblyName System.Windows.Forms
 $root = $PSScriptRoot
 $runtimeDir = Join-Path $root '.runtime'
 New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
-$logPath = Join-Path $runtimeDir 'install.log'
-$errorPath = Join-Path $runtimeDir 'install-error.log'
+$logDir = Join-Path $runtimeDir 'logs'
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+$cutoff = (Get-Date).ToUniversalTime().AddDays(-4)
+Get-ChildItem -LiteralPath $logDir -Filter 'install-*.log' -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.LastWriteTimeUtc -lt $cutoff } | Remove-Item -Force -ErrorAction SilentlyContinue
+foreach ($legacy in @('install.log', 'install-error.log')) {
+    $item = Get-Item -LiteralPath (Join-Path $runtimeDir $legacy) -ErrorAction SilentlyContinue
+    if ($item -and $item.LastWriteTimeUtc -lt $cutoff) { Remove-Item -LiteralPath $item.FullName -Force -ErrorAction SilentlyContinue }
+}
+$script:logPath = $null
+$script:errorPath = $null
+$script:logSequence = 0
+$stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmss') + '-' + $PID
 $form = [System.Windows.Forms.Form]::new()
 $form.Text = 'Reality Restyling Setup'
 $form.StartPosition = 'CenterScreen'
@@ -66,7 +77,9 @@ function Invoke-Child {
     param([string]$FilePath, [string]$Arguments, [string]$Step)
     if ($script:cancelRequested) { throw 'Setup canceled.' }
     Set-Step -Text $Step
-    Remove-Item -LiteralPath $logPath, $errorPath -Force -ErrorAction SilentlyContinue
+    $script:logSequence++
+    $script:logPath = Join-Path $logDir ("install-$stamp-$script:logSequence.log")
+    $script:errorPath = Join-Path $logDir ("install-$stamp-$script:logSequence-error.log")
     $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -PassThru -WindowStyle Hidden -RedirectStandardOutput $logPath -RedirectStandardError $errorPath
     $script:activeProcess = $process
     while (-not $process.HasExited) {
@@ -111,8 +124,8 @@ function Show-LogError {
     param([string]$Message)
     $choice = [System.Windows.Forms.MessageBox]::Show($Message + "`n`nOpen the setup log?", 'Reality Restyling Setup', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Error)
     if ($choice -eq [System.Windows.Forms.DialogResult]::Yes) {
-        if (Test-Path -LiteralPath $logPath) { Start-Process notepad.exe -ArgumentList (Quote-Argument $logPath) }
-        if (Test-Path -LiteralPath $errorPath) { Start-Process notepad.exe -ArgumentList (Quote-Argument $errorPath) }
+        if ($logPath -and (Test-Path -LiteralPath $logPath)) { Start-Process notepad.exe -ArgumentList (Quote-Argument $logPath) }
+        if ($errorPath -and (Test-Path -LiteralPath $errorPath)) { Start-Process notepad.exe -ArgumentList (Quote-Argument $errorPath) }
     }
 }
 
@@ -137,7 +150,9 @@ try {
     $modelState = Invoke-ModelTool -Arguments @('--check') -Step 'Checking model files...'
     if ($ModelMode -eq 'download' -or ($ModelMode -eq 'existing' -and $modelState -ne 0 -and [System.Windows.Forms.MessageBox]::Show('Some model files are missing. Download the missing files now?', 'Reality Restyling Setup', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question) -eq [System.Windows.Forms.DialogResult]::Yes)) {
         $downloadState = Invoke-ModelTool -Arguments @('--download-required') -Step 'Downloading model files. This can take a while...'
-        if ($downloadState -ne 0) { Show-LogError 'The model download did not finish. It can be resumed by running setup again.' }
+        if ($downloadState -ne 0) { throw 'The requested model download did not finish. Run setup again to resume it.' }
+        $modelState = Invoke-ModelTool -Arguments @('--check') -Step 'Verifying downloaded model files...'
+        if ($modelState -ne 0) { throw 'Model files are still incomplete. Run setup again to repair them.' }
     }
 
     $upscalerState = Invoke-ModelTool -Arguments @('--check-upscaler') -Step 'Checking Compact 2x...'
@@ -171,7 +186,8 @@ try {
         }
     }
 
-    Set-Step 'Setup complete.'
+    if ($modelState -eq 0) { Set-Step 'Setup complete. Ready to use.' }
+    else { Set-Step 'Application installed. Model required before inference.' }
     $script:completed = $true
     $script:allowClose = $true
     Start-Sleep -Milliseconds 500
