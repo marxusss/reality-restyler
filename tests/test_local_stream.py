@@ -21,6 +21,9 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
             item.start()
         self.client = TestClient(TestServer(app.create_app()))
         await self.client.start_server()
+        response = await self.client.post("/session", json={})
+        self.token = (await response.json())["token"]
+        self.headers = {"X-Restyle-Session": self.token}
 
     async def asyncTearDown(self):
         await self.client.close()
@@ -29,7 +32,7 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
 
     async def open_socket(self):
         origin = str(self.client.make_url("/").origin())
-        return await self.client.ws_connect("/local-stream", origin=origin)
+        return await self.client.ws_connect("/local-stream", origin=origin, protocols=["restyle." + self.token])
 
     async def test_loopback_uses_local_transport_and_returns_full_image(self):
         response = await self.client.get("/transport")
@@ -37,12 +40,13 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
         socket = await self.open_socket()
         source = Image.new("RGB", (96, 64), (27, 84, 132))
         encoded = BytesIO()
-        source.save(encoded, format="PNG")
+        source.save(encoded, format="JPEG")
         await socket.send_bytes(encoded.getvalue())
         message = await socket.receive(timeout=5)
         self.assertEqual(message.type, WSMsgType.BINARY)
         result = Image.open(BytesIO(message.data))
         self.assertEqual(result.size, source.size)
+        self.assertEqual(result.format, "JPEG")
         await socket.close()
 
     async def test_local_stream_rejects_fuzzed_payloads_without_crashing(self):
@@ -63,21 +67,43 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
         socket = await self.open_socket()
         source = Image.new("RGB", (32, 24), (27, 84, 132))
         encoded = BytesIO()
-        source.save(encoded, format="PNG")
+        source.save(encoded, format="JPEG")
         await socket.send_bytes(encoded.getvalue())
         message = await socket.receive(timeout=5)
         self.assertEqual(message.type, WSMsgType.TEXT)
         self.assertIn("Frame processing failed", json.loads(message.data)["error"])
         await socket.close()
 
-    async def test_non_png_frame_is_rejected(self):
+    async def test_png_frame_is_rejected(self):
         socket = await self.open_socket()
         encoded = BytesIO()
-        Image.new("RGB", (32, 24)).save(encoded, format="JPEG")
+        Image.new("RGB", (32, 24)).save(encoded, format="PNG")
         await socket.send_bytes(encoded.getvalue())
         message = await socket.receive(timeout=5)
         self.assertEqual(message.type, WSMsgType.TEXT)
         self.assertIn("format is not supported", json.loads(message.data)["error"])
+        await socket.close()
+
+    async def test_second_controller_cannot_mutate_or_claim(self):
+        for path, body in (("/session", {}), ("/settings", {"settings": {"prompt": "other"}}),
+                           ("/pause", {}), ("/stop", {}), ("/heartbeat", {}),
+                           ("/start", {"settings": {}}), ("/offer", {"sdp": "fake", "type": "offer"})):
+            response = await self.client.post(path, json=body)
+            self.assertEqual(response.status, 409, path)
+        response = await self.client.post("/session", json={}, headers=self.headers)
+        self.assertEqual((await response.json())["token"], self.token)
+
+    async def test_second_transport_rejected_and_stop_releases(self):
+        from aiohttp import WSServerHandshakeError
+        socket = await self.open_socket()
+        with self.assertRaises(WSServerHandshakeError) as rejected:
+            await self.open_socket()
+        self.assertEqual(rejected.exception.status, 409)
+        response = await self.client.post("/stop", json={}, headers=self.headers)
+        self.assertEqual(response.status, 200)
+        response = await self.client.post("/session", json={})
+        self.assertEqual(response.status, 200)
+        self.assertNotEqual((await response.json())["token"], self.token)
         await socket.close()
 
     async def test_transport_is_local_for_the_host_tailscale_address(self):
@@ -99,7 +125,7 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status, 200)
             await response.json()
         with patch.object(app.runtime, "heartbeat", side_effect=lambda: (observed_threads.append(threading.get_ident()), True)[1]):
-            response = await self.client.post("/heartbeat", json={})
+            response = await self.client.post("/heartbeat", json={}, headers=self.headers)
             self.assertEqual(response.status, 200)
             self.assertTrue((await response.json())["loaded"])
         self.assertEqual(len(observed_threads), 2)

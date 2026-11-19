@@ -1,7 +1,6 @@
 import argparse
 import asyncio
 import ipaddress
-from io import BytesIO
 import json
 import os
 import shutil
@@ -16,17 +15,17 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-import av
 from aiohttp import WSMsgType, web
-from aiortc import RTCConfiguration, RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
-from PIL import Image
+from aiortc import RTCConfiguration, RTCPeerConnection, RTCSessionDescription
 
 from runtime import Runtime
+from sessions import SESSION_KEY, TOKEN_HEADER, PROTOCOL_PREFIX, SessionManager
+from local_frames import process_frame
+from webrtc_track import RestyleTrack
 
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "web"
 RUNTIME_DIR = ROOT / ".runtime"
-LIFECYCLE_LOCK_KEY = web.AppKey("lifecycle_lock", asyncio.Lock)
 TLS_CONTEXT_KEY = web.AppKey("tls_context", ssl.SSLContext)
 TLS_RENEW_TASK_KEY = web.AppKey("tls_renew_task", asyncio.Task)
 PHONE_DNS_NAME_KEY = web.AppKey("phone_dns_name", str)
@@ -35,9 +34,7 @@ IDLE_SECONDS = min(3600, max(5, int(os.environ.get("REALITY_RESTYLE_IDLE_SECONDS
 TLS_RENEW_SECONDS = 6 * 60 * 60
 ALLOW_LAN = os.environ.get("REALITY_RESTYLE_ALLOW_LAN", "").strip().lower() in {"1", "true", "yes", "on"}
 runtime = Runtime()
-sessions = {}
-local_sessions = set()
-reaper_task = None
+REAPER_TASK_KEY = web.AppKey("reaper_task", asyncio.Task)
 local_peer_addresses = None
 local_peer_addresses_updated = 0.0
 LOCAL_ADDRESS_CACHE_SECONDS = 30.0
@@ -139,16 +136,35 @@ async def transport_mode(request):
     local = await asyncio.to_thread(_is_local_peer, request.remote)
     return web.json_response({"mode": "local" if local else "remote"})
 
+async def claim_session(request):
+    manager = request.app[SESSION_KEY]
+    async with manager.lock:
+        token = manager.claim(request.headers.get(TOKEN_HEADER))
+    return web.json_response({"token": token})
+
+
+def require_owner(request):
+    manager = request.app[SESSION_KEY]
+    manager.require(request.headers.get(TOKEN_HEADER))
+    return manager
+
+
 async def local_stream(request):
     if not await asyncio.to_thread(_is_local_peer, request.remote):
         raise web.HTTPForbidden()
     origin = request.headers.get("Origin", "")
     if not origin or urlsplit(origin).netloc.lower() != request.headers.get("Host", "").lower():
         raise web.HTTPForbidden()
-    if local_sessions or sessions:
-        raise web.HTTPConflict(text="A camera session is already active.")
-    socket = web.WebSocketResponse(max_msg_size=16 * 1024 * 1024, heartbeat=30)
-    local_sessions.add(socket)
+    protocols = request.headers.get("Sec-WebSocket-Protocol", "").split(",")
+    protocol = next((p.strip() for p in protocols if p.strip().startswith(PROTOCOL_PREFIX)), "")
+    token = protocol[len(PROTOCOL_PREFIX):]
+    manager = request.app[SESSION_KEY]
+    socket = web.WebSocketResponse(protocols=[protocol], max_msg_size=4 * 1024 * 1024, heartbeat=30)
+    async with manager.lock:
+        manager.require(token)
+        if not runtime.loaded():
+            raise web.HTTPConflict(text="The model is not loaded.")
+        manager.reserve(token, socket)
     try:
         await socket.prepare(request)
         async for message in socket:
@@ -158,16 +174,7 @@ async def local_stream(request):
                 await socket.send_json({"error": "The model stopped. Press Start to retry."})
                 break
             try:
-                with Image.open(BytesIO(message.data)) as source:
-                    if source.format != "PNG":
-                        raise ValueError("Camera frame format is not supported.")
-                    if source.width > 4096 or source.height > 4096:
-                        raise ValueError("Camera frame is too large.")
-                    source.load()
-                    frame = source.convert("RGB")
-                result = await asyncio.to_thread(runtime.render, frame)
-                buffer = BytesIO()
-                result.save(buffer, format="PNG", compress_level=1)
+                payload = await asyncio.to_thread(process_frame, message.data, runtime)
             except Exception as exc:
                 detail = "".join(traceback.format_exception_only(type(exc), exc)).strip()
                 await asyncio.to_thread(runtime.report_error, f"Frame processing failed: {detail}")
@@ -178,12 +185,13 @@ async def local_stream(request):
                     break
                 continue
             try:
-                await socket.send_bytes(buffer.getvalue())
+                await socket.send_bytes(payload)
             except Exception:
                 break
     finally:
-        local_sessions.discard(socket)
+        manager.discard(socket)
     return socket
+
 
 async def start_runtime(request):
     data = await _json(request)
@@ -193,22 +201,25 @@ async def start_runtime(request):
     allow_low_vram = data.get("allow_low_vram", False)
     if not isinstance(settings, dict) or not isinstance(allow_low_vram, bool):
         raise web.HTTPBadRequest(text="Invalid settings.")
-    try:
-        async with request.app[LIFECYCLE_LOCK_KEY]:
+    manager = request.app[SESSION_KEY]
+    async with manager.lock:
+        require_owner(request)
+        try:
             result = await asyncio.to_thread(runtime.start, settings, allow_low_vram)
-        if result.get("ok"):
-            return web.json_response(result)
-        return web.json_response(result, status=409)
-    except ValueError as exc:
-        return web.json_response({"ok": False, "error": str(exc)}, status=422)
-    except RuntimeError as exc:
-        return web.json_response({"ok": False, "error": str(exc)}, status=503)
-    except Exception as exc:
-        print(f"Runtime startup failed: {type(exc).__name__}: {exc}", flush=True)
-        return web.json_response({"ok": False, "error": f"Start failed: {type(exc).__name__}: {exc}"}, status=503)
+            manager.require(request.headers.get(TOKEN_HEADER))
+            return web.json_response(result, status=200 if result.get("ok") else 409)
+        except ValueError as exc:
+            return web.json_response({"ok": False, "error": str(exc)}, status=422)
+        except RuntimeError as exc:
+            return web.json_response({"ok": False, "error": str(exc)}, status=503)
+        except Exception as exc:
+            print(f"Runtime startup failed: {type(exc).__name__}: {exc}", flush=True)
+            return web.json_response({"ok": False, "error": f"Start failed: {type(exc).__name__}: {exc}"}, status=503)
+
 
 async def update_settings(request):
     data = await _json(request)
+    require_owner(request)
     if set(data) != {"settings"} or not isinstance(data["settings"], dict):
         raise web.HTTPBadRequest(text="Invalid settings.")
     try:
@@ -217,196 +228,113 @@ async def update_settings(request):
     except ValueError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=422)
 
-async def heartbeat(_request):
+
+async def heartbeat(request):
+    require_owner(request)
     return web.json_response({"ok": True, "loaded": await asyncio.to_thread(runtime.heartbeat)})
 
-async def close_sessions():
-    for socket in list(local_sessions):
-        try:
-            await socket.close(code=1000)
-        except Exception as exc:
-            print(f"Local camera close failed: {type(exc).__name__}: {exc}", flush=True)
-    current = list(sessions.items())
-    sessions.clear()
-    for _, pc in current:
-        try:
-            await pc.close()
-        except Exception as exc:
-            print(f"Peer close failed: {type(exc).__name__}: {exc}", flush=True)
 
-async def stop_runtime(_request):
-    async with _request.app[LIFECYCLE_LOCK_KEY]:
-        await close_sessions()
+async def stop_runtime(request):
+    manager = request.app[SESSION_KEY]
+    async with manager.lock:
+        require_owner(request)
+        await manager.close_transport()
         await asyncio.to_thread(runtime.unload)
+        manager.release()
     return web.json_response({"ok": True})
 
-async def pause_runtime(_request):
-    async with _request.app[LIFECYCLE_LOCK_KEY]:
-        await close_sessions()
+
+async def pause_runtime(request):
+    manager = request.app[SESSION_KEY]
+    async with manager.lock:
+        require_owner(request)
+        await manager.close_transport()
         loaded = await asyncio.to_thread(runtime.heartbeat)
     return web.json_response({"ok": True, "loaded": loaded})
 
+
 async def offer(request):
-    if not runtime.loaded():
-        return web.json_response({"ok": False, "error": "The model stopped before the camera connected. Press Start to retry."}, status=409)
-    if sessions or local_sessions:
-        return web.json_response({"ok": False, "error": "A camera session is already active."}, status=409)
     data = await _json(request)
     if set(data) != {"sdp", "type"} or data.get("type") != "offer" or not isinstance(data.get("sdp"), str) or not data["sdp"].strip():
         return web.json_response({"ok": False, "error": "Invalid WebRTC offer."}, status=422)
-    pc = RTCPeerConnection(RTCConfiguration(iceServers=[]))
-    session_id = os.urandom(24).hex()
-    sessions[session_id] = pc
+    manager = request.app[SESSION_KEY]
+    token = request.headers.get(TOKEN_HEADER)
+    async with manager.lock:
+        manager.require(token)
+        if not runtime.loaded():
+            raise web.HTTPConflict(text="The model stopped before the camera connected. Press Start to retry.")
+        if manager.transport is not None:
+            raise web.HTTPConflict(text="A camera session is already active.")
+        pc = RTCPeerConnection(RTCConfiguration(iceServers=[]))
+        manager.reserve(token, pc)
 
-    @pc.on("track")
-    def on_track(track):
-        if track.kind == "video":
-            pc.addTrack(RestyleTrack(track, runtime))
+        @pc.on("track")
+        def on_track(track):
+            if track.kind == "video":
+                pc.addTrack(RestyleTrack(track, runtime))
 
-    @pc.on("connectionstatechange")
-    async def on_connectionstatechange():
-        if pc.connectionState in {"failed", "closed"}:
-            sessions.pop(session_id, None)
-            if pc.connectionState != "closed":
-                await pc.close()
+        @pc.on("connectionstatechange")
+        async def on_connectionstatechange():
+            if pc.connectionState in {"failed", "closed"}:
+                manager.discard(pc)
+                if pc.connectionState != "closed":
+                    await pc.close()
 
-    try:
-        await pc.setRemoteDescription(RTCSessionDescription(sdp=data["sdp"], type="offer"))
-        answer = await pc.createAnswer()
-        await pc.setLocalDescription(answer)
-        local = pc.localDescription
-        if not local or not isinstance(local.sdp, str) or not local.sdp.strip():
-            raise RuntimeError("The host produced an empty WebRTC answer.")
-        return web.json_response({"sdp": local.sdp, "type": "answer", "session_id": session_id})
-    except Exception as exc:
-        sessions.pop(session_id, None)
+        async def negotiate():
+            await pc.setRemoteDescription(RTCSessionDescription(sdp=data["sdp"], type="offer"))
+            answer = await pc.createAnswer()
+            await pc.setLocalDescription(answer)
+            local = pc.localDescription
+            if not local or not isinstance(local.sdp, str) or not local.sdp.strip():
+                raise RuntimeError("The host produced an empty WebRTC answer.")
+            return web.json_response({"sdp": local.sdp, "type": "answer"})
+
         try:
-            await pc.close()
-        except Exception:
-            pass
-        print(f"WebRTC negotiation failed: {type(exc).__name__}: {exc}", flush=True)
-        return web.json_response({"ok": False, "error": "Could not connect the camera."}, status=502)
-
-class RestyleTrack(VideoStreamTrack):
-    def __init__(self, source, active_runtime):
-        super().__init__()
-        self.source = source
-        self.runtime = active_runtime
-        self.input_frames = asyncio.Queue(maxsize=1)
-        self.output_frames = asyncio.Queue(maxsize=1)
-        self.last_image = None
-        self.last_error = ""
-        self.reader_task = asyncio.create_task(self._read())
-        self.render_task = asyncio.create_task(self._render())
-
-    async def _replace_latest(self, queue, item):
-        if queue.full():
+            return await asyncio.wait_for(negotiate(), timeout=20)
+        except (Exception, asyncio.CancelledError) as exc:
+            manager.discard(pc)
             try:
-                queue.get_nowait()
-            except asyncio.QueueEmpty:
+                await pc.close()
+            except Exception:
                 pass
-        queue.put_nowait(item)
+            if isinstance(exc, asyncio.CancelledError):
+                raise
+            print(f"WebRTC negotiation failed: {type(exc).__name__}: {exc}", flush=True)
+            return web.json_response({"ok": False, "error": "Could not connect the camera."}, status=502)
 
-    async def _read(self):
-        try:
-            while self.readyState == "live":
-                frame = await self.source.recv()
-                await self._replace_latest(self.input_frames, frame)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            self.stop()
 
-    async def _render(self):
-        try:
-            while self.readyState == "live":
-                frame = await self.input_frames.get()
-                while not self.input_frames.empty():
-                    try:
-                        frame = self.input_frames.get_nowait()
-                    except asyncio.QueueEmpty:
-                        break
-                try:
-                    image = frame.to_image()
-                    output = await asyncio.to_thread(self.runtime.render, image)
-                except Exception as exc:
-                    error = f"{type(exc).__name__}: {exc}"
-                    if error != self.last_error:
-                        detail = "".join(traceback.format_exception_only(type(exc), exc)).strip()
-                        print(f"Frame processing failed: {detail}", flush=True)
-                        await asyncio.to_thread(self.runtime.report_error, f"Frame processing failed: {detail}")
-                        self.last_error = error
-                    output = self.last_image.copy() if self.last_image is not None else Image.new("RGB", (frame.width, frame.height))
-                else:
-                    self.last_error = ""
-                await self._replace_latest(self.output_frames, output)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            self.stop()
-
-    async def recv(self):
-        pts, time_base = await self.next_timestamp()
-        try:
-            image = self.output_frames.get_nowait()
-            self.last_image = image
-        except asyncio.QueueEmpty:
-            if self.last_image is None:
-                image = await self.output_frames.get()
-                self.last_image = image
-            else:
-                image = self.last_image
-        if self.readyState != "live":
-            from aiortc.mediastreams import MediaStreamError
-            raise MediaStreamError
-        frame = av.VideoFrame.from_image(image)
-        frame.pts = pts
-        frame.time_base = time_base
-        return frame
-
-    def stop(self):
-        if self.readyState != "live":
-            return
-        for task in (self.reader_task, self.render_task):
-            if not task.done():
-                task.cancel()
-        try:
-            self.source.stop()
-        except Exception:
-            pass
-        super().stop()
-
-async def idle_reaper(_app):
+async def idle_reaper(app):
+    manager = app[SESSION_KEY]
     while True:
         await asyncio.sleep(min(5, max(1, IDLE_SECONDS / 6)))
-        async with _app[LIFECYCLE_LOCK_KEY]:
-            if await asyncio.to_thread(runtime.unload_if_idle, IDLE_SECONDS):
-                await close_sessions()
+        async with manager.lock:
+            if manager.expired(IDLE_SECONDS):
+                await manager.close_transport()
+                await asyncio.to_thread(runtime.unload)
+                manager.release()
+
 
 async def on_startup(app):
-    global reaper_task
-    reaper_task = asyncio.create_task(idle_reaper(app))
+    app[REAPER_TASK_KEY] = asyncio.create_task(idle_reaper(app))
     context = app.get(TLS_CONTEXT_KEY)
     if context is not None:
         app[TLS_RENEW_TASK_KEY] = asyncio.create_task(tls_renewal_loop(context, app[PHONE_DNS_NAME_KEY]))
 
-async def on_cleanup(_app):
-    global reaper_task
-    if reaper_task and not reaper_task.done():
-        reaper_task.cancel()
-        try:
-            await reaper_task
-        except asyncio.CancelledError:
-            pass
-    tls_task = _app.get(TLS_RENEW_TASK_KEY)
-    if tls_task and not tls_task.done():
-        tls_task.cancel()
-        try:
-            await tls_task
-        except asyncio.CancelledError:
-            pass
-    await close_sessions()
+
+async def on_cleanup(app):
+    for key in (REAPER_TASK_KEY, TLS_RENEW_TASK_KEY):
+        task = app.get(key)
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+    manager = app[SESSION_KEY]
+    await manager.close_transport()
     await asyncio.to_thread(runtime.unload)
+    manager.release()
+
 
 def _tailscale_status():
     executable = shutil.which("tailscale")
@@ -568,7 +496,7 @@ def _print_phone_link(dns_name):
 
 def create_app():
     app = web.Application(middlewares=[boundary], client_max_size=2 * 1024 * 1024)
-    app[LIFECYCLE_LOCK_KEY] = asyncio.Lock()
+    app[SESSION_KEY] = SessionManager()
     app.router.add_get("/", index)
     app.router.add_get("/app.js", app_script)
     app.router.add_get("/style.css", style_sheet)
@@ -577,6 +505,7 @@ def create_app():
     app.router.add_get("/metrics", metrics)
     app.router.add_get("/transport", transport_mode)
     app.router.add_get("/local-stream", local_stream)
+    app.router.add_post("/session", claim_session)
     app.router.add_post("/start", start_runtime)
     app.router.add_post("/settings", update_settings)
     app.router.add_post("/heartbeat", heartbeat)
