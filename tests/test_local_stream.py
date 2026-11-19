@@ -101,6 +101,14 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
         new_socket = await self.open_socket()
         await new_socket.close()
 
+    async def test_same_client_start_rotates_token(self):
+        response = await self.client.post("/session", json={}, headers=self.headers)
+        token = (await response.json())["token"]
+        self.assertNotEqual(token, self.token)
+        stale = await self.client.post("/stop", json={}, headers=self.headers)
+        self.assertEqual(stale.status, 409)
+        app.runtime.unload.assert_not_called()
+
     async def test_duplicate_transports_are_rejected(self):
         from aiohttp import WSServerHandshakeError
         socket = await self.open_socket()

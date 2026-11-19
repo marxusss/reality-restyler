@@ -33,7 +33,7 @@ jobs:
       - name: Browser syntax and transport tests
         run: |
           for file in web/*.js; do node --experimental-default-type=module --check "$file"; done
-          node --experimental-default-type=module --test tests/test_transport.mjs
+          node --experimental-default-type=module --test tests/*.mjs
 
   windows-installer:
     runs-on: windows-latest

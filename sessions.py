@@ -17,12 +17,8 @@ class SessionManager:
         self.last_seen = 0.0
         self.transport = None
 
-    async def claim(self, supplied=None):
+    async def claim(self):
         """Explicit Start transfers ownership. Caller holds the lifecycle lock."""
-        if supplied and self.token and supplied.isascii() and hmac.compare_digest(self.token, supplied):
-            self.last_seen = time.monotonic()
-            await self.close_transport()
-            return self.token
         self.token = secrets.token_urlsafe(32)
         self.last_seen = time.monotonic()
         await self.close_transport()

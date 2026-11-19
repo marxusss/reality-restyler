@@ -159,7 +159,7 @@ async def transport_mode(request):
 async def claim_session(request):
     manager = request.app[SESSION_KEY]
     async with manager.lock:
-        token = await manager.claim(request.headers.get(TOKEN_HEADER))
+        token = await manager.claim()
         await asyncio.to_thread(runtime.heartbeat)
     return web.json_response({"token": token})
 
@@ -578,7 +578,7 @@ def create_app():
     app[SESSION_KEY] = SessionManager()
     app[STARTUP_PROGRESS_KEY] = {}
     app.router.add_get("/", index)
-    for script in ("app.js", "camera.js", "transport.js"):
+    for script in ("app.js", "camera.js", "transport.js", "styles.js", "errors.js"):
         app.router.add_get("/" + script, app_script)
     app.router.add_get("/style.css", style_sheet)
     app.router.add_get("/favicon.svg", favicon)
