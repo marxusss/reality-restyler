@@ -12,51 +12,13 @@ MODELS = normalize_root(os.environ.get("REALITY_RESTYLE_MODELS_DIR", ROOT / "mod
 BASE_DIR = model_directory(MODELS)
 TRANSFORMER_FILE = transformer_file(MODELS, BASE_DIR)
 UPSCALER_FILE = MODELS / "upscalers" / "2xNomosUni_compact_multijpg.safetensors"
-RESOLUTIONS = (512, 640, 768, 896, 1024)
-DEFAULT_SETTINGS = {
-    "prompt": "",
-    "steps": 4,
-    "resolution": 1024,
-    "upscale": True,
-    "rotation": 0,
-}
-
-def normalize_settings(raw, previous=None):
-    source = dict(DEFAULT_SETTINGS if previous is None else previous)
-    if not isinstance(raw, dict):
-        raise ValueError("Settings must be an object.")
-    allowed = set(DEFAULT_SETTINGS)
-    unknown = set(raw) - allowed
-    if unknown:
-        raise ValueError("Unknown setting.")
-    source.update(raw)
-    prompt = source.get("prompt")
-    if not isinstance(prompt, str) or len(prompt) > 2000:
-        raise ValueError("Prompt must be text under 2000 characters.")
-    steps = source.get("steps")
-    if isinstance(steps, bool) or not isinstance(steps, int) or not 1 <= steps <= 12:
-        raise ValueError("Steps must be between 1 and 12.")
-    resolution = source.get("resolution")
-    if type(resolution) is not int or resolution not in RESOLUTIONS:
-        raise ValueError("Resolution is not supported.")
-    upscale = source.get("upscale")
-    if not isinstance(upscale, bool):
-        raise ValueError("Upscale must be a boolean.")
-    rotation = source.get("rotation")
-    if type(rotation) is not int or rotation not in (0, 90, 180, 270):
-        raise ValueError("Rotation must be 0, 90, 180, or 270.")
-    return {
-        "prompt": prompt,
-        "steps": steps,
-        "resolution": int(resolution),
-        "upscale": upscale,
-        "rotation": rotation,
-    }
+from runtime_settings import DEFAULT_SETTINGS, RESOLUTIONS, normalize_settings
 
 class Runtime:
     def __init__(self):
         self._lock = threading.RLock()
         self._settings_lock = threading.Lock()
+        self._status_lock = threading.RLock()
         self._settings = dict(DEFAULT_SETTINGS)
         self._pipe = None
         self._upscaler = None
@@ -84,17 +46,18 @@ class Runtime:
             return dict(self._settings)
 
     def metrics(self):
-        with self._lock:
+        with self._status_lock:
             result = dict(self._metrics)
             result["upscaler_available"] = UPSCALER_FILE.is_file()
             result["loaded"] = self._pipe is not None
             return result
 
     def loaded(self):
-        return self._pipe is not None
+        with self._status_lock:
+            return self._pipe is not None
 
     def heartbeat(self):
-        with self._lock:
+        with self._status_lock:
             if self._pipe is None:
                 self._last_heartbeat = 0.0
                 return False
@@ -102,7 +65,7 @@ class Runtime:
             return True
 
     def idle_expired(self, idle_seconds):
-        with self._lock:
+        with self._status_lock:
             return self._idle_expired_locked(idle_seconds)
 
     def _idle_expired_locked(self, idle_seconds):
@@ -110,20 +73,21 @@ class Runtime:
 
     def unload_if_idle(self, idle_seconds):
         with self._lock:
-            if not self._idle_expired_locked(idle_seconds):
-                return False
-            self._unload_locked()
-            return True
+            with self._status_lock:
+                if not self._idle_expired_locked(idle_seconds):
+                    return False
+                self._unload_locked()
+                return True
 
     def report_error(self, message):
-        with self._lock:
+        with self._status_lock:
             self._metrics["error"] = str(message)[:500]
 
     def start(self, raw, allow_low_vram=False):
         self.set_settings(raw)
         with self._lock:
             if self._pipe is not None:
-                self._last_heartbeat = time.monotonic()
+                self.heartbeat()
                 return {"ok": True, "low_vram": False, "upscaler_available": UPSCALER_FILE.is_file()}
             _, _, missing = missing_files(MODELS)
             if missing:
@@ -178,21 +142,22 @@ class Runtime:
                 if isinstance(exc, ModuleNotFoundError):
                     raise RuntimeError(f"Runtime module unavailable: {exc.name}. Run run.bat to repair dependencies.") from None
                 raise RuntimeError(f"Local runtime failed: {type(exc).__name__}: {exc}") from None
-            self._pipe = pipe
             self._upscaler = None
             self._upscaler_attempted = False
             self._prompt = None
             self._prompt_embeds = None
             self._prompt_ids = None
-            self._last_heartbeat = time.monotonic()
-            self._metrics.update({
-                "loaded": True,
-                "model_ms": 0.0,
-                "upscale_ms": 0.0,
-                "total_ms": 0.0,
-                "error": "",
-                "upscaler_available": UPSCALER_FILE.is_file(),
-            })
+            with self._status_lock:
+                self._pipe = pipe
+                self._last_heartbeat = time.monotonic()
+                self._metrics.update({
+                    "loaded": True,
+                    "model_ms": 0.0,
+                    "upscale_ms": 0.0,
+                    "total_ms": 0.0,
+                    "error": "",
+                    "upscaler_available": UPSCALER_FILE.is_file(),
+                })
             return {"ok": True, "low_vram": low_vram, "upscaler_available": UPSCALER_FILE.is_file()}
 
     def unload(self):
@@ -202,19 +167,21 @@ class Runtime:
     def _unload_locked(self):
         pipe = self._pipe
         upscaler = self._upscaler
-        self._pipe = None
         self._upscaler = None
         self._upscaler_attempted = False
         self._prompt = None
         self._prompt_embeds = None
         self._prompt_ids = None
-        self._last_heartbeat = 0.0
-        self._metrics.update({
-            "loaded": False,
-            "model_ms": 0.0,
-            "upscale_ms": 0.0,
-            "total_ms": 0.0,
-        })
+        with self._status_lock:
+            self._pipe = None
+            self._last_heartbeat = 0.0
+            self._metrics.update({
+                "loaded": False,
+                "model_ms": 0.0,
+                "upscale_ms": 0.0,
+                "total_ms": 0.0,
+                "error": "",
+            })
         del pipe
         del upscaler
         gc.collect()
@@ -246,7 +213,7 @@ class Runtime:
             return None
         self._upscaler_attempted = True
         if not UPSCALER_FILE.is_file():
-            self._metrics["error"] = "Upscaler checkpoint is missing."
+            self.report_error("Upscaler checkpoint is missing.")
             return None
         try:
             from spandrel import ModelLoader
@@ -259,7 +226,7 @@ class Runtime:
             return self._upscaler
         except Exception as exc:
             print(f"Upscaler load failed: {type(exc).__name__}: {exc}", flush=True)
-            self._metrics["error"] = "Upscaler could not be loaded."
+            self.report_error("Upscaler could not be loaded.")
             return None
 
     def _upscale(self, image, torch):
@@ -347,12 +314,13 @@ class Runtime:
             if rotation:
                 output = output.rotate(rotation, expand=True)
             total_ms = (time.perf_counter() - generation_started) * 1000.0
-            self._metrics.update({
-                "loaded": True,
-                "model_ms": round(model_ms, 1),
-                "upscale_ms": round(upscale_ms, 1),
-                "total_ms": round(total_ms, 1),
-            })
-            if not settings["upscale"] or self._upscaler is not None:
-                self._metrics["error"] = ""
+            with self._status_lock:
+                self._metrics.update({
+                    "loaded": True,
+                    "model_ms": round(model_ms, 1),
+                    "upscale_ms": round(upscale_ms, 1),
+                    "total_ms": round(total_ms, 1),
+                })
+                if not settings["upscale"] or self._upscaler is not None:
+                    self._metrics["error"] = ""
             return output

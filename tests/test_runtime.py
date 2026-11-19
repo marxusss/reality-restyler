@@ -37,6 +37,15 @@ class RuntimeSettingsTests(unittest.TestCase):
         self.assertFalse(runtime.loaded())
         self.assertFalse(runtime.metrics()["loaded"])
 
+    def test_status_reads_do_not_wait_for_inference_lock(self):
+        from concurrent.futures import ThreadPoolExecutor
+        runtime = Runtime()
+        runtime._pipe = object()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            with runtime._lock:
+                self.assertTrue(executor.submit(runtime.metrics).result(timeout=1)["loaded"])
+                self.assertTrue(executor.submit(runtime.heartbeat).result(timeout=1))
+
     def test_render_never_returns_an_unprocessed_frame(self):
         runtime = Runtime()
         with self.assertRaisesRegex(RuntimeError, "not loaded"):
