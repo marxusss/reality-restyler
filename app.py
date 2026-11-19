@@ -121,8 +121,8 @@ async def _json(request):
 async def index(_request):
     return web.FileResponse(WEB_ROOT / "index.html")
 
-async def app_script(_request):
-    return web.FileResponse(WEB_ROOT / "app.js", headers={"Content-Type": "text/javascript"})
+async def app_script(request):
+    return web.FileResponse(WEB_ROOT / request.path[1:], headers={"Content-Type": "text/javascript"})
 
 async def style_sheet(_request):
     return web.FileResponse(WEB_ROOT / "style.css", headers={"Content-Type": "text/css"})
@@ -578,7 +578,8 @@ def create_app():
     app[SESSION_KEY] = SessionManager()
     app[STARTUP_PROGRESS_KEY] = {}
     app.router.add_get("/", index)
-    app.router.add_get("/app.js", app_script)
+    for script in ("app.js", "camera.js", "transport.js"):
+        app.router.add_get("/" + script, app_script)
     app.router.add_get("/style.css", style_sheet)
     app.router.add_get("/favicon.svg", favicon)
     app.router.add_get("/styles/{asset:catalog\\.json|[a-zA-Z0-9_-]+\\.webp}", style_asset)
