@@ -386,14 +386,12 @@ async function start() {
   clearErrors();
   clearTimeout(promptApplyTimer);
   promptApplyTimer = 0;
-  showStartup("Checking connection");
+  showStartup("Opening camera");
   startButton.disabled = true;
   quitModelButton.disabled = true;
   cameraInput.disabled = true;
   localRoundTripMs = 0;
   try {
-    await claimSession();
-    showStartup("Opening camera");
     stream = await cameraStream(cameraInput.value);
     const cameraTrack = stream.getVideoTracks()[0];
     if (!cameraTrack) throw new Error("The selected camera returned no video.");
@@ -405,8 +403,10 @@ async function start() {
     await populateCameras(cameraTrack.getSettings?.().deviceId || "");
     updateFlashVisibility(cameraTrack);
     applyCameraMirror(cameraTrack);
+    showStartup("Checking connection");
     const connection = await request("/transport");
     transportMode = connection.mode;
+    await claimSession();
     showStartup("Loading");
     await startRuntime();
     if (!heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
