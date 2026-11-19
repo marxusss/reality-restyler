@@ -1,3 +1,6 @@
+import { cameraStream, currentRotation } from "./camera.js";
+import { encodeCameraFrame } from "./transport.js";
+
 const $ = id => document.getElementById(id);
 const output = $("output");
 const localOutput = $("localOutput");
@@ -26,7 +29,7 @@ const mirrorButton = $("mirrorButton");
 let peer = null;
 let stream = null;
 let localSocket = null;
-let sessionId = "";
+let sessionToken = "";
 let started = false;
 let busy = false;
 let runtimeLoaded = false;
@@ -40,6 +43,11 @@ let settingsApplyQueue = Promise.resolve();
 let cameraSwitchQueue = Promise.resolve();
 let cameraSwitchSequence = 0;
 let localFramePending = false;
+let localFrameDeadline = 0;
+let localFrameFailures = 0;
+let metricsPending = false;
+let heartbeatPending = false;
+let generation = 0;
 let localFrameTimer = 0;
 let localFrameSentAt = 0;
 let localRoundTripMs = 0;
@@ -47,10 +55,14 @@ let previousStats = null;
 let jitterMs = 0;
 let decodeMs = 0;
 
-function showError(message) {
-  errorBox.textContent = message || "";
-  errorBox.hidden = !message;
+const errors = new Map();
+function showError(message, source = "action") {
+  if (message) errors.set(source, message);
+  else errors.delete(source);
+  errorBox.textContent = [...errors.values()].join(" · ");
+  errorBox.hidden = errors.size === 0;
 }
+function clearErrors() { errors.clear(); showError(""); }
 
 function showStartup(message) {
   const visible = Boolean(message);
@@ -60,13 +72,6 @@ function showStartup(message) {
   startupProgress.removeAttribute("aria-valuenow");
   startupProgress.setAttribute("aria-valuetext", message || "");
   startupFill.style.width = visible ? "34%" : "0%";
-}
-
-function currentRotation() {
-  let angle = Number(screen.orientation && screen.orientation.angle);
-  if (!Number.isFinite(angle) && Number.isFinite(Number(window.orientation))) angle = Number(window.orientation);
-  if (!Number.isFinite(angle)) angle = 0;
-  return ((Math.round(angle / 90) * 90) % 360 + 360) % 360;
 }
 
 function readSettings() {
@@ -106,21 +111,31 @@ function restoreSettings() {
 }
 
 async function request(path, body) {
-  const response = await fetch(path, {
-    method: body === undefined ? "GET" : "POST",
-    headers: body === undefined ? {} : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: "no-store"
-  });
-  let result = {};
-  try { result = await response.json(); } catch (_) {}
-  if (!response.ok) {
-    const failure = new Error(result.error || "Request failed (" + response.status + ").");
-    failure.status = response.status;
-    failure.data = result;
-    throw failure;
+  const headers = body === undefined ? {} : {"Content-Type": "application/json"};
+  if (sessionToken) headers["X-Restyle-Session"] = sessionToken;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), path === "/start" ? 600000 : 30000);
+  try {
+    const response = await fetch(path, {method: body === undefined ? "GET" : "POST", headers,
+      body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal: controller.signal});
+    const raw = await response.text();
+    let result = {};
+    try { result = JSON.parse(raw); } catch (_) {}
+    if (!response.ok) {
+      const failure = new Error(result.error || raw || "Request failed (" + response.status + ").");
+      failure.status = response.status; failure.data = result;
+      throw failure;
+    }
+    return result;
+  } finally { clearTimeout(timer); }
+}
+async function claimSession() {
+  try { sessionToken = (await request("/session", {})).token; }
+  catch (error) {
+    if (error.status !== 409 || !sessionToken) throw error;
+    sessionToken = ""; runtimeLoaded = false;
+    sessionToken = (await request("/session", {})).token;
   }
-  return result;
 }
 
 async function startRuntime() {
@@ -131,7 +146,7 @@ async function startRuntime() {
     if (error.status === 409 && error.data && error.data.low_vram) {
       const free = Number(error.data.free_vram_gb) || 0;
       const total = Number(error.data.total_vram_gb) || 0;
-      const proceed = window.confirm(`Low VRAM: ${free.toFixed(1)} GB free of ${total.toFixed(1)} GB. Start anyway?`);
+      const proceed = window.confirm(`Low VRAM: ${free.toFixed(1)} GB free of ${total.toFixed(1)} GB. Start anyway? This does not enable a low-memory mode.`);
       if (!proceed) throw new Error("Start cancelled.");
       result = await request("/start", { settings: readSettings(), allow_low_vram: true });
     } else {
@@ -140,37 +155,6 @@ async function startRuntime() {
   }
   if (!result.ok) throw new Error("Could not start the local runtime.");
   runtimeLoaded = true;
-}
-
-async function cameraStream(deviceId = "", facingMode = "environment") {
-  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    throw new Error("Camera access requires a secure HTTPS page.");
-  }
-  const camera = {
-    width: { ideal: 1920, max: 1920 },
-    height: { ideal: 1080, max: 1080 },
-    frameRate: { ideal: 30, max: 30 }
-  };
-  const video = deviceId
-    ? { ...camera, deviceId: { exact: deviceId } }
-    : { ...camera, facingMode: { ideal: facingMode } };
-  try {
-    return await navigator.mediaDevices.getUserMedia({ video, audio: false });
-  } catch (error) {
-    if (["NotAllowedError", "PermissionDeniedError", "SecurityError"].includes(error.name)) {
-      throw new Error("Allow camera access in browser settings, then retry.");
-    }
-    if (["NotFoundError", "DevicesNotFoundError"].includes(error.name)) {
-      throw new Error("No camera is available.");
-    }
-    if (["NotReadableError", "TrackStartError", "AbortError"].includes(error.name) || error.message === "Load failed") {
-      throw new Error("The selected camera could not be opened. It may be busy or unavailable.");
-    }
-    if (error.name === "OverconstrainedError") {
-      throw new Error("The selected camera is unavailable. Choose another camera.");
-    }
-    throw error;
-  }
 }
 
 function applyCameraMirror(track) {
@@ -213,8 +197,9 @@ function setMirror(value) {
 
 async function startPeer() {
   peer = new RTCPeerConnection({ iceServers: [] });
+  const active = peer;
   peer.addEventListener("track", event => {
-    if (!peer || event.track.kind !== "video") return;
+    if (peer !== active || event.track.kind !== "video") return;
     localOutput.hidden = true;
     output.classList.remove("camera-source");
     output.hidden = false;
@@ -222,9 +207,9 @@ async function startPeer() {
     output.play().catch(() => {});
   });
   peer.addEventListener("connectionstatechange", () => {
-    if (!started || !peer) return;
-    if (peer.connectionState === "failed") {
-      showError("Camera connection failed.");
+    if (!started || peer !== active) return;
+    if (["failed", "closed"].includes(active.connectionState)) {
+      showError("Camera connection failed. Resume to reconnect.", "camera");
       void pause(true);
     }
   });
@@ -244,14 +229,14 @@ async function startPeer() {
     peer.addEventListener("icegatheringstatechange", check);
   });
   const answer = await request("/offer", { sdp: peer.localDescription.sdp, type: peer.localDescription.type });
-  sessionId = answer.session_id;
-  await peer.setRemoteDescription({ sdp: answer.sdp, type: answer.type });
+  await active.setRemoteDescription({ sdp: answer.sdp, type: answer.type });
+  if (["failed", "closed"].includes(active.connectionState)) throw new Error("Camera connection failed.");
 }
 
 function openLocalStream() {
   const url = new URL("/local-stream", window.location.href);
   url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const socket = new WebSocket(url);
+  const socket = new WebSocket(url, ["restyle." + sessionToken]);
   socket.binaryType = "blob";
   localSocket = socket;
   socket.addEventListener("message", event => void handleLocalMessage(event, socket));
@@ -271,86 +256,79 @@ function openLocalStream() {
           return;
         }
       } catch (_) {}
-      showError("Camera connection closed.");
+      showError("Camera connection closed. Resume to reconnect.", "camera");
       void pause(true);
     }
   });
   return new Promise((resolve, reject) => {
-    socket.addEventListener("open", resolve, { once: true });
-    socket.addEventListener("error", () => reject(new Error("Local camera connection failed.")), { once: true });
+    const timer = setTimeout(() => { socket.close(); reject(new Error("Local camera connection timed out.")); }, 10000);
+    socket.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
+    const fail = () => { clearTimeout(timer); reject(new Error("Local camera connection failed.")); };
+    socket.addEventListener("error", fail, { once: true });
+    socket.addEventListener("close", fail, { once: true });
   });
 }
 
 async function handleLocalMessage(event, sourceSocket) {
   if (sourceSocket !== localSocket) return;
+  clearTimeout(localFrameDeadline);
+  localFrameDeadline = 0;
   if (typeof event.data === "string") {
     try {
       const result = JSON.parse(event.data);
-      if (result.error) {
-        showError(result.error);
-        if (started) void pause(true);
-      }
+      if (result.error) { showError(result.error, "camera"); if (started) void pause(true); }
     } catch (_) {}
     localFramePending = false;
     return;
   }
   try {
     const bitmap = await createImageBitmap(event.data);
-    if (sourceSocket !== localSocket || !started) {
-      bitmap.close();
-      return;
-    }
-    localOutput.width = bitmap.width;
-    localOutput.height = bitmap.height;
+    if (sourceSocket !== localSocket || !started) { bitmap.close(); return; }
+    localOutput.width = bitmap.width; localOutput.height = bitmap.height;
     localContext.drawImage(bitmap, 0, 0);
     bitmap.close();
     localRoundTripMs = performance.now() - localFrameSentAt;
-    localOutput.hidden = false;
-    output.hidden = false;
-    output.classList.add("camera-source");
-    latency.hidden = false;
-    showError("");
+    localOutput.hidden = false; output.hidden = false; output.classList.add("camera-source");
+    latency.hidden = false; localFrameFailures = 0;
+    showError("", "camera");
     void updateMetrics();
   } catch (error) {
-    showError(error.message);
-  } finally {
-    localFramePending = false;
-    if (started) scheduleLocalFrame();
-  }
+    if (sourceSocket === localSocket) retryFrame(error);
+    return;
+  } finally { if (sourceSocket === localSocket) localFramePending = false; }
+  if (sourceSocket === localSocket) scheduleLocalFrame();
 }
-
-function scheduleLocalFrame() {
-  if (localFrameTimer || !started) return;
-  localFrameTimer = setTimeout(() => {
-    localFrameTimer = 0;
-    void sendLocalFrame();
-  }, 8);
+function scheduleLocalFrame(delay = 8) {
+  if (localFrameTimer || !started || document.visibilityState !== "visible") return;
+  localFrameTimer = setTimeout(() => { localFrameTimer = 0; void sendLocalFrame(); }, delay);
 }
-
+function retryFrame(error) {
+  localFramePending = false;
+  localFrameFailures += 1;
+  showError(error.message, "camera");
+  if (localFrameFailures >= 3) void pause(true);
+  else scheduleLocalFrame(250 * localFrameFailures);
+}
 async function sendLocalFrame() {
   const socket = localSocket;
   const track = stream && stream.getVideoTracks()[0];
   if (!started || !socket || socket.readyState !== WebSocket.OPEN || localFramePending || !track || document.visibilityState !== "visible") return;
-  if (output.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-    scheduleLocalFrame();
-    return;
-  }
+  if (output.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) { scheduleLocalFrame(50); return; }
+  const current = generation;
   localFramePending = true;
   try {
-    const settings = track.getSettings();
-    const width = settings.width || output.videoWidth;
-    const height = settings.height || output.videoHeight;
-    localInputCanvas.width = width;
-    localInputCanvas.height = height;
-    localInputContext.drawImage(output, 0, 0, width, height);
-    const image = await new Promise(resolve => localInputCanvas.toBlob(resolve, "image/png"));
-    if (!image || !localSocket || localSocket.readyState !== WebSocket.OPEN) throw new Error("Could not capture a camera frame.");
-    localFrameSentAt = performance.now();
-    localSocket.send(await image.arrayBuffer());
-  } catch (error) {
-    localFramePending = false;
-    showError(error.message);
-  }
+    const captureTime = performance.now();
+    const image = await encodeCameraFrame(output, localInputCanvas, localInputContext, Number(resolutionInput.value));
+    if (socket !== localSocket || current !== generation || !started) return;
+    if (socket.readyState !== WebSocket.OPEN) throw new Error("Camera connection closed.");
+    localFrameSentAt = captureTime;
+    socket.send(image);
+    localFrameDeadline = setTimeout(() => {
+      if (socket !== localSocket || !started) return;
+      showError("Frame processing timed out. Resume to reconnect.", "camera");
+      void pause(true);
+    }, 30000);
+  } catch (error) { if (socket === localSocket && current === generation) retryFrame(error); }
 }
 
 async function sendRotation() {
@@ -370,9 +348,9 @@ async function applySettings() {
     if (!runtimeLoaded) return;
     try {
       await request("/settings", { settings });
-      showError("");
+      showError("", "settings");
     } catch (error) {
-      showError(error.message);
+      showError(error.message, "settings");
     }
   });
   return settingsApplyQueue;
@@ -389,18 +367,18 @@ function schedulePromptApply() {
 
 async function start() {
   if (busy || started) return;
-  const runtimeWasLoaded = runtimeLoaded;
-  let loadedDuringStart = false;
   busy = true;
-  showError("");
+  clearErrors();
   clearTimeout(promptApplyTimer);
   promptApplyTimer = 0;
-  showStartup("Opening camera");
+  showStartup("Checking connection");
   startButton.disabled = true;
   quitModelButton.disabled = true;
   cameraInput.disabled = true;
   localRoundTripMs = 0;
   try {
+    await claimSession();
+    showStartup("Opening camera");
     stream = await cameraStream(cameraInput.value);
     const cameraTrack = stream.getVideoTracks()[0];
     if (!cameraTrack) throw new Error("The selected camera returned no video.");
@@ -416,7 +394,6 @@ async function start() {
     transportMode = connection.mode;
     showStartup("Loading");
     await startRuntime();
-    loadedDuringStart = !runtimeWasLoaded && runtimeLoaded;
     if (!heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
     if (!(await heartbeat())) throw new Error("The model stopped during startup. Press Start to retry.");
     await request("/settings", { settings: readSettings() });
@@ -431,16 +408,14 @@ async function start() {
     if (transportMode === "local") scheduleLocalFrame();
     await updateMetrics();
   } catch (error) {
-    if (loadedDuringStart) {
-      await stop(true, true);
-    } else {
-      clearCameraSession();
-      if (!runtimeLoaded) {
-        clearInterval(heartbeatTimer);
-        heartbeatTimer = 0;
-      }
-      startButton.textContent = runtimeLoaded ? "Resume" : "Start";
+    clearCameraSession();
+    if (sessionToken && runtimeLoaded) {
+      try { await request("/pause", {}); } catch (_) {}
     }
+    if (!runtimeLoaded) {
+      clearInterval(heartbeatTimer); heartbeatTimer = 0;
+    }
+    startButton.textContent = runtimeLoaded ? "Resume" : "Start";
     if (error.message !== "Start cancelled.") showError(error.message);
   } finally {
     busy = false;
@@ -456,7 +431,13 @@ function clearCameraSession() {
   const currentStream = stream;
   peer = null;
   stream = null;
-  sessionId = "";
+  generation += 1;
+  clearTimeout(localFrameDeadline);
+  localFrameDeadline = 0;
+  localFrameFailures = 0;
+  previousStats = null;
+  jitterMs = 0;
+  decodeMs = 0;
   started = false;
   clearInterval(metricsTimer);
   clearTimeout(localFrameTimer);
@@ -505,58 +486,72 @@ async function pause(preserveError = false) {
   startButton.textContent = runtimeLoaded ? "Resume" : "Start";
   startButton.disabled = false;
   busy = false;
-  if (!preserveError) showError("");
 }
 
 async function stop(preserveError = false, sendRequest = true) {
+  if (busy) return;
+  busy = true;
+  startButton.disabled = true;
   clearTimeout(promptApplyTimer);
   promptApplyTimer = 0;
   clearCameraSession();
   clearInterval(heartbeatTimer);
   heartbeatTimer = 0;
   let failure = "";
-  if (sendRequest) {
+  if (sendRequest && sessionToken) {
     try {
       await request("/stop", {});
       runtimeLoaded = false;
+      sessionToken = "";
     } catch (error) {
       failure = error.message;
+      if (error.status === 409) { runtimeLoaded = false; sessionToken = ""; }
+      else if (runtimeLoaded && !heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
     }
   } else {
     runtimeLoaded = false;
   }
   startButton.textContent = runtimeLoaded ? "Resume" : "Start";
-  if (!preserveError) showError(failure);
+  if (!preserveError) { if (!failure) clearErrors(); else showError(failure); }
+  busy = false;
+  startButton.disabled = false;
 }
 
 async function heartbeat() {
-  if (!runtimeLoaded || document.visibilityState !== "visible") return true;
+  if (!runtimeLoaded || !sessionToken || document.visibilityState !== "visible") return true;
+  if (heartbeatPending) return true;
+  heartbeatPending = true;
   try {
     const result = await request("/heartbeat", {});
+    showError("", "heartbeat");
     if (!result.loaded) {
       runtimeLoaded = false;
-      clearInterval(heartbeatTimer);
-      heartbeatTimer = 0;
-      if (started) {
-        clearCameraSession();
-        showError("The model unloaded after inactivity.");
-      }
+      clearInterval(heartbeatTimer); heartbeatTimer = 0;
+      if (started) { clearCameraSession(); showError("The model unloaded after inactivity.", "heartbeat"); }
       startButton.textContent = "Start";
       return false;
     }
     return true;
   } catch (error) {
-    showError(error.message);
+    if (error.status === 409) {
+      runtimeLoaded = false; sessionToken = "";
+      clearInterval(heartbeatTimer); heartbeatTimer = 0;
+      clearCameraSession(); startButton.textContent = "Start";
+    }
+    showError(error.message, "heartbeat");
     return false;
-  }
+  } finally { heartbeatPending = false; }
 }
 
 async function updateMetrics() {
-  if (!started || document.visibilityState !== "visible") return;
+  if (!started || metricsPending || document.visibilityState !== "visible") return;
+  metricsPending = true;
+  const current = generation;
   try {
     const metrics = await request("/metrics");
-    if (metrics.error) showError(metrics.error);
-    else showError("");
+    if (!started || current !== generation) return;
+    showError(metrics.error || "", "model");
+    showError("", "metrics");
     let roundTrip = 0;
     if (peer) {
       const stats = await peer.getStats();
@@ -590,10 +585,10 @@ async function updateMetrics() {
     const modelMs = Number(metrics.model_ms) || 0;
     const totalMs = Number(metrics.total_ms) || modelMs;
     const clientMs = transportMode === "local" ? localRoundTripMs : totalMs + roundTrip + jitterMs + decodeMs;
-    latency.textContent = "Model " + Math.round(modelMs) + " ms · End-to-end " + Math.round(clientMs) + " ms";
-  } catch (error) {
-    showError(error.message);
-  }
+    if (!started || current !== generation) return;
+    latency.textContent = "Model " + Math.round(modelMs) + " ms · " + (transportMode === "local" ? "Frame round trip " : "Estimated latency ") + Math.round(clientMs) + " ms";
+  } catch (error) { if (current === generation) showError(error.message, "metrics"); }
+  finally { metricsPending = false; }
 }
 
 async function switchCamera(deviceId, sequence) {
@@ -712,21 +707,12 @@ if (screen.orientation) screen.orientation.addEventListener("change", () => {
   if (runtimeLoaded) void sendRotation();
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && runtimeLoaded) void heartbeat();
+  if (document.visibilityState === "visible" && runtimeLoaded) {
+    void heartbeat();
+    if (started && transportMode === "local") scheduleLocalFrame();
+  }
 });
 
-async function syncRuntime() {
-  try {
-    const result = await request("/health");
-    if (busy || started) return;
-    runtimeLoaded = Boolean(result.loaded);
-    if (runtimeLoaded) {
-      startButton.textContent = "Resume";
-      if (!heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
-      void heartbeat();
-    }
-  } catch (_) {}
-}
-
+// New tabs must claim their own controller lease.
 restoreSettings();
-void syncRuntime();
+
