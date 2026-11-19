@@ -165,9 +165,15 @@ async def local_stream(request):
         if not runtime.loaded():
             raise web.HTTPConflict(text="The model is not loaded.")
         manager.reserve(token, socket)
+        try:
+            await socket.prepare(request)
+        except BaseException:
+            manager.discard(socket)
+            raise
     try:
-        await socket.prepare(request)
         async for message in socket:
+            if manager.transport is not socket:
+                break
             if message.type != WSMsgType.BINARY:
                 continue
             if not runtime.loaded():
@@ -184,6 +190,8 @@ async def local_stream(request):
                 except Exception:
                     break
                 continue
+            if manager.transport is not socket:
+                break
             try:
                 await socket.send_bytes(payload)
             except Exception:
@@ -219,19 +227,22 @@ async def start_runtime(request):
 
 async def update_settings(request):
     data = await _json(request)
-    require_owner(request)
     if set(data) != {"settings"} or not isinstance(data["settings"], dict):
         raise web.HTTPBadRequest(text="Invalid settings.")
     try:
-        result = runtime.set_settings(data["settings"])
+        async with request.app[SESSION_KEY].lock:
+            require_owner(request)
+            result = runtime.set_settings(data["settings"])
         return web.json_response({"ok": True, "settings": result})
     except ValueError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=422)
 
 
 async def heartbeat(request):
-    require_owner(request)
-    return web.json_response({"ok": True, "loaded": await asyncio.to_thread(runtime.heartbeat)})
+    async with request.app[SESSION_KEY].lock:
+        require_owner(request)
+        loaded = await asyncio.to_thread(runtime.heartbeat)
+    return web.json_response({"ok": True, "loaded": loaded})
 
 
 async def stop_runtime(request):

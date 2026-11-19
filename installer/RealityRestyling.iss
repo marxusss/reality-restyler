@@ -24,6 +24,7 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 [Files]
 Source: "..\app.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\runtime.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\runtime_settings.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\sessions.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\local_frames.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\webrtc_track.py"; DestDir: "{app}"; Flags: ignoreversion
