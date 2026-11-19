@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check release version
+        shell: pwsh
+        run: |
+          $tagVersion = $env:GITHUB_REF_NAME -replace '^v', ''
+          $appVersion = (Get-Content version.txt -Raw).Trim()
+          if ($tagVersion -ne $appVersion) { throw "Tag $tagVersion does not match version.txt $appVersion." }
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+      - name: Build installer
+        shell: pwsh
+        run: .\installer\build-installer.ps1
+      - name: Publish release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME .\RealityRestylingSetup.exe .\RealityRestylingSetup.exe.sha256 --verify-tag --generate-notes

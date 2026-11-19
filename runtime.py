@@ -2,8 +2,10 @@ import gc
 import os
 import threading
 import time
+from functools import lru_cache
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 from model_setup import missing_files, model_directory, normalize_root, transformer_file
 
@@ -12,13 +14,122 @@ MODELS = normalize_root(os.environ.get("REALITY_RESTYLE_MODELS_DIR", ROOT / "mod
 BASE_DIR = model_directory(MODELS)
 TRANSFORMER_FILE = transformer_file(MODELS, BASE_DIR)
 UPSCALER_FILE = MODELS / "upscalers" / "2xNomosUni_compact_multijpg.safetensors"
-from runtime_settings import DEFAULT_SETTINGS, RESOLUTIONS, normalize_settings
+RESOLUTIONS = (512, 640, 768, 896, 1024)
+PROMPT_TOKEN_LIMIT = 512
+DEFAULT_SETTINGS = {
+    "prompt": "",
+    "steps": 4,
+    "resolution": 512,
+    "upscale": True,
+    "rotation": 0,
+}
+
+class TimingWindow:
+    def __init__(self, path, size=30):
+        self.path = path
+        self.size = size
+        self.samples = []
+        self.context = {}
+
+    def record(self, context=None, **values):
+        context = dict(context or {})
+        if self.samples and context != self.context:
+            self.flush()
+        self.context = context
+        self.samples.append({name: float(value) for name, value in values.items()})
+        if len(self.samples) >= self.size:
+            self.flush()
+
+    def flush(self):
+        if not self.samples:
+            return
+        samples = self.samples
+        self.samples = []
+        fields = []
+        for name in samples[0]:
+            values = sorted(sample[name] for sample in samples)
+            p95 = values[min(len(values) - 1, max(0, int(len(values) * 0.95 + 0.999) - 1))]
+            fields.extend((
+                f"{name}_avg={sum(values) / len(values):.1f}",
+                f"{name}_p95={p95:.1f}",
+                f"{name}_max={values[-1]:.1f}",
+            ))
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%S")
+        context = " ".join(f"{name}={value}" for name, value in self.context.items())
+        suffix = f" {context}" if context else ""
+        print(f"TIMING {timestamp} path={self.path} frames={len(samples)}{suffix} {' '.join(fields)}", flush=True)
+        self.context = {}
+
+@lru_cache(maxsize=1)
+def _style_tokenizer():
+    from jinja2.sandbox import ImmutableSandboxedEnvironment
+    from tokenizers import Tokenizer
+
+    folder = BASE_DIR / "tokenizer"
+    template = ImmutableSandboxedEnvironment(trim_blocks=True, lstrip_blocks=True).from_string(
+        (folder / "chat_template.jinja").read_text(encoding="utf-8")
+    )
+    return Tokenizer.from_file(str(folder / "tokenizer.json")), template
+
+def prompt_token_count(prompt):
+    tokenizer, template = _style_tokenizer()
+    rendered = template.render(messages=[{"role": "user", "content": prompt}],
+                               add_generation_prompt=True, enable_thinking=False)
+    return len(tokenizer.encode(rendered).ids)
+
+def combine_style_prompts(prompts):
+    if not isinstance(prompts, list) or not 1 <= len(prompts) <= 5:
+        raise ValueError("Choose one to five styles.")
+    if any(not isinstance(text, str) or not text.strip() or len(text) > 2000 for text in prompts):
+        raise ValueError("Invalid style prompt.")
+    if len(prompts) == 1:
+        prompt = prompts[0]
+    else:
+        parts = [text.strip().removesuffix(", keep scene intact").rstrip(" .") for text in prompts]
+        prompt = ".\n".join(parts) + ". keep scene intact"
+    if len(prompt) > 2000:
+        raise ValueError("These styles exceed the prompt length limit.")
+    tokens = prompt_token_count(prompt)
+    if tokens > PROMPT_TOKEN_LIMIT:
+        raise ValueError(f"These styles use {tokens} tokens. The limit is {PROMPT_TOKEN_LIMIT}.")
+    return prompt, tokens
+
+def normalize_settings(raw, previous=None):
+    source = dict(DEFAULT_SETTINGS if previous is None else previous)
+    if not isinstance(raw, dict):
+        raise ValueError("Settings must be an object.")
+    allowed = set(DEFAULT_SETTINGS)
+    unknown = set(raw) - allowed
+    if unknown:
+        raise ValueError("Unknown setting.")
+    source.update(raw)
+    prompt = source.get("prompt")
+    if not isinstance(prompt, str) or len(prompt) > 2000:
+        raise ValueError("Prompt must be text under 2000 characters.")
+    steps = source.get("steps")
+    if isinstance(steps, bool) or not isinstance(steps, int) or not 1 <= steps <= 12:
+        raise ValueError("Steps must be between 1 and 12.")
+    resolution = source.get("resolution")
+    if type(resolution) is not int or resolution not in RESOLUTIONS:
+        raise ValueError("Resolution is not supported.")
+    upscale = source.get("upscale")
+    if not isinstance(upscale, bool):
+        raise ValueError("Upscale must be a boolean.")
+    rotation = source.get("rotation")
+    if type(rotation) is not int or rotation not in (0, 90, 180, 270):
+        raise ValueError("Rotation must be 0, 90, 180, or 270.")
+    return {
+        "prompt": prompt,
+        "steps": steps,
+        "resolution": int(resolution),
+        "upscale": upscale,
+        "rotation": rotation,
+    }
 
 class Runtime:
     def __init__(self):
         self._lock = threading.RLock()
         self._settings_lock = threading.Lock()
-        self._status_lock = threading.RLock()
         self._settings = dict(DEFAULT_SETTINGS)
         self._pipe = None
         self._upscaler = None
@@ -35,6 +146,7 @@ class Runtime:
             "error": "",
             "upscaler_available": UPSCALER_FILE.is_file(),
         }
+        self._timing = TimingWindow("inference")
 
     def settings(self):
         with self._settings_lock:
@@ -46,18 +158,21 @@ class Runtime:
             return dict(self._settings)
 
     def metrics(self):
-        with self._status_lock:
+        with self._lock:
             result = dict(self._metrics)
             result["upscaler_available"] = UPSCALER_FILE.is_file()
             result["loaded"] = self._pipe is not None
             return result
 
+    def flush_timings(self):
+        with self._lock:
+            self._timing.flush()
+
     def loaded(self):
-        with self._status_lock:
-            return self._pipe is not None
+        return self._pipe is not None
 
     def heartbeat(self):
-        with self._status_lock:
+        with self._lock:
             if self._pipe is None:
                 self._last_heartbeat = 0.0
                 return False
@@ -65,7 +180,7 @@ class Runtime:
             return True
 
     def idle_expired(self, idle_seconds):
-        with self._status_lock:
+        with self._lock:
             return self._idle_expired_locked(idle_seconds)
 
     def _idle_expired_locked(self, idle_seconds):
@@ -73,25 +188,29 @@ class Runtime:
 
     def unload_if_idle(self, idle_seconds):
         with self._lock:
-            with self._status_lock:
-                if not self._idle_expired_locked(idle_seconds):
-                    return False
-                self._unload_locked()
-                return True
+            if not self._idle_expired_locked(idle_seconds):
+                return False
+            self._unload_locked()
+            return True
 
     def report_error(self, message):
-        with self._status_lock:
+        with self._lock:
             self._metrics["error"] = str(message)[:500]
 
-    def start(self, raw, allow_low_vram=False):
+    def start(self, raw, allow_low_vram=False, report_stage=None):
+        def report(stage):
+            if report_stage is not None:
+                report_stage(stage)
+
         self.set_settings(raw)
         with self._lock:
             if self._pipe is not None:
-                self.heartbeat()
+                self._last_heartbeat = time.monotonic()
                 return {"ok": True, "low_vram": False, "upscaler_available": UPSCALER_FILE.is_file()}
+            report("checking")
             _, _, missing = missing_files(MODELS)
             if missing:
-                raise RuntimeError("Required files are missing or invalid. Close and rerun run.bat to set them up.")
+                raise RuntimeError("Required files are missing or invalid. Restart from the Reality Restyling launcher to set them up.")
             import torch
             if not torch.cuda.is_available():
                 raise RuntimeError("CUDA is unavailable on this computer.")
@@ -110,6 +229,7 @@ class Runtime:
                 from diffusers import Flux2KleinPipeline
                 from nunchaku.models.transformers.transformer_flux2 import NunchakuFlux2Transformer2DModel
                 from transformers import BitsAndBytesConfig, Qwen3ForCausalLM
+                report("text_encoder")
                 text_encoder = Qwen3ForCausalLM.from_pretrained(
                     str(BASE_DIR),
                     subfolder="text_encoder",
@@ -118,10 +238,12 @@ class Runtime:
                     local_files_only=True,
                     device_map={"": 0},
                 )
+                report("model")
                 transformer = NunchakuFlux2Transformer2DModel.from_pretrained(
                     str(TRANSFORMER_FILE),
                     torch_dtype=torch.bfloat16,
                 )
+                report("pipeline")
                 pipe = Flux2KleinPipeline.from_pretrained(
                     str(BASE_DIR),
                     transformer=transformer,
@@ -129,6 +251,7 @@ class Runtime:
                     torch_dtype=torch.bfloat16,
                     local_files_only=True,
                 )
+                report("gpu")
                 pipe.transformer.to("cuda")
                 pipe.vae.to("cuda")
                 pipe.set_progress_bar_config(disable=True)
@@ -140,24 +263,23 @@ class Runtime:
                 except Exception:
                     pass
                 if isinstance(exc, ModuleNotFoundError):
-                    raise RuntimeError(f"Runtime module unavailable: {exc.name}. Run run.bat to repair dependencies.") from None
+                    raise RuntimeError(f"Runtime module unavailable: {exc.name}. Restart from the Reality Restyling launcher to repair dependencies.") from None
                 raise RuntimeError(f"Local runtime failed: {type(exc).__name__}: {exc}") from None
+            self._pipe = pipe
             self._upscaler = None
             self._upscaler_attempted = False
             self._prompt = None
             self._prompt_embeds = None
             self._prompt_ids = None
-            with self._status_lock:
-                self._pipe = pipe
-                self._last_heartbeat = time.monotonic()
-                self._metrics.update({
-                    "loaded": True,
-                    "model_ms": 0.0,
-                    "upscale_ms": 0.0,
-                    "total_ms": 0.0,
-                    "error": "",
-                    "upscaler_available": UPSCALER_FILE.is_file(),
-                })
+            self._last_heartbeat = time.monotonic()
+            self._metrics.update({
+                "loaded": True,
+                "model_ms": 0.0,
+                "upscale_ms": 0.0,
+                "total_ms": 0.0,
+                "error": "",
+                "upscaler_available": UPSCALER_FILE.is_file(),
+            })
             return {"ok": True, "low_vram": low_vram, "upscaler_available": UPSCALER_FILE.is_file()}
 
     def unload(self):
@@ -165,23 +287,22 @@ class Runtime:
             self._unload_locked()
 
     def _unload_locked(self):
+        self._timing.flush()
         pipe = self._pipe
         upscaler = self._upscaler
+        self._pipe = None
         self._upscaler = None
         self._upscaler_attempted = False
         self._prompt = None
         self._prompt_embeds = None
         self._prompt_ids = None
-        with self._status_lock:
-            self._pipe = None
-            self._last_heartbeat = 0.0
-            self._metrics.update({
-                "loaded": False,
-                "model_ms": 0.0,
-                "upscale_ms": 0.0,
-                "total_ms": 0.0,
-                "error": "",
-            })
+        self._last_heartbeat = 0.0
+        self._metrics.update({
+            "loaded": False,
+            "model_ms": 0.0,
+            "upscale_ms": 0.0,
+            "total_ms": 0.0,
+        })
         del pipe
         del upscaler
         gc.collect()
@@ -199,7 +320,7 @@ class Runtime:
             prompt=prompt,
             device="cuda",
             num_images_per_prompt=1,
-            max_sequence_length=512,
+            max_sequence_length=PROMPT_TOKEN_LIMIT,
         )
         self._prompt = prompt
         self._prompt_embeds = embeds
@@ -213,7 +334,7 @@ class Runtime:
             return None
         self._upscaler_attempted = True
         if not UPSCALER_FILE.is_file():
-            self.report_error("Upscaler checkpoint is missing.")
+            self._metrics["error"] = "Upscaler checkpoint is missing."
             return None
         try:
             from spandrel import ModelLoader
@@ -226,14 +347,14 @@ class Runtime:
             return self._upscaler
         except Exception as exc:
             print(f"Upscaler load failed: {type(exc).__name__}: {exc}", flush=True)
-            self.report_error("Upscaler could not be loaded.")
+            self._metrics["error"] = "Upscaler could not be loaded."
             return None
 
-    def _upscale(self, image, torch):
-        model = self._load_upscaler()
+    def _upscale(self, image, torch, model=None):
+        if model is None:
+            model = self._load_upscaler()
         if model is None:
             return image
-        import numpy as np
         array = np.asarray(image.convert("RGB"))
         with torch.inference_mode():
             tensor = torch.from_numpy(array.copy()).to("cuda").permute(2, 0, 1).unsqueeze(0).float() / 255.0
@@ -247,6 +368,8 @@ class Runtime:
         with self._lock:
             if self._pipe is None:
                 raise RuntimeError("The model is not loaded.")
+            frame_started = time.perf_counter()
+            preprocess_started = frame_started
             settings = self.settings()
             rotation = settings["rotation"]
             source = image.convert("RGB")
@@ -257,9 +380,13 @@ class Runtime:
             target_width = max(16, round(width * scale / 16) * 16)
             target_height = max(16, round(height * scale / 16) * 16)
             source = source.resize((target_width, target_height), Image.Resampling.BICUBIC)
+            preprocess_ms = (time.perf_counter() - preprocess_started) * 1000.0
             import torch
             generation_started = time.perf_counter()
+            prompt_cache_miss = self._prompt != settings["prompt"] or self._prompt_embeds is None
+            prompt_started = time.perf_counter()
             embeds, ids = self._encode_prompt(settings["prompt"])
+            prompt_encode_ms = (time.perf_counter() - prompt_started) * 1000.0
             generator = torch.Generator(device="cuda").manual_seed(0)
             pipe = self._pipe
             original_encode = pipe.encode_prompt
@@ -270,7 +397,7 @@ class Runtime:
                 device=None,
                 num_images_per_prompt=1,
                 prompt_embeds=None,
-                max_sequence_length=512,
+                max_sequence_length=PROMPT_TOKEN_LIMIT,
                 text_encoder_out_layers=(9, 18, 27),
             ):
                 if prompt is None and num_images_per_prompt == 1 and prompt_embeds is embeds:
@@ -284,6 +411,7 @@ class Runtime:
                     text_encoder_out_layers=text_encoder_out_layers,
                 )
             pipe.encode_prompt = cached_encode_prompt
+            pipeline_started = time.perf_counter()
             try:
                 with torch.inference_mode():
                     output = pipe(
@@ -295,7 +423,7 @@ class Runtime:
                         width=target_width,
                         generator=generator,
                         output_type="pil",
-                        max_sequence_length=512,
+                        max_sequence_length=PROMPT_TOKEN_LIMIT,
                     ).images[0]
             finally:
                 if had_override:
@@ -305,22 +433,48 @@ class Runtime:
                         del pipe.encode_prompt
                     except AttributeError:
                         pass
+            pipeline_ms = (time.perf_counter() - pipeline_started) * 1000.0
             model_ms = (time.perf_counter() - generation_started) * 1000.0
-            upscale_ms = 0.0
+            upscale_load_ms = 0.0
+            upscale_compute_ms = 0.0
             if settings["upscale"]:
-                upscale_started = time.perf_counter()
-                output = self._upscale(output, torch)
-                upscale_ms = (time.perf_counter() - upscale_started) * 1000.0
+                load_started = time.perf_counter()
+                load_was_attempted = self._upscaler_attempted
+                upscaler = self._load_upscaler()
+                if not load_was_attempted:
+                    upscale_load_ms = (time.perf_counter() - load_started) * 1000.0
+                if upscaler is not None:
+                    upscale_started = time.perf_counter()
+                    output = self._upscale(output, torch, upscaler)
+                    upscale_compute_ms = (time.perf_counter() - upscale_started) * 1000.0
+            postprocess_started = time.perf_counter()
             if rotation:
                 output = output.rotate(rotation, expand=True)
+            postprocess_ms = (time.perf_counter() - postprocess_started) * 1000.0
             total_ms = (time.perf_counter() - generation_started) * 1000.0
-            with self._status_lock:
-                self._metrics.update({
-                    "loaded": True,
-                    "model_ms": round(model_ms, 1),
-                    "upscale_ms": round(upscale_ms, 1),
-                    "total_ms": round(total_ms, 1),
-                })
-                if not settings["upscale"] or self._upscaler is not None:
-                    self._metrics["error"] = ""
+            upscale_ms = upscale_load_ms + upscale_compute_ms
+            self._metrics.update({
+                "loaded": True,
+                "model_ms": round(model_ms, 1),
+                "upscale_ms": round(upscale_ms, 1),
+                "total_ms": round(total_ms, 1),
+            })
+            self._timing.record(
+                context={
+                    "input": f"{width}x{height}",
+                    "output": f"{target_width}x{target_height}",
+                    "steps": settings["steps"],
+                    "upscale": int(settings["upscale"]),
+                },
+                preprocess_ms=preprocess_ms,
+                prompt_encode_wall_ms=prompt_encode_ms,
+                prompt_cache_miss=prompt_cache_miss,
+                pipeline_wall_ms=pipeline_ms,
+                upscale_load_ms=upscale_load_ms,
+                upscale_compute_wall_ms=upscale_compute_ms,
+                postprocess_ms=postprocess_ms,
+                total_ms=total_ms,
+            )
+            if not settings["upscale"] or self._upscaler is not None:
+                self._metrics["error"] = ""
             return output

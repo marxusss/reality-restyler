@@ -13,7 +13,7 @@ class RuntimeSettingsTests(unittest.TestCase):
         settings = normalize_settings({})
         self.assertEqual(settings, DEFAULT_SETTINGS)
         self.assertTrue(settings["upscale"])
-        self.assertEqual(settings["resolution"], 1024)
+        self.assertEqual(settings["resolution"], 512)
 
     def test_partial_updates_preserve_other_values(self):
         updated = normalize_settings({"steps": 8}, {"prompt": "portrait", "steps": 4, "resolution": 640, "upscale": True, "rotation": 90})

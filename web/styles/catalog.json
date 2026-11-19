@@ -1,0 +1,266 @@
+[
+  {
+    "id": "anime",
+    "name": "Anime",
+    "prompt": "Draw with confident clean contours, appealing simplified proportions, expressive eyes and bright cel-like shading. Keep color blocks readable, use crisp highlights and gentle gradients, and give the image the lively, polished feeling of a modern hand-animated scene while preserving its original structure., keep scene intact",
+    "thumbnail": "/styles/anime.webp"
+  },
+  {
+    "id": "hand-painted-animation",
+    "name": "Hand-painted fantasy animation",
+    "prompt": "Use soft, hand-painted animation textures with watercolor-like light and carefully observed natural details. Favor rounded expressive shapes, layered foliage, warm atmospheric color and a quiet sense of wonder, balancing a cozy everyday mood with a hint of gentle fantasy., keep scene intact",
+    "thumbnail": "/styles/hand-painted-animation.webp"
+  },
+  {
+    "id": "manga",
+    "name": "Manga",
+    "prompt": "Render with precise black ink contours, expressive faces and dramatic panel-like contrast. Use fine hatching or screentone dots for shadow, clear white highlights and purposeful line weight, giving the image the energetic, carefully composed look of a printed graphic story., keep scene intact",
+    "thumbnail": "/styles/manga.webp"
+  },
+  {
+    "id": "chinese-ink",
+    "name": "Chinese ink drawing",
+    "prompt": "Render the existing subject in its same pose with fluid black brush contours, pooled ink shadows and generous open-paper space. Keep its identity, framing, composition and recognizable background details or landmarks intact, translating all existing scenery into ink work., keep scene intact",
+    "thumbnail": "/styles/chinese-ink.webp"
+  },
+  {
+    "id": "technical-drawing",
+    "name": "Technical drawing",
+    "prompt": "Use disciplined drafting lines, consistent stroke weights and measured geometric construction. Define edges with clean contours, restrained labels or guide marks and minimal shading, so the result feels engineered and legible while the existing forms and relationships remain clear., keep scene intact",
+    "thumbnail": "/styles/technical-drawing.webp"
+  },
+  {
+    "id": "doodle",
+    "name": "Simple doodle",
+    "prompt": "Reduce the scene to playful, uneven hand-drawn outlines and a few simple color patches. Let lines wobble, proportions feel informal and details stay sparse, as if quickly sketched in a notebook by an untrained but imaginative hand., keep scene intact",
+    "thumbnail": "/styles/doodle.webp"
+  },
+  {
+    "id": "noir-animation",
+    "name": "Noir animation",
+    "prompt": "Simplify forms into elegant angular silhouettes, strong curved contours and sharply separated shadow shapes. Use a restrained noir palette with decisive highlights, clean graphic edges and expressive poses, creating a sleek animated crime-story mood without adding unnecessary detail., keep scene intact",
+    "thumbnail": "/styles/noir-animation.webp"
+  },
+  {
+    "id": "corporate-memphis",
+    "name": "Corporate Memphis",
+    "prompt": "Build figures from rounded geometric shapes, tube-like limbs and simplified anatomy. Apply flat cheerful color, minimal shadows and spacious clean forms, with playful asymmetry and an approachable presentation-illustration mood rather than naturalistic surface detail., keep scene intact",
+    "thumbnail": "/styles/corporate-memphis.webp"
+  },
+  {
+    "id": "travel-poster",
+    "name": "Flat travel poster",
+    "prompt": "Compose the scene from bold flat planes, angular cut-paper shapes and a compact vintage palette. Use simplified distant landmarks, confident silhouettes and subtle printed texture, like a destination poster designed for quick recognition from across a room., keep scene intact",
+    "thumbnail": "/styles/travel-poster.webp"
+  },
+  {
+    "id": "post-impressionist",
+    "name": "Post-impressionist brushwork",
+    "prompt": "Apply thick directional brush marks that curl and ripple across both subjects and surroundings. Layer vivid blues, yellows and greens in energetic bands, allowing visible paint texture and rhythmic movement to shape the light, sky and solid forms., keep scene intact",
+    "thumbnail": "/styles/post-impressionist.webp"
+  },
+  {
+    "id": "cubism",
+    "name": "Cubism",
+    "prompt": "Repaint the existing subject and setting as a cubist composition of opaque, overlapping painted planes and fractured contours. Let adjacent facets shift viewpoint while keeping forms recognizable; flatten depth with muted ochre, slate, cream and blue, add visible brush texture, and avoid translucent polygon overlays., keep scene intact",
+    "thumbnail": "/styles/cubism.webp"
+  },
+  {
+    "id": "action-painting",
+    "name": "Abstract action painting",
+    "prompt": "Cover the composition with vigorous sweeping paint gestures, splashes, drips and scattered flecks. Let layered lines move across the full frame with varied scale and color, retaining traces of the underlying scene beneath the expressive abstract marks., keep scene intact",
+    "thumbnail": "/styles/action-painting.webp"
+  },
+  {
+    "id": "watercolor-ink",
+    "name": "Wet-on-wet watercolor ink",
+    "prompt": "Let translucent pigments bloom and bleed through damp paper, with soft-edged color pools beside selective dark ink lines. Preserve airy whites, delicate granulation and unexpected overlaps, giving the image a fluid handmade finish instead of crisp digital edges., keep scene intact",
+    "thumbnail": "/styles/watercolor-ink.webp"
+  },
+  {
+    "id": "academic-realism",
+    "name": "Academic precision realism",
+    "prompt": "Render forms with smooth layered tones, measured anatomy, precise edges and controlled reflected light. Build depth through subtle glazes rather than obvious brush marks, maintaining balanced classical composition and careful realism without making the scene feel photographic., keep scene intact",
+    "thumbnail": "/styles/academic-realism.webp"
+  },
+  {
+    "id": "gothic-storybook",
+    "name": "Gothic storybook illustration",
+    "prompt": "Give the scene a whimsical gothic storybook mood with crooked silhouettes, spindly contours and slightly exaggerated proportions. Add scratchy pen texture, crosshatched shadows and muted aged colors, balancing playful charm with a gently macabre atmosphere., keep scene intact",
+    "thumbnail": "/styles/gothic-storybook.webp"
+  },
+  {
+    "id": "crayon-book",
+    "name": "Colored-pencil book illustration",
+    "prompt": "Fill simple outlined shapes with visible wax-crayon strokes, layered pigments and uneven hand pressure. Keep the colors cheerful and tactile, letting small gaps and overlapping marks show through so the result feels colored by hand on paper., keep scene intact",
+    "thumbnail": "/styles/crayon-book.webp"
+  },
+  {
+    "id": "blue-hour-cinema",
+    "name": "Blue hour cinema",
+    "prompt": "Use cool twilight illumination with soft blue-violet gradients, long gentle shadows and atmospheric depth. Add restrained warm lights against the dusk, keeping the mood quiet and cinematic with natural color transitions and clear separation between foreground and distance., keep scene intact",
+    "thumbnail": "/styles/blue-hour-cinema.webp"
+  },
+  {
+    "id": "animated-3d",
+    "name": "Expressive 3D animation",
+    "prompt": "Shape the scene as polished expressive 3D animation with rounded appealing forms, smooth surfaces and warm soft light. Use subtle subsurface glow, lively eyes and cinematic depth, preserving recognizable subjects while adding a handcrafted family-film sense of warmth., keep scene intact",
+    "thumbnail": "/styles/animated-3d.webp"
+  },
+  {
+    "id": "neon-photo",
+    "name": "Neon photography",
+    "prompt": "Create a vivid night photograph lit by concentrated neon sources and saturated reflections. Let magenta, cyan or electric blue accents glow against deep shadow, with crisp luminous edges, wet-looking highlights and realistic photographic contrast across the scene., keep scene intact",
+    "thumbnail": "/styles/neon-photo.webp"
+  },
+  {
+    "id": "direct-flash",
+    "name": "Direct-flash photography",
+    "prompt": "Use a hard on-camera flash that brightly exposes the subject and throws short, abrupt shadows behind it. Keep colors direct, texture crisp and tonal transitions stark, like an unpolished candid photograph taken close to the camera at night., keep scene intact",
+    "thumbnail": "/styles/direct-flash.webp"
+  },
+  {
+    "id": "low-poly",
+    "name": "Low-poly",
+    "prompt": "Rebuild forms from broad flat-shaded polygons with crisp edges and visible faceted transitions. Simplify small details into angular planes, use a compact coordinated palette and preserve enough structure to make the portrait and surroundings easy to read., keep scene intact",
+    "thumbnail": "/styles/low-poly.webp"
+  },
+  {
+    "id": "claymation",
+    "name": "Claymation",
+    "prompt": "Rebuild the entire frame as a handcrafted stop-motion clay scene, reshaping the existing subject and every visible background element together. Preserve identity, pose, clothing, props, composition and recognizable setting; use rounded forms, fingerprints and miniature-set lighting, adding no figures., keep scene intact",
+    "thumbnail": "/styles/claymation.webp"
+  },
+  {
+    "id": "pop-art",
+    "name": "Pop art",
+    "prompt": "Separate bold flat colors with strong outlines and repeated halftone dots. Use punchy primary hues, graphic shadow blocks and a slightly screen-printed texture, turning the full composition into a crisp poster-like image with lively visual rhythm., keep scene intact",
+    "thumbnail": "/styles/pop-art.webp"
+  },
+  {
+    "id": "etching",
+    "name": "Etching",
+    "prompt": "Construct light and shadow from fine engraved lines, crosshatching and carefully varied mark density. Keep contours sharp, tones monochrome and surface texture consistent, as if the entire image were cut into a metal plate and printed on paper., keep scene intact",
+    "thumbnail": "/styles/etching.webp"
+  },
+  {
+    "id": "mosaic",
+    "name": "Mosaic art",
+    "prompt": "Recreate the full image as a dense arrangement of small flat colored tiles, including the existing subject and every visible background element. Vary tile tones to describe form, preserve identity, pose, framing and recognizable landmarks, and do not omit or replace scene content., keep scene intact",
+    "thumbnail": "/styles/mosaic.webp"
+  },
+  {
+    "id": "stained-glass",
+    "name": "Flat stained glass art",
+    "prompt": "Construct every part of the image from distinct luminous colored-glass pieces, rebuilding the focal subject and background as joined panels. Use bold continuous dark lead lines that fully enclose each pane, jewel tones and transmitted light; preserve the recognizable scene and avoid painting beneath a grid., keep scene intact",
+    "thumbnail": "/styles/stained-glass.webp"
+  },
+  {
+    "id": "8-bit",
+    "name": "8-bit pixel art",
+    "prompt": "Translate all contours and shading into hard-edged square pixels with a tightly limited retro palette. Use stepped outlines, chunky blocks and simple contrast patterns, keeping the core pose and scenery recognizable at a glance., keep scene intact",
+    "thumbnail": "/styles/8-bit.webp"
+  },
+  {
+    "id": "voxel-world",
+    "name": "Voxel game art",
+    "prompt": "Construct the image from chunky cubic voxel forms, block-built surfaces and deliberately low-resolution textures. Use clear square silhouettes, stepped terrain and bright game-like colors, translating the person and surroundings into a cohesive miniature world., keep scene intact",
+    "thumbnail": "/styles/voxel-world.webp"
+  },
+  {
+    "id": "cyberpunk",
+    "name": "Cyberpunk",
+    "prompt": "Give the image a high-contrast animated science-fiction look with sharp linework, neon signage and saturated colored light. Break shadows into graphic shapes, add reflective highlights and a futuristic urban mood while retaining the core layout and subjects., keep scene intact",
+    "thumbnail": "/styles/cyberpunk.webp"
+  },
+  {
+    "id": "anime-digital",
+    "name": "Polished anime digital illustration",
+    "prompt": "Use luminous anime-inspired digital painting with soft gradients, glowing rim light and dreamy bloom around important forms. Combine richly saturated color with delicate linework, polished facial features and a gentle fantasy atmosphere, keeping the original scene recognizable., keep scene intact",
+    "thumbnail": "/styles/anime-digital.webp"
+  },
+  {
+    "id": "sketch",
+    "name": "Loose sketch",
+    "prompt": "Capture the image with loose searching pencil strokes, visible construction lines and varied pressure. Let contours overlap slightly, use sparse hatching for tone and keep the drawing immediate and unfinished, like a confident study made from observation., keep scene intact",
+    "thumbnail": "/styles/sketch.webp"
+  },
+  {
+    "id": "charcoal",
+    "name": "Charcoal rendering",
+    "prompt": "Model the scene through smoky charcoal values, soft smudges and expressive dark marks. Preserve a tactile dusty surface, rich blacks and gentle midtone transitions, with edges that fade into atmosphere while important forms remain clear., keep scene intact",
+    "thumbnail": "/styles/charcoal.webp"
+  },
+  {
+    "id": "vintage-comic",
+    "name": "Vintage comic art",
+    "prompt": "Use bold inked contours, dynamic simplified shapes and coarse halftone shading. Add slightly imperfect print registration, faded paper colors and crisp graphic highlights, creating the worn look of an older illustrated story page., keep scene intact",
+    "thumbnail": "/styles/vintage-comic.webp"
+  },
+  {
+    "id": "fisheye",
+    "name": "Fisheye photography",
+    "prompt": "Photograph the scene with an ultra-wide spherical view that bows straight lines toward the frame edges. Exaggerate depth near the center and stretch peripheral forms, while keeping the portrait and major landmarks visible in one continuous view., keep scene intact",
+    "thumbnail": "/styles/fisheye.webp"
+  },
+  {
+    "id": "surveillance",
+    "name": "Surveillance camera photo",
+    "prompt": "Make the image feel like a fixed security-camera capture with flat illumination, restrained color and coarse digital grain. Use modest sharpness, compressed tonal range and a detached, unposed perspective without changing the scene arrangement., keep scene intact",
+    "thumbnail": "/styles/surveillance.webp"
+  },
+  {
+    "id": "film-noir",
+    "name": "Film noir",
+    "prompt": "Use stark monochrome lighting with hard pools of illumination carved out of deep surrounding shadow. Add smoky atmosphere, wet highlights and dramatic tonal separation, shaping the existing portrait and setting into a tense cinematic night scene., keep scene intact",
+    "thumbnail": "/styles/film-noir.webp"
+  },
+  {
+    "id": "motion-blur",
+    "name": "Motion-blur photography",
+    "prompt": "Suggest a long exposure with directional streaks and smeared movement around relatively sharp focal areas. Keep the blur aligned with plausible motion, preserve enough detail to identify the original subjects and use realistic photographic light trails., keep scene intact",
+    "thumbnail": "/styles/motion-blur.webp"
+  },
+  {
+    "id": "synthwave",
+    "name": "Synthwave",
+    "prompt": "Build a retro-futurist night scene with glowing neon bands, vivid magenta and cyan, and a deep perspective grid. Separate dark silhouettes from luminous edges, add smooth gradients and polished digital glow for a nostalgic electronic mood., keep scene intact",
+    "thumbnail": "/styles/synthwave.webp"
+  },
+  {
+    "id": "dark-fantasy-painting",
+    "name": "Moody dark fantasy painting",
+    "prompt": "Create an atmospheric fantasy painting with refined realistic forms, poetic visual storytelling and layered painterly texture. Use sophisticated cinematic light, a dreamlike mood and emotional focus, keeping the image detailed without becoming glossy or mechanical., keep scene intact",
+    "thumbnail": "/styles/dark-fantasy-painting.webp"
+  },
+  {
+    "id": "concept-art",
+    "name": "Highly polished concept art",
+    "prompt": "Render as high-production concept art with controlled painterly detail and crisp technical definition. Use cinematic lighting to establish depth and scale, carefully balance focal clarity with atmospheric edges, and give materials considered texture and finish., keep scene intact",
+    "thumbnail": "/styles/concept-art.webp"
+  },
+  {
+    "id": "dark-fantasy",
+    "name": "Dark fantasy illustration",
+    "prompt": "Turn the image into dark fantasy with moonlit stone textures and an indigo atmosphere. Preserve the same focal subject, identity, pose, crop, composition and recognizable background details or landmarks. Cast clear cool moonlight across the subject so visible features stay readable; add no figures., keep scene intact",
+    "thumbnail": "/styles/dark-fantasy.webp"
+  },
+  {
+    "id": "stylized-painting",
+    "name": "Hyper-stylized digital painting",
+    "prompt": "Push proportions and shapes into a bold painterly interpretation while keeping the subject recognizable. Combine layered brush texture, simplified color masses and dramatic accents, balancing expressive distortion with a clear composition and deliberate visual hierarchy., keep scene intact",
+    "thumbnail": "/styles/stylized-painting.webp"
+  },
+  {
+    "id": "graffiti",
+    "name": "Graffiti painting",
+    "prompt": "Apply layered graffiti marks across the whole existing image, treating the subject and background together. Use spray-textured edges, energetic contours, paint drips and vivid pigment while preserving the same identity, pose, framing, composition and recognizable setting rather than replacing it., keep scene intact",
+    "thumbnail": "/styles/graffiti.webp"
+  },
+  {
+    "id": "tenebrism",
+    "name": "Tenebrism",
+    "prompt": "Build the image around deep enveloping shadow interrupted by one concentrated pool of light. Let forms emerge abruptly from darkness with strong warm highlights and deliberate tonal contrast, while preserving readable structure and carefully composed edges., keep scene intact",
+    "thumbnail": "/styles/tenebrism.webp"
+  }
+]

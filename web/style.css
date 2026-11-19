@@ -137,26 +137,10 @@ button {
 .startup[hidden] {
   display: none;
 }
-.startup-track {
-  height: 3px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255,255,255,.16);
-}
-.startup-fill {
-  display: block;
-  width: 0;
-  height: 100%;
-  border-radius: inherit;
-  background: #f5f6f7;
-  transition: width .28s ease;
-}
-.startup.indeterminate .startup-fill {
-  animation: startup-sweep 1.2s ease-in-out infinite;
-}
-@keyframes startup-sweep {
-  from { transform: translateX(-120%); }
-  to { transform: translateX(420%); }
+.startup progress {
+  width: 100%;
+  height: 6px;
+  accent-color: #a7ecd0;
 }
 .actions {
   position: absolute;
@@ -261,6 +245,14 @@ button {
 .prompt-heading label {
   color: inherit;
 }
+.style-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.style-actions .toggle-button {
+  min-height: 34px;
+}
 textarea, select {
   width: 100%;
   min-width: 0;
@@ -333,6 +325,151 @@ textarea:focus, select:focus {
 .toggle-button svg {
   width: 17px;
   height: 17px;
+}
+.style-dialog {
+  width: min(600px, calc(100vw - 24px));
+  max-width: none;
+  max-height: min(75dvh, 700px);
+  overflow: auto;
+  margin: auto;
+  padding: 16px;
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 20px;
+  background: #131519;
+  color: inherit;
+  box-shadow: 0 24px 80px rgba(0,0,0,.5);
+}
+.style-dialog::backdrop {
+  background: rgba(0,0,0,.44);
+}
+#stylesDialog[open] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#stylesDialog .panel-top, #stylesDialog .style-toolbar {
+  flex: 0 0 auto;
+}
+.style-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 3px;
+}
+.style-dialog h2, .style-dialog h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.style-dialog h3 {
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+#customStyleSection {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+.style-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 120px), 1fr));
+  gap: 10px;
+}
+.style-card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 5px 8px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px;
+  background: rgba(255,255,255,.035);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.style-card:hover, .style-card:focus-visible {
+  border-color: rgba(255,255,255,.45);
+  background: rgba(255,255,255,.10);
+}
+.style-card[aria-pressed="true"] {
+  border-color: #91d5bd;
+  background: rgba(145,213,189,.16);
+}
+.style-card:disabled {
+  opacity: .45;
+  cursor: default;
+}
+#addStyleButton[hidden], #useStylesButton[hidden] {
+  display: none;
+}
+.style-card > span:last-child {
+  padding-inline: 3px;
+  overflow-wrap: anywhere;
+}
+.style-thumbnail {
+  display: block;
+  aspect-ratio: 8 / 5;
+  overflow: hidden;
+  border-radius: 7px;
+  background: #22262d;
+}
+.style-thumbnail img, #styleCapturePreview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.style-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.style-toolbar-bottom {
+  margin-top: 16px;
+}
+.style-editor {
+  width: min(430px, calc(100vw - 24px));
+}
+.style-editor .field + .field {
+  margin-top: 14px;
+}
+.style-editor input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 11px;
+  color: #f4f5f6;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
+  background: rgba(255,255,255,.055);
+}
+.style-editor input, .style-editor textarea {
+  font-size: 16px;
+}
+#styleCapturePreview {
+  width: min(100%, 240px);
+  height: 120px;
+  margin-top: 12px;
+  border-radius: 9px;
+  object-fit: contain;
+  background: #0c0d0f;
+}
+#styleCapturePreview[hidden] {
+  display: none;
+}
+.style-save {
+  background: #f5f6f7;
+  color: #141619;
+  font-weight: 650;
+}
+.style-error {
+  margin: 12px 0 0;
+  color: #ffdede;
+  font-size: 13px;
 }
 .error {
   position: absolute;

@@ -1,0 +1,7 @@
+{
+  "provider": "github-releases",
+  "repository": "marxusss/reality-restyler",
+  "channel": "stable",
+  "installer": "RealityRestylingSetup.exe",
+  "checksum": "RealityRestylingSetup.exe.sha256"
+}

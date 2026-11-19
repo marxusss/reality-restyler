@@ -1,5 +1,3 @@
-#define AppVersion "0.1.0"
-
 [Setup]
 AppId={{DA4D8C60-7C90-49B7-BE1E-844183982AA1}
 AppName=Reality Restyling
@@ -12,7 +10,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 WizardStyle=modern
-OutputDir=..\dist
+OutputDir=..
 OutputBaseFilename=RealityRestylingSetup
 Compression=lzma2/ultra64
 SolidCompression=yes
@@ -32,9 +30,14 @@ Source: "..\sessions.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\local_frames.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\webrtc_track.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\model_setup.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\runtime_cleanup.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\requirements.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\version.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\updates.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\updater.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BundledPythonDir}\*"; DestDir: "{app}\python"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\run.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\run.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\launcher.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\setup.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
@@ -44,15 +47,16 @@ Source: "..\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs 
 Source: "install-flow.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Reality Restyling"; Filename: "{app}\run.bat"; Parameters: "-Launcher"; WorkingDir: "{app}"
-Name: "{autodesktop}\Reality Restyling"; Filename: "{app}\run.bat"; Parameters: "-Launcher"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\Reality Restyling"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\launcher.ps1"""; WorkingDir: "{app}"
+Name: "{autodesktop}\Reality Restyling"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\launcher.ps1"""; WorkingDir: "{app}"; Tasks: desktopicon
 
 [InstallDelete]
+Type: files; Name: "{app}\run.bat"
 Type: files; Name: "{group}\Reality Restyling (Phone).lnk"
 Type: files; Name: "{group}\Setup Guide.lnk"
 
 [Run]
-Filename: "{app}\run.bat"; Parameters: "-Launcher"; Description: "Launch Reality Restyling"; Flags: postinstall skipifsilent nowait; Check: IsRuntimeSetupSucceeded
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\launcher.ps1"""; Description: "Launch Reality Restyling"; WorkingDir: "{app}"; Flags: postinstall skipifsilent nowait runhidden; Check: IsRuntimeSetupSucceeded
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\.runtime"
@@ -64,11 +68,18 @@ Type: dirifempty; Name: "{app}"
 [Code]
 var
   ModelPage: TInputOptionWizardPage;
-  ModelDirPage: TInputDirWizardPage;
+  ModelDirPage: TInputQueryWizardPage;
   TailscalePage: TInputOptionWizardPage;
   RuntimeSetupAttempted: Boolean;
   RuntimeSetupSucceeded: Boolean;
   RuntimeSetupCanceled: Boolean;
+  IsUpdateInstall: Boolean;
+
+function InitializeSetup: Boolean;
+begin
+  IsUpdateInstall := RegKeyExists(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{DA4D8C60-7C90-49B7-BE1E-844183982AA1}_is1');
+  Result := True;
+end;
 
 function IsRuntimeSetupSucceeded: Boolean;
 begin
@@ -86,7 +97,59 @@ begin
   end;
 end;
 
+function CleanModelPath(const Input: String): String;
+begin
+  Result := Trim(Input);
+  if Length(Result) >= 2 then
+    if (Result[1] = '"') and (Result[Length(Result)] = '"') then
+      Result := Trim(Copy(Result, 2, Length(Result) - 2));
+  StringChangeEx(Result, '/', '\', True);
+end;
+
+function ModelFolderError(var Path: String; Existing: Boolean): String;
+var
+  Location: String;
+begin
+  Result := '';
+  if ((Length(Path) < 3) or ((Copy(Path, 2, 2) <> ':\') and
+     (Copy(Path, 1, 2) <> '\\'))) or (Pos('"', Path) > 0) then begin
+    Result := 'Paste a full Windows path or click Browse.';
+    Exit;
+  end;
+
+  Location := Path;
+  if Existing and not DirExists(Path) then begin
+    if CompareText(ExtractFileExt(Path), '.safetensors') = 0 then begin
+      if FileExists(Path) then
+        Path := ExtractFileDir(Path)
+      else
+        Result := 'Could not open the model file:';
+    end else
+      Result := 'Could not open the model folder:';
+  end else if not Existing and FileExists(Path) then
+    Result := 'Choose a folder for the download:';
+
+  if Result <> '' then begin
+    Result := Result + #13#10 + Location;
+    if Length(Location) >= 260 then
+      Result := Result + #13#10#13#10 + 'Try a shorter model folder path.';
+  end;
+end;
+
+procedure BrowseModelFolder(Sender: TObject);
+var
+  Folder: String;
+begin
+  Folder := CleanModelPath(ModelDirPage.Values[0]);
+  if FileExists(Folder) then
+    Folder := ExtractFileDir(Folder);
+  if BrowseForFolder('Select the model folder', Folder, False) then
+    ModelDirPage.Values[0] := Folder;
+end;
+
 procedure InitializeWizard;
+var
+  BrowseButton: TNewButton;
 begin
   ModelPage := CreateInputOptionPage(wpSelectDir, 'Model files', 'Choose your model setup', 'Select whether to reuse existing model files, download them now, or do this later.', True, False);
   ModelPage.Add('I already have the model files');
@@ -94,9 +157,18 @@ begin
   ModelPage.Add('Download later');
   ModelPage.SelectedValueIndex := 2;
 
-  ModelDirPage := CreateInputDirPage(ModelPage.ID, 'Model folder', 'Select model files', 'Choose the folder containing your model files or where they should be downloaded.', False, '');
-  ModelDirPage.Add('Model files folder:');
+  ModelDirPage := CreateInputQueryPage(ModelPage.ID, 'Model location', 'Select model files', 'Browse to a folder or paste a folder or model file path.');
+  ModelDirPage.Add('Model path:', False);
   ModelDirPage.Values[0] := ExpandConstant('{localappdata}\Reality Restyling\Models');
+  ModelDirPage.Edits[0].Width := ModelDirPage.SurfaceWidth - ScaleX(88);
+  BrowseButton := TNewButton.Create(ModelDirPage);
+  BrowseButton.Parent := ModelDirPage.Surface;
+  BrowseButton.Caption := SetupMessage(msgButtonWizardBrowse);
+  BrowseButton.Left := ModelDirPage.SurfaceWidth - ScaleX(78);
+  BrowseButton.Top := ModelDirPage.Edits[0].Top - 1;
+  BrowseButton.Width := ScaleX(78);
+  BrowseButton.Height := WizardForm.NextButton.Height;
+  BrowseButton.OnClick := @BrowseModelFolder;
 
   TailscalePage := CreateInputOptionPage(ModelDirPage.ID, 'Phone connection', 'Tailscale (optional)', 'Install Tailscale if you plan to connect a phone.', False, False);
   TailscalePage.Add('Install Tailscale with winget if it is missing');
@@ -118,23 +190,31 @@ end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
-  Result := (PageID = ModelDirPage.ID) and (ModelPage.SelectedValueIndex = 2);
+  Result := (IsUpdateInstall and ((PageID = wpSelectDir) or (PageID = ModelPage.ID) or
+    (PageID = ModelDirPage.ID) or (PageID = TailscalePage.ID))) or
+    ((PageID = ModelDirPage.ID) and (ModelPage.SelectedValueIndex = 2));
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  Path, ErrorText: String;
 begin
   Result := True;
-  if (CurPageID = ModelDirPage.ID) and (ModelPage.SelectedValueIndex = 0) then begin
-    if not DirExists(ModelDirPage.Values[0]) then begin
-      MsgBox('Select the folder that contains your model files.', mbError, MB_OK);
+  if CurPageID = ModelDirPage.ID then begin
+    Path := CleanModelPath(ModelDirPage.Values[0]);
+    ErrorText := ModelFolderError(Path, ModelPage.SelectedValueIndex = 0);
+    if ErrorText <> '' then begin
+      MsgBox(ErrorText, mbError, MB_OK);
+      WizardForm.ActiveControl := ModelDirPage.Edits[0];
       Result := False;
-    end;
+    end else
+      ModelDirPage.Values[0] := Path;
   end;
 end;
 
 function GetInstallParameters(Param: String): String;
 var
-  ModeName: String;
+  ModeName, ModelPath: String;
 begin
   case ModelPage.SelectedValueIndex of
     0: ModeName := 'existing';
@@ -143,9 +223,12 @@ begin
     ModeName := 'later';
   end;
   if ModelPage.SelectedValueIndex = 2 then
-    Result := '-ModelMode ' + ModeName + ' -ModelsPath "' + ExpandConstant('{localappdata}\Reality Restyling\Models') + '"'
+    ModelPath := ExpandConstant('{localappdata}\Reality Restyling\Models')
   else
-    Result := '-ModelMode ' + ModeName + ' -ModelsPath "' + ModelDirPage.Values[0] + '"';
+    ModelPath := ModelDirPage.Values[0];
+  if (Length(ModelPath) > 0) and (ModelPath[Length(ModelPath)] = '\') then
+    ModelPath := ModelPath + '.';
+  Result := '-ModelMode ' + ModeName + ' -ModelsPath "' + ModelPath + '"';
   if TailscalePage.Values[0] then
     Result := Result + ' -InstallTailscale';
 end;
@@ -156,10 +239,10 @@ var
   Parameters: String;
 begin
   if CurStep = ssPostInstall then begin
-    RuntimeSetupAttempted := not WizardSilent;
-    RuntimeSetupSucceeded := False;
+    RuntimeSetupAttempted := not WizardSilent and not IsUpdateInstall;
+    RuntimeSetupSucceeded := IsUpdateInstall;
     RuntimeSetupCanceled := False;
-    if not WizardSilent then begin
+    if not WizardSilent and not IsUpdateInstall then begin
       Parameters := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\install-flow.ps1') + '" ' + GetInstallParameters('');
       if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode) then
         MsgBox('The setup wizard could not start the local runtime setup.', mbError, MB_OK)

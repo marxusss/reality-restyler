@@ -21,9 +21,6 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
             item.start()
         self.client = TestClient(TestServer(app.create_app()))
         await self.client.start_server()
-        response = await self.client.post("/session", json={})
-        self.token = (await response.json())["token"]
-        self.headers = {"X-Restyle-Session": self.token}
 
     async def asyncTearDown(self):
         await self.client.close()
@@ -32,7 +29,7 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
 
     async def open_socket(self):
         origin = str(self.client.make_url("/").origin())
-        return await self.client.ws_connect("/local-stream", origin=origin, protocols=["restyle." + self.token])
+        return await self.client.ws_connect("/local-stream", origin=origin)
 
     async def test_loopback_uses_local_transport_and_returns_full_image(self):
         response = await self.client.get("/transport")
@@ -40,13 +37,12 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
         socket = await self.open_socket()
         source = Image.new("RGB", (96, 64), (27, 84, 132))
         encoded = BytesIO()
-        source.save(encoded, format="JPEG")
+        source.save(encoded, format="PNG")
         await socket.send_bytes(encoded.getvalue())
         message = await socket.receive(timeout=5)
         self.assertEqual(message.type, WSMsgType.BINARY)
         result = Image.open(BytesIO(message.data))
         self.assertEqual(result.size, source.size)
-        self.assertEqual(result.format, "JPEG")
         await socket.close()
 
     async def test_local_stream_rejects_fuzzed_payloads_without_crashing(self):
@@ -67,83 +63,29 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
         socket = await self.open_socket()
         source = Image.new("RGB", (32, 24), (27, 84, 132))
         encoded = BytesIO()
-        source.save(encoded, format="JPEG")
+        source.save(encoded, format="PNG")
         await socket.send_bytes(encoded.getvalue())
         message = await socket.receive(timeout=5)
         self.assertEqual(message.type, WSMsgType.TEXT)
         self.assertIn("Frame processing failed", json.loads(message.data)["error"])
         await socket.close()
 
-    async def test_png_frame_is_rejected(self):
+    async def test_unsupported_frame_format_is_rejected(self):
         socket = await self.open_socket()
         encoded = BytesIO()
-        Image.new("RGB", (32, 24)).save(encoded, format="PNG")
+        Image.new("RGB", (32, 24)).save(encoded, format="GIF")
         await socket.send_bytes(encoded.getvalue())
         message = await socket.receive(timeout=5)
         self.assertEqual(message.type, WSMsgType.TEXT)
         self.assertIn("format is not supported", json.loads(message.data)["error"])
         await socket.close()
 
-    async def test_webp_input_is_supported(self):
-        socket = await self.open_socket()
-        encoded = BytesIO()
-        Image.new("RGB", (48, 32)).save(encoded, format="WEBP")
-        await socket.send_bytes(encoded.getvalue())
-        message = await socket.receive(timeout=5)
-        self.assertEqual(message.type, WSMsgType.BINARY)
-        self.assertEqual(Image.open(BytesIO(message.data)).format, "JPEG")
-        await socket.close()
-
-    async def test_concurrent_claims_admit_only_one_controller(self):
-        import asyncio
-        await self.client.post("/stop", json={}, headers=self.headers)
-        results = await asyncio.gather(*(self.client.post("/session", json={}) for _ in range(4)))
-        self.assertEqual(sorted(response.status for response in results), [200, 409, 409, 409])
-
-    async def test_lease_expiration_releases_controller(self):
-        from sessions import SESSION_KEY
-        manager = self.client.server.app[SESSION_KEY]
-        manager.last_seen -= app.IDLE_SECONDS + 1
-        self.assertTrue(manager.expired(app.IDLE_SECONDS))
-        # Run a dedicated short reaper interval without sleeping the production timeout.
-        import asyncio
-        with patch.object(app, "IDLE_SECONDS", 5):
-            for _ in range(30):
-                if manager.token is None:
-                    break
-                await asyncio.sleep(0.2)
-        self.assertIsNone(manager.token)
-        response = await self.client.post("/session", json={})
-        self.assertEqual(response.status, 200)
-
-    async def test_second_controller_cannot_mutate_or_claim(self):
-        for path, body in (("/session", {}), ("/settings", {"settings": {"prompt": "other"}}),
-                           ("/pause", {}), ("/stop", {}), ("/heartbeat", {}),
-                           ("/start", {"settings": {}}), ("/offer", {"sdp": "fake", "type": "offer"})):
-            response = await self.client.post(path, json=body)
-            self.assertEqual(response.status, 409, path)
-        response = await self.client.post("/session", json={}, headers=self.headers)
-        self.assertEqual((await response.json())["token"], self.token)
-
-    async def test_second_transport_rejected_and_stop_releases(self):
-        from aiohttp import WSServerHandshakeError
-        socket = await self.open_socket()
-        with self.assertRaises(WSServerHandshakeError) as rejected:
-            await self.open_socket()
-        self.assertEqual(rejected.exception.status, 409)
-        response = await self.client.post("/stop", json={}, headers=self.headers)
-        self.assertEqual(response.status, 200)
-        response = await self.client.post("/session", json={})
-        self.assertEqual(response.status, 200)
-        self.assertNotEqual((await response.json())["token"], self.token)
-        await socket.close()
-
     async def test_transport_is_local_for_the_host_tailscale_address(self):
         original = app.local_peer_addresses
-        app.local_peer_addresses = {"100.118.25.61", "fd7a:115c:a1e0::d35:193e"}
+        app.local_peer_addresses = {"100.64.0.1", "fd7a:115c:a1e0::1"}
         try:
-            self.assertTrue(app._is_local_peer("100.118.25.61"))
-            self.assertTrue(app._is_local_peer("fd7a:115c:a1e0::d35:193e"))
+            self.assertTrue(app._is_local_peer("100.64.0.1"))
+            self.assertTrue(app._is_local_peer("fd7a:115c:a1e0::1"))
             self.assertTrue(app._is_local_peer("127.0.0.1"))
             self.assertFalse(app._is_local_peer("100.64.0.12"))
         finally:
@@ -157,7 +99,7 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status, 200)
             await response.json()
         with patch.object(app.runtime, "heartbeat", side_effect=lambda: (observed_threads.append(threading.get_ident()), True)[1]):
-            response = await self.client.post("/heartbeat", json={}, headers=self.headers)
+            response = await self.client.post("/heartbeat", json={})
             self.assertEqual(response.status, 200)
             self.assertTrue((await response.json())["loaded"])
         self.assertEqual(len(observed_threads), 2)

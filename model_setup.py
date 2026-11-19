@@ -107,6 +107,19 @@ def _missing_bytes(missing):
     return sum(FILE_SIZES.get(name, 0) for name in missing)
 
 
+def _setup_progress_options(prefix="RR_MODEL"):
+    if os.environ.get("REALITY_RESTYLE_INSTALL_PROGRESS") != "1":
+        return {}
+    from tqdm import tqdm
+
+    class SetupProgress(tqdm):
+        def display(self, msg=None, pos=None):
+            if self.unit == "B" and self.total and not self.desc.startswith("Downloading bytes"):
+                print(f"{prefix} {int(self.n)} of {int(self.total)}", flush=True)
+
+    return {"tqdm_class": SetupProgress}
+
+
 def _download_model(root, missing):
     from huggingface_hub import snapshot_download
 
@@ -119,6 +132,7 @@ def _download_model(root, missing):
             revision=MODEL_REVISION,
             local_dir=str(target),
             allow_patterns=selected,
+            **_setup_progress_options(),
         )
 
 
@@ -154,7 +168,7 @@ def _wait_for_hub_access(exc, non_interactive=False):
         webbrowser.open("https://huggingface.co/settings/tokens")
         cli = Path(sys.executable).parent / "hf.exe"
         if not cli.is_file():
-            raise RuntimeError("Install a read token with `hf auth login`, then rerun run.bat.") from exc
+            raise RuntimeError("Install a read token with `hf auth login`, then run RealityRestylingSetup.exe again.") from exc
         subprocess.run([str(cli), "auth", "login"], check=True)
 
 
@@ -178,6 +192,7 @@ def download_upscaler(root):
         filename=UPSCALE_NAME,
         revision=UPSCALE_REVISION,
         local_dir=str(destination.parent),
+        **_setup_progress_options(),
     )
     if not destination.is_file() or destination.stat().st_size != UPSCALE_SIZE:
         raise RuntimeError("The Compact 2x file is incomplete.")

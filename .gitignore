@@ -3,6 +3,8 @@ __pycache__/
 .venv/
 .runtime/
 /dist/
+/RealityRestylingSetup.exe
+/RealityRestylingSetup.exe.sha256
 *.pyc
 !/models/
 /models/*
