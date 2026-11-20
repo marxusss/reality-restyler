@@ -697,7 +697,7 @@ def create_app():
     app[SESSION_KEY] = SessionManager()
     app[STARTUP_PROGRESS_KEY] = {}
     app.router.add_get("/", index)
-    for script in ("app.js", "camera.js", "transport.js", "styles.js", "errors.js"):
+    for script in ("app.js", "camera.js", "capture.js", "transport.js", "styles.js", "errors.js"):
         app.router.add_get("/" + script, app_script)
     app.router.add_get("/style.css", style_sheet)
     app.router.add_get("/favicon.svg", favicon)

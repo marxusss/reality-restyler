@@ -1,4 +1,5 @@
-import { cameraStream, currentRotation } from "./camera.js";
+import { cameraFacing, cameraLenses, cameraStream, currentRotation, setCameraZoom } from "./camera.js";
+import { mountCapture } from "./capture.js";
 import { encodeCameraFrame } from "./transport.js";
 import { mountStyles } from "./styles.js";
 import { ErrorState } from "./errors.js";
@@ -23,7 +24,7 @@ const promptInput = $("promptInput");
 const stepsInput = $("stepsInput");
 const stepsValue = $("stepsValue");
 const resolutionInput = $("resolutionInput");
-const cameraInput = $("cameraInput");
+const lensBar = $("lensBar");
 const upscaleButton = $("upscaleButton");
 const flashButton = $("flashButton");
 const mirrorButton = $("mirrorButton");
@@ -49,6 +50,7 @@ let promptApplyTimer = 0;
 let settingsApplyQueue = Promise.resolve();
 let cameraSwitchQueue = Promise.resolve();
 let cameraSwitchSequence = 0;
+let selectedCamera = null;
 let localFramePending = false;
 let localFrameTimer = 0;
 let localFrameSentAt = 0;
@@ -115,6 +117,37 @@ for (const element of [settingsPanel, ...document.querySelectorAll("dialog")]) {
 window.addEventListener("resize", scheduleErrorPosition);
 window.visualViewport?.addEventListener("resize", scheduleErrorPosition);
 
+const viewport = window.visualViewport;
+const touchScreen = window.matchMedia("(any-pointer: coarse)");
+const textFields = "textarea, input[type='text']";
+
+function updateKeyboardLayout() {
+  const editing = touchScreen.matches && document.activeElement?.matches(textFields);
+  document.body.classList.toggle("text-entry", editing);
+  if (editing && viewport) {
+    document.body.style.setProperty("--keyboard-top", `${viewport.offsetTop}px`);
+    document.body.style.setProperty("--keyboard-height", `${viewport.height}px`);
+  }
+}
+
+function dismissKeyboard() {
+  if (document.activeElement?.matches(textFields)) document.activeElement.blur();
+}
+
+document.addEventListener("focusin", updateKeyboardLayout);
+document.addEventListener("focusout", () => requestAnimationFrame(updateKeyboardLayout));
+viewport?.addEventListener("resize", updateKeyboardLayout);
+viewport?.addEventListener("scroll", updateKeyboardLayout);
+for (const button of document.querySelectorAll(".keyboard-done")) {
+  button.addEventListener("click", dismissKeyboard);
+}
+for (const name of ["gesturestart", "gesturechange"]) {
+  document.addEventListener(name, event => event.preventDefault(), { passive: false });
+}
+document.addEventListener("wheel", event => {
+  if (event.ctrlKey) event.preventDefault();
+}, { passive: false });
+
 function showStartup(message, completed = 0) {
   if (startupLabel.textContent !== message) startupLabel.textContent = message;
   startup.hidden = !message;
@@ -124,7 +157,17 @@ function showStartup(message, completed = 0) {
 function showFirstFrame() {
   if (firstFrameReceived) return;
   firstFrameReceived = true;
-  if (started) showStartup("");
+  if (started) {
+    showStartup("");
+    capture.setAvailable(true);
+  }
+}
+
+function setPlayback(playing = false) {
+  const label = playing ? "Pause" : runtimeLoaded ? "Resume" : "Start";
+  startButton.classList.toggle("playing", playing);
+  startButton.setAttribute("aria-label", label);
+  startButton.title = label;
 }
 
 function readSettings() {
@@ -190,7 +233,7 @@ function loseOwnership(message) {
   runtimeLoaded = false;
   clearInterval(heartbeatTimer); heartbeatTimer = 0;
   clearCameraSession();
-  startButton.textContent = "Start";
+  setPlayback();
   showError(message || "Camera control moved to another device. Press Start to take over.", "camera");
 }
 
@@ -237,28 +280,46 @@ async function startRuntime() {
   runtimeLoaded = true;
 }
 
-function applyCameraMirror(track) {
+function applyCameraMirror(track, choice) {
   const settings = track && track.getSettings ? track.getSettings() : {};
-  let facing = settings.facingMode;
-  if (facing !== "user" && facing !== "environment") {
-    const label = cameraInput.selectedOptions?.[0]?.textContent?.toLowerCase() || "";
-    if (/\b(front|selfie|user)\b/.test(label)) facing = "user";
-    else if (/\b(back|rear|environment)\b/.test(label)) facing = "environment";
-  }
+  const facing = choice?.facing || settings.facingMode || cameraFacing(track?.label);
   if (facing === "user") setMirror(true);
   else if (facing === "environment") setMirror(false);
 }
 
-async function populateCameras(selectedId = "") {
-  const devices = (await navigator.mediaDevices.enumerateDevices()).filter(item => item.kind === "videoinput");
-  cameraInput.replaceChildren();
-  for (const [index, device] of devices.entries()) {
-    const option = document.createElement("option");
-    option.value = device.deviceId;
-    option.textContent = device.label || "Camera " + (index + 1);
-    cameraInput.append(option);
+let cameraDevices = [];
+function renderLenses(track) {
+  const settings = track.getSettings();
+  const lenses = cameraLenses(cameraDevices, settings, track.getCapabilities?.()?.zoom);
+  selectedCamera = lenses.find(lens => lens.active) ||
+    {deviceId: settings.deviceId, facing: settings.facingMode};
+  lensBar.replaceChildren();
+  lensBar.hidden = lenses.length <= 1;
+  if (lensBar.hidden) return;
+  for (const lens of lenses) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "toggle-button lens-button";
+    button.textContent = lens.label;
+    button.title = lens.name;
+    button.setAttribute("aria-pressed", String(lens.active));
+    button.addEventListener("click", () => {
+      if (busy) return;
+      if (started) {
+        if (!lens.active) queueCameraSwitch(lens);
+      } else {
+        selectedCamera = lens;
+        for (const item of lensBar.children) item.setAttribute("aria-pressed", String(item === button));
+      }
+    });
+    lensBar.append(button);
   }
-  if (selectedId && devices.some(item => item.deviceId === selectedId)) cameraInput.value = selectedId;
+}
+
+async function populateCameras(track) {
+  cameraDevices = await navigator.mediaDevices.enumerateDevices()
+    .then(devices => devices.filter(device => device.kind === "videoinput"), () => []);
+  renderLenses(track);
 }
 
 function updateFlashVisibility(track) {
@@ -507,7 +568,6 @@ async function start() {
   showStartup("Opening camera");
   startButton.disabled = true;
   quitModelButton.disabled = true;
-  cameraInput.disabled = true;
   localRoundTripMs = 0;
   localCaptureMs = 0;
   localEncodeMs = 0;
@@ -518,7 +578,13 @@ async function start() {
     sessionToken = (await request("/session", {})).token;
     runtimeLoaded = Boolean((await request("/health")).loaded);
     if (runtimeLoaded && !heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
-    stream = await cameraStream(cameraInput.value);
+    const requestedCamera = selectedCamera;
+    try {
+      stream = await cameraStream(requestedCamera?.deviceId, requestedCamera?.facing || "environment");
+    } catch (error) {
+      if (!requestedCamera?.deviceId || !/unavailable/.test(error.message)) throw error;
+      stream = await cameraStream("", requestedCamera.facing || "environment");
+    }
     const cameraTrack = stream.getVideoTracks()[0];
     if (!cameraTrack) throw new Error("The selected camera returned no video.");
     output.srcObject = stream;
@@ -526,9 +592,13 @@ async function start() {
     output.classList.add("camera-source");
     localOutput.hidden = true;
     await output.play().catch(() => {});
-    await populateCameras(cameraTrack.getSettings?.().deviceId || "");
+    if (requestedCamera?.zoom !== undefined && cameraTrack.getSettings().deviceId === requestedCamera.deviceId) {
+      try { await setCameraZoom(cameraTrack, requestedCamera.zoom); }
+      catch (error) { showError(error.message, "camera-switch"); }
+    }
+    await populateCameras(cameraTrack);
     updateFlashVisibility(cameraTrack);
-    applyCameraMirror(cameraTrack);
+    applyCameraMirror(cameraTrack, selectedCamera);
     const connection = await request("/transport");
     transportMode = connection.mode;
     await startRuntime();
@@ -539,9 +609,12 @@ async function start() {
     if (transportMode === "local") await openLocalStream();
     else await startPeer();
     started = true;
-    startButton.textContent = "Pause";
+    setPlayback(true);
     latency.hidden = false;
-    if (firstFrameReceived) showStartup("");
+    if (firstFrameReceived) {
+      showStartup("");
+      capture.setAvailable(true);
+    }
     else showStartup("Waiting for the first frame", 7);
     metricsTimer = setInterval(() => void updateMetrics(), 1000);
     if (transportMode === "local") scheduleLocalFrame();
@@ -556,17 +629,17 @@ async function start() {
       }
     }
     if (!runtimeLoaded) { clearInterval(heartbeatTimer); heartbeatTimer = 0; }
-    startButton.textContent = runtimeLoaded ? "Resume" : "Start";
+    setPlayback();
     if (error.message !== "Start cancelled.") showError(error.message);
   } finally {
     busy = false;
     startButton.disabled = false;
     quitModelButton.disabled = false;
-    cameraInput.disabled = false;
   }
 }
 
 function clearCameraSession() {
+  capture.setAvailable(false);
   cameraSwitchSequence += 1;
   const currentPeer = peer;
   const currentStream = stream;
@@ -630,7 +703,7 @@ async function pause(preserveError = false) {
     if (error.status === 409) loseOwnership(error.message);
     else showError(error.message, "pause");
   } finally {
-    startButton.textContent = runtimeLoaded ? "Resume" : "Start";
+    setPlayback();
     startButton.disabled = false; quitModelButton.disabled = false; busy = false;
   }
 }
@@ -649,7 +722,7 @@ async function stop() {
     if (error.status === 409) loseOwnership(error.message);
     else showError(error.message, "stop");
   } finally {
-    startButton.textContent = runtimeLoaded ? "Resume" : "Start";
+    setPlayback();
     startButton.disabled = false; busy = false;
   }
 }
@@ -724,21 +797,27 @@ async function updateMetrics() {
   finally { metricsPending = false; }
 }
 
-async function switchCamera(deviceId, sequence) {
-  if (!deviceId || !stream || !started) return;
+async function switchCamera(lens, sequence) {
+  if (sequence !== cameraSwitchSequence || !stream || !started) return;
   const previous = stream;
   const previousTrack = previous.getVideoTracks()[0];
   if (!previousTrack) {
     showError("The current camera is unavailable.", "camera-switch");
     return;
   }
-  if (previousTrack.getSettings?.().deviceId === deviceId) return;
   const activePeer = peer;
   let next = null;
   try {
-    next = await cameraStream(deviceId);
+    if (previousTrack.getSettings().deviceId === lens.deviceId) {
+      await setCameraZoom(previousTrack, lens.zoom);
+      if (started && stream === previous) renderLenses(previousTrack);
+      showError("", "camera-switch");
+      return;
+    }
+    next = await cameraStream(lens.deviceId, lens.facing || "environment");
     const nextTrack = next.getVideoTracks()[0];
     if (!nextTrack) throw new Error("The selected camera returned no video.");
+    await setCameraZoom(nextTrack, lens.zoom);
     if (sequence !== cameraSwitchSequence || !started || stream !== previous) {
       for (const track of next.getTracks()) track.stop();
       return;
@@ -747,14 +826,16 @@ async function switchCamera(deviceId, sequence) {
       const sender = activePeer.getSenders().find(item => item.track && item.track.kind === "video");
       if (!sender) throw new Error("The camera connection is unavailable.");
       await sender.replaceTrack(nextTrack);
-      if (sequence !== cameraSwitchSequence || !started || stream !== previous || peer !== activePeer) {
+      if (!started || stream !== previous || peer !== activePeer) {
         for (const track of next.getTracks()) track.stop();
         return;
       }
     }
     stream = next;
+    flashButton.setAttribute("aria-pressed", "false");
     updateFlashVisibility(nextTrack);
-    applyCameraMirror(nextTrack);
+    renderLenses(nextTrack);
+    applyCameraMirror(nextTrack, lens);
     if (transportMode === "local") {
       output.srcObject = next;
       output.hidden = false;
@@ -767,15 +848,13 @@ async function switchCamera(deviceId, sequence) {
   } catch (error) {
     if (next) for (const track of next.getTracks()) track.stop();
     if (sequence !== cameraSwitchSequence) return;
-    const previousId = previousTrack.getSettings?.().deviceId;
-    if (previousId && [...cameraInput.options].some(option => option.value === previousId)) cameraInput.value = previousId;
     showError(error.message || "Could not switch camera.", "camera-switch");
   }
 }
 
-function queueCameraSwitch(deviceId) {
+function queueCameraSwitch(lens) {
   const sequence = ++cameraSwitchSequence;
-  cameraSwitchQueue = cameraSwitchQueue.catch(() => {}).then(() => switchCamera(deviceId, sequence));
+  cameraSwitchQueue = cameraSwitchQueue.catch(() => {}).then(() => switchCamera(lens, sequence));
 }
 
 async function toggleFlash() {
@@ -797,30 +876,36 @@ async function toggleFlash() {
 }
 
 function setPanel(open) {
+  if (!open && settingsPanel.contains(document.activeElement)) dismissKeyboard();
   settingsPanel.hidden = !open;
   settingsButton.setAttribute("aria-expanded", String(open));
   scheduleErrorPosition();
 }
 
+function getRenderedFrame() {
+  if (!started || !firstFrameReceived) return null;
+  if (!localOutput.hidden) return {frame: localOutput, width: localOutput.width, height: localOutput.height};
+  if (peer && !output.hidden && !output.classList.contains("camera-source") &&
+      output.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    return {frame: output, width: output.videoWidth, height: output.videoHeight};
+  }
+  return null;
+}
+
 settingsButton.addEventListener("click", () => setPanel(settingsPanel.hidden));
+const capture = mountCapture({
+  getFrame: getRenderedFrame,
+  isMirrored: () => mirror,
+  reportError: message => showError(message, "capture")
+});
 mountStyles({
   promptInput, applyPromptNow, request,
-  isMirrored: () => mirror,
-  getRenderedFrame() {
-    if (!started || !firstFrameReceived) return null;
-    if (!localOutput.hidden) return {frame: localOutput, width: localOutput.width, height: localOutput.height};
-    if (peer && !output.hidden && !output.classList.contains("camera-source") &&
-        output.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      return {frame: output, width: output.videoWidth, height: output.videoHeight};
-    }
-    return null;
-  }
+  isMirrored: () => mirror, getRenderedFrame
 });
 startButton.addEventListener("click", () => started ? void pause() : void start());
 clearPromptButton.addEventListener("click", () => {
   promptInput.value = "";
   applyPromptNow();
-  promptInput.focus();
 });
 quitModelButton.addEventListener("click", async () => {
   quitModelButton.disabled = true;
@@ -847,14 +932,16 @@ promptInput.addEventListener("keydown", event => {
   if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey ||
       event.isComposing || event.keyCode === 229) return;
   event.preventDefault();
-  if (!event.repeat) applyPromptNow();
+  if (!event.repeat) {
+    applyPromptNow();
+    if (touchScreen.matches) dismissKeyboard();
+  }
 });
 if (!output.requestVideoFrameCallback) {
   output.addEventListener("loadeddata", () => {
     if (peer && !output.classList.contains("camera-source")) showFirstFrame();
   });
 }
-cameraInput.addEventListener("change", () => queueCameraSwitch(cameraInput.value));
 for (const eventName of ["orientationchange", "resize"]) {
   window.addEventListener(eventName, () => {
     if (runtimeLoaded) void sendRotation();

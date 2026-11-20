@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#050505">
 <title>Reality Restyle</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -20,11 +20,24 @@
 <span id="startupLabel"></span>
 <progress id="startupProgress" max="8" value="0" aria-label="Startup stages completed"></progress>
 </div>
+<div class="camera-controls">
+<div id="lensBar" class="lens-bar" role="group" aria-label="Camera lenses" hidden></div>
+<div id="captureFileActions" class="capture-file-actions" hidden>
+<button id="saveCaptureButton" class="toggle-button" type="button">Save</button>
+<button id="discardCaptureButton" class="icon-button small" type="button" aria-label="Discard capture"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+</div>
 <div class="actions">
 <button id="flashButton" class="icon-button" type="button" aria-label="Flash" aria-pressed="false" hidden>
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.3 2.5 5.8 13h5l-.5 8.5 7.9-11.1h-5.1l.2-7.9Z"/></svg>
 </button>
-<button id="startButton" class="start-button" type="button">Start</button>
+<button id="startButton" class="icon-button" type="button" aria-label="Start" title="Start">
+<svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+<svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14m6-14v14"/></svg>
+</button>
+<div class="capture-controls">
+<button id="captureModeButton" class="capture-mode" type="button" aria-label="Switch to video">Photo</button>
+<button id="shutterButton" class="shutter-button" type="button" aria-label="Take photo" disabled></button>
+</div>
 <button id="settingsButton" class="icon-button" type="button" aria-label="Settings" aria-controls="settingsPanel" aria-expanded="false">
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.63-.07-.94l2.03-1.58c.18-.14.23-.39.12-.6l-1.92-3.32c-.11-.2-.35-.27-.56-.2l-2.39.96c-.5-.38-1.04-.7-1.63-.94l-.36-2.54c-.03-.22-.21-.38-.44-.38h-3.8c-.22 0-.41.16-.44.38l-.36 2.54c-.59.24-1.13.56-1.63.94l-2.39-.96c-.21-.08-.45 0-.56.2L2.88 8.88c-.11.2-.06.46.12.6l2.03 1.58c-.05.31-.07.63-.07.94s.02.63.07.94l-2.03 1.58c-.18.14-.23.39-.12.6l1.92 3.32c.11.2.35.27.56.2l2.39-.96c.5.38 1.04.7 1.63.94l.36 2.54c.03.22.21.38.44.38h3.8c.22 0 .41-.16.44-.38l.36-2.54c.59-.24 1.13-.56 1.63-.94l2.39.96c.21.08.45 0 .56-.2l1.92-3.32c.11-.2.06-.46-.12-.6l-2.02-1.58zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
 </button>
@@ -32,17 +45,15 @@
 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"/><path d="m8 7-4 5 4 5M16 7l4 5-4 5"/></svg>
 </button>
 </div>
+</div>
 <section id="settingsPanel" class="settings-panel" aria-label="Settings" hidden>
 <div class="field prompt-field">
-<div class="prompt-heading"><label for="promptInput">Prompt</label><div class="style-actions"><button id="stylesButton" class="toggle-button" type="button" aria-haspopup="dialog">Styles</button><button id="clearPromptButton" class="icon-button small" type="button" aria-label="Clear prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div>
-<textarea id="promptInput" rows="3" maxlength="2000" spellcheck="false"></textarea>
+<div class="prompt-heading"><label for="promptInput">Prompt</label><div class="style-actions"><button id="stylesButton" class="toggle-button" type="button" aria-haspopup="dialog">Styles</button><button id="clearPromptButton" class="toggle-button" type="button">Clear prompt</button><button class="toggle-button keyboard-done" type="button" aria-label="Dismiss keyboard">Done</button></div></div>
+<textarea id="promptInput" rows="3" maxlength="2000" spellcheck="false" enterkeyhint="done"></textarea>
 </div>
 <div class="setting-row">
 <label class="field"><span>Steps</span><div class="range-wrap"><input id="stepsInput" type="range" min="1" max="4" value="4"><output id="stepsValue">4</output></div></label>
 <label class="field"><span>Resolution</span><select id="resolutionInput"><option value="512" selected>512</option><option value="640">640</option><option value="768">768</option><option value="896">896</option><option value="1024">1024</option></select></label>
-</div>
-<div class="setting-row camera-row">
-<label class="field"><span>Camera</span><select id="cameraInput"></select></label>
 </div>
 <div class="setting-footer">
 <button id="upscaleButton" class="toggle-button" type="button" aria-pressed="true">
@@ -72,7 +83,10 @@
 <form id="styleForm">
 <div class="panel-top">
 <h2 id="styleEditorTitle">Add style</h2>
+<div class="style-actions">
+<button class="toggle-button keyboard-done" type="button" aria-label="Dismiss keyboard">Done</button>
 <button id="closeStyleEditorButton" class="icon-button small" type="button" aria-label="Close style editor"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+</div>
 </div>
 <label class="field"><span>Name</span><input id="styleName" type="text" maxlength="60" required autofocus></label>
 <label class="field"><span>Prompt</span><textarea id="stylePrompt" rows="4" maxlength="2000" spellcheck="false" required></textarea></label>

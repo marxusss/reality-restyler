@@ -15,7 +15,24 @@ html, body, #app {
   height: 100dvh;
   margin: 0;
   overflow: hidden;
+  overscroll-behavior: none;
   background: #050505;
+}
+body, #app {
+  position: fixed;
+  inset: 0;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+textarea, input[type="text"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+#output, #localOutput {
+  touch-action: none;
 }
 button, input, select, textarea {
   font: inherit;
@@ -90,7 +107,7 @@ button {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.icon-button:active, .toggle-button:active, .start-button:active {
+.icon-button:active, .toggle-button:active, .shutter-button:active {
   transform: scale(.97);
 }
 .icon-button svg, .toggle-button svg {
@@ -142,21 +159,54 @@ button {
   height: 6px;
   accent-color: #a7ecd0;
 }
-.actions {
+.camera-controls {
   position: absolute;
   left: 50%;
   bottom: max(20px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100% - 16px);
+}
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, 46px) 68px repeat(2, 46px);
+  align-items: end;
+  gap: 6px;
+  padding: 6px;
   border: 1px solid rgba(255,255,255,.13);
-  border-radius: 19px;
+  border-radius: 22px;
   background: rgba(11,13,16,.72);
   box-shadow: 0 12px 40px rgba(0,0,0,.32);
   backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
+}
+.lens-bar, .capture-file-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 18px;
+  background: rgba(11,13,16,.86);
+}
+.lens-bar[hidden], .capture-file-actions[hidden], .capture-mode[hidden] {
+  display: none;
+}
+.toggle-button.lens-button {
+  min-width: 40px;
+  min-height: 36px;
+  padding: 0 6px;
+  border-radius: 14px;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+.actions #flashButton[hidden] {
+  display: inline-flex;
+  visibility: hidden;
 }
 .actions .icon-button {
   border-color: transparent;
@@ -168,32 +218,74 @@ button {
   background: rgba(255,255,255,.16);
   border-color: rgba(255,255,255,.24);
 }
-.start-button {
-  min-width: 116px;
-  height: 46px;
-  padding: 0 24px;
+#startButton .pause-icon, #startButton.playing .play-icon {
+  display: none;
+}
+#startButton.playing .pause-icon {
+  display: block;
+}
+#startButton .play-icon {
+  fill: currentColor;
+}
+#startButton:disabled {
+  opacity: .5;
+  cursor: wait;
+}
+.capture-controls {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  touch-action: none;
+}
+.capture-mode {
+  min-height: 27px;
+  padding: 0 7px;
   border: 0;
-  border-radius: 14px;
-  background: #f5f6f7;
-  color: #141619;
-  font-size: 15px;
-  font-weight: 650;
-  letter-spacing: .01em;
+  background: transparent;
+  font-size: 12px;
+  color: #f3e8a7;
+  cursor: pointer;
+}
+.shutter-button {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: transparent;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.start-button:disabled {
-  opacity: .7;
-  cursor: wait;
+.shutter-button::before {
+  content: "";
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #fff;
+}
+.shutter-button[data-mode="video"]::before {
+  background: #ff454f;
+}
+.shutter-button.recording::before {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+.shutter-button:disabled {
+  opacity: .42;
+  cursor: default;
 }
 .settings-panel {
   position: absolute;
   z-index: 2;
   left: 50%;
-  bottom: max(88px, calc(env(safe-area-inset-bottom) + 76px));
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 112px);
   width: min(430px, calc(100vw - 24px));
   max-height: min(72vh, 620px);
   overflow: auto;
+  overscroll-behavior: contain;
   transform: translateX(-50%);
   padding: 18px;
   border: 1px solid rgba(255,255,255,.14);
@@ -202,6 +294,15 @@ button {
   box-shadow: 0 24px 80px rgba(0,0,0,.42);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
+}
+#app:has(.lens-bar:not([hidden])) {
+  --lens-height: 54px;
+}
+#app:has(.capture-file-actions:not([hidden])) {
+  --capture-save-height: 54px;
+}
+.settings-panel, .error {
+  margin-bottom: calc(var(--lens-height, 0px) + var(--capture-save-height, 0px));
 }
 .settings-panel[hidden] {
   display: none;
@@ -252,6 +353,9 @@ button {
 }
 .style-actions .toggle-button {
   min-height: 34px;
+}
+.toggle-button.keyboard-done {
+  display: none;
 }
 textarea, select {
   width: 100%;
@@ -510,7 +614,7 @@ textarea:focus, select:focus {
   position: absolute;
   z-index: 3;
   left: 50%;
-  bottom: max(85px, calc(env(safe-area-inset-bottom) + 72px));
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 112px);
   width: min(430px, calc(100vw - 24px));
   transform: translateX(-50%);
   padding: 11px 14px;
@@ -527,11 +631,48 @@ textarea:focus, select:focus {
 }
 @media (max-width: 440px) {
   .settings-panel {
-    bottom: max(84px, calc(env(safe-area-inset-bottom) + 72px));
     padding: 16px;
     border-radius: 20px;
   }
   .setting-row {
     gap: 9px;
+  }
+}
+@media (any-pointer: coarse) {
+  textarea, select, .style-editor input {
+    font-size: 16px;
+  }
+  textarea {
+    resize: none;
+  }
+  .toggle-button.keyboard-done {
+    display: inline-flex;
+  }
+  .text-entry .settings-panel {
+    z-index: 4;
+    top: calc(var(--keyboard-top, 0px) + max(8px, env(safe-area-inset-top)));
+    bottom: auto;
+    margin-bottom: 0;
+    max-height: calc(var(--keyboard-height, 100dvh) - 16px);
+    padding: 10px;
+  }
+  .text-entry .settings-panel > :not(.prompt-field),
+  .text-entry .style-editor #styleCapturePreview,
+  .text-entry .style-editor .style-toolbar {
+    display: none;
+  }
+  .text-entry .prompt-field {
+    margin-bottom: 0;
+  }
+  .text-entry .settings-panel textarea {
+    min-height: 40px;
+    max-height: calc(var(--keyboard-height, 100dvh) - 80px);
+  }
+  .text-entry .style-editor {
+    position: fixed;
+    inset: calc(var(--keyboard-top, 0px) + env(safe-area-inset-top)) 0 auto;
+    margin: 8px auto;
+    max-height: calc(var(--keyboard-height, 100dvh) - 16px);
+    overscroll-behavior: contain;
   }
 }
