@@ -8,7 +8,9 @@ function recordCameraOpen(startedAt, result) {
   return timing;
 }
 
-export async function cameraStream(deviceId = "", facingMode = "environment") {
+let cameraOpen = Promise.resolve();
+
+export async function cameraStream(deviceId = "", facingMode = "environment", current = () => true) {
   const startedAt = performance.now();
   if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     throw new Error("Camera access requires a secure HTTPS page.");
@@ -21,8 +23,18 @@ export async function cameraStream(deviceId = "", facingMode = "environment") {
   const video = deviceId
     ? { ...camera, deviceId: { exact: deviceId } }
     : { ...camera, facingMode: { ideal: facingMode } };
-  try {
+  const pending = cameraOpen.then(async () => {
+    if (!current()) throw new DOMException("Camera open cancelled.", "AbortError");
     const stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+    if (!current()) {
+      for (const track of stream.getTracks()) track.stop();
+      throw new DOMException("Camera open cancelled.", "AbortError");
+    }
+    return stream;
+  });
+  cameraOpen = pending.catch(() => {});
+  try {
+    const stream = await pending;
     stream.cameraOpenTiming = { ...recordCameraOpen(startedAt, "success") };
     return stream;
   } catch (error) {
@@ -45,18 +57,18 @@ export async function cameraStream(deviceId = "", facingMode = "environment") {
   }
 }
 
-export async function openStartingCamera(choice) {
+export async function openStartingCamera(choice, { fallback = true, current = () => true } = {}) {
   const facing = choice?.facing || "environment";
   let deviceId = choice?.deviceId || "";
   for (let attempt = 0; ; attempt++) {
     try {
-      return await cameraStream(deviceId, facing);
+      return await cameraStream(deviceId, facing, current);
     } catch (error) {
-      if (deviceId && ["NotFoundError", "DevicesNotFoundError", "OverconstrainedError"].includes(error.name)) {
+      if (fallback && deviceId && ["NotFoundError", "DevicesNotFoundError", "OverconstrainedError"].includes(error.name)) {
         deviceId = "";
         continue;
       }
-      if (attempt >= 2 || !["NotReadableError", "TrackStartError", "AbortError"].includes(error.name)) throw error;
+      if (!current() || attempt >= 2 || !["NotReadableError", "TrackStartError", "AbortError"].includes(error.name)) throw error;
       await new Promise(resolve => setTimeout(resolve, 150 * (attempt + 1)));
     }
   }
@@ -68,7 +80,7 @@ export function cameraFacing(label = "") {
   return "";
 }
 
-export function cameraLenses(devices, settings = {}, zoom = null) {
+export function cameraLenses(devices, settings = {}, zoom = null, knownZoom = new Map()) {
   const activeDevice = devices.find(device => device.deviceId === settings.deviceId);
   const activeFacing = settings.facingMode || cameraFacing(activeDevice?.label);
   if (!activeDevice || !["user", "environment"].includes(activeFacing) ||
@@ -79,7 +91,7 @@ export function cameraLenses(devices, settings = {}, zoom = null) {
   const hasRearMain = physicalCameras.some(({label}) => cameraFacing(label) === "environment" &&
     !logicalCamera.test(label) && !/ultra[\s-]*wide|telephoto/i.test(label));
   const cameras = physicalCameras.filter(device =>
-    (device.deviceId === settings.deviceId || !hasRearMain || !logicalCamera.test(device.label)));
+    (device.deviceId === settings.deviceId || knownZoom.has(device.deviceId) || !hasRearMain || !logicalCamera.test(device.label)));
   const choices = [];
   for (const device of cameras) {
     const current = device.deviceId === settings.deviceId;
@@ -93,18 +105,19 @@ export function cameraLenses(devices, settings = {}, zoom = null) {
     const duplicate = choices.findIndex(existing =>
       existing.facing === facing && existing.magnification === magnification);
     if (duplicate < 0) choices.push(choice);
-    else if (current) choices[duplicate] = choice;
+    else if (current || (!choices[duplicate].active && knownZoom.has(device.deviceId))) choices[duplicate] = choice;
   }
-  const base = choices.find(choice => choice.active && choice.magnification === 1);
-  if (base && zoom && typeof settings.zoom === "number" && zoom.min <= 1 && zoom.max >= 1) {
+  for (const base of choices.filter(choice => choice.magnification === 1)) {
+    const range = base.active ? zoom : knownZoom.get(base.deviceId);
+    if (!range || !(range.min <= 1 && range.max >= 1)) continue;
     const selfie = base.facing === "user";
     const stops = selfie ? [0.5] : [0.5, 2];
     if (!selfie && !choices.some(choice => choice.facing === base.facing &&
-      choice.magnification > 2)) stops.push(zoom.max >= 4 ? 4 : 3);
+      choice.magnification > 2)) stops.push(range.max >= 4 ? 4 : 3);
     for (const target of stops) {
-      if (!(target >= zoom.min && target <= zoom.max) ||
+      if (!(target >= range.min && target <= range.max) ||
           choices.some(choice => choice.facing === base.facing && choice.magnification === target)) continue;
-      const active = Math.abs(settings.zoom - target) < Math.max((zoom.step || 0) / 2, 0.01);
+      const active = base.active && Math.abs(settings.zoom - target) < Math.max((range.step || 0) / 2, 0.01);
       choices.push({...base, magnification: target, zoom: target, active});
       if (active) base.active = false;
     }
