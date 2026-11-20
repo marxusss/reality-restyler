@@ -299,9 +299,11 @@ function renderLenses(track) {
   for (const lens of lenses) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "toggle-button lens-button";
-    button.textContent = lens.label;
-    button.title = lens.name;
+    const selfie = lens.facing === "user";
+    const number = String(lens.magnification).replace(/^0\./, ".");
+    button.className = "lens-button";
+    button.textContent = `${selfie ? "−" : ""}${number}`;
+    button.setAttribute("aria-label", `${selfie ? "Selfie" : "Rear"} ${lens.magnification}×`);
     button.setAttribute("aria-pressed", String(lens.active));
     button.addEventListener("click", () => {
       if (busy) return;
