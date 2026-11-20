@@ -22,11 +22,13 @@
   <em>(Note: The GIF encoding has reduced the color range to 95 colors in this demo.)</em>
 </p>
 
-## Overview
+## Features
 
-- Restyle a webcam or phone camera live. Phone access uses Tailscale.
-- Combine preset styles or write and save your own prompts.
-- Save restyled photos and video clips to the device you’re using.
+- **Live Restyling** — Apply AI styles as you move.
+- **Custom Styles** — Save your own prompts and thumbnails.
+- **Phone Connection** — Use your phone camera over Tailscale.
+- **Style Combiner** — Blend up to five styles.
+- **Photo & Video** — Save restyled captures to your device.
 
 ## Setup
 
