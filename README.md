@@ -13,11 +13,13 @@
 </p>
 
 <p align="center">
-  <a href="media/demo.mp4"><img src="media/demo.gif" width="660" alt="Reality Restyling demo cycling through voxel, painting, and pencil sketch styles"></a>
+  <a href="media/demo.mp4?raw=true"><img src="media/demo.gif" width="660" alt="Reality Restyling demo cycling through voxel, painting, and pencil sketch styles"></a>
   <br>
-  <a href="media/demo.mp4">Full demo</a>
+  <a href="media/demo.mp4?raw=true">Full desktop demo (MP4)</a>
   <br>
   <sub>Demo from the development build on an RTX 5090.</sub>
+  <br>
+  <em>(Note: The GIF encoding has reduced the color range to 95 colors in this demo.)</em>
 </p>
 
 ## Overview
@@ -31,6 +33,18 @@
 1. On Windows 11, run `RealityRestylingSetup.exe` and select your model folder or download the files.
 2. In **Reality Restyling**, select **Start server**, then **Open app**.
 3. Press **Start** and choose a style.
+
+### Phone
+
+With Tailscale connected on both devices, open the phone link from the Windows launcher in Safari, then tap **Share → Add to Home Screen** to connect from the new icon whenever the PC server is running.
+
+<p align="center">
+  <a href="media/phone.mp4?raw=true"><img src="media/phone.gif" width="300" alt="Reality Restyling running on an iPhone and restyling a cat live"></a>
+  <br>
+  <a href="media/phone.mp4?raw=true">Full phone demo (MP4)</a>
+  <br>
+  <em>(Note: The GIF encoding has reduced the color range to 255 colors in this demo.)</em>
+</p>
 
 [Phone setup and troubleshooting](docs/setup.md)
 
