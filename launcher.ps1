@@ -300,11 +300,15 @@ function Set-PhoneStartup($Enabled) {
             }
             $hadStartup = $current -eq $startupCommand
             if (-not $hadStartup) {
-                New-Item -Path $startupKeyPath -Force -ErrorAction Stop | Out-Null
+                if (-not (Test-Path -LiteralPath $startupKeyPath)) {
+                    New-Item -Path $startupKeyPath -ErrorAction Stop | Out-Null
+                }
                 Set-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -Value $startupCommand -ErrorAction Stop
                 $createdStartup = $true
             }
-            New-Item -Path $startupApprovalKeyPath -Force -ErrorAction Stop | Out-Null
+            if (-not (Test-Path -LiteralPath $startupApprovalKeyPath)) {
+                New-Item -Path $startupApprovalKeyPath -ErrorAction Stop | Out-Null
+            }
             Set-ItemProperty -LiteralPath $startupApprovalKeyPath -Name $startupApprovalValueName -Value $hostname -ErrorAction Stop
         } else {
             Clear-PhoneStartupApproval
