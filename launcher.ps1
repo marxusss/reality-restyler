@@ -1,3 +1,5 @@
+param([switch]$PhoneStartup)
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [Windows.Forms.Application]::EnableVisualStyles()
@@ -123,7 +125,8 @@ foreach ($segment in @($desktop, $phone)) {
     $segment.TextAlign = 'MiddleCenter'
     $segment.Cursor = 'Hand'
 }
-$desktop.Checked = $true
+$desktop.Checked = -not $PhoneStartup
+$phone.Checked = [bool]$PhoneStartup
 
 $statusCard = Add-Control $window Panel '' 24 88 452 118
 $statusTitle = Add-Control $statusCard Label '' 18 16 416 27
@@ -159,6 +162,53 @@ $qr = Add-Control $phoneCard PictureBox '' 314 14 120 120
 $qr.SizeMode = 'Zoom'
 $qr.AccessibleName = 'Phone access QR code'
 
+$startupCheck = Add-Control $window CheckBox 'Start phone server with Windows' 24 0 260 24
+$startupCheck.BackColor = $background
+$startupCheck.ForeColor = $foreground
+$startupCheck.AutoSize = $true
+$startupWarning = Add-Control $window Label 'Starts at sign-in; model stays unloaded.' 298 0 178 22
+$startupWarning.ForeColor = $muted
+$startupWarning.Font = [Drawing.Font]::new('Segoe UI', 8.5)
+
+$startupKeyPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+$startupValueName = 'RealityRestylingPhoneAccess'
+$startupCommand = '"' + (Join-Path $PSScriptRoot 'RealityRestyling.exe') + '" --phone-startup'
+$startupApprovalKeyPath = 'HKCU:\Software\RealityRestyling'
+$startupApprovalValueName = 'PhoneStartupApprovedHostname'
+$startupValue = (Get-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -ErrorAction SilentlyContinue).$startupValueName
+$startupCheck.Checked = $startupValue -eq $startupCommand
+$startupWarning.Visible = $startupCheck.Checked
+
+function Get-PhoneStartupApproval {
+    $value = (Get-ItemProperty -LiteralPath $startupApprovalKeyPath -Name $startupApprovalValueName -ErrorAction SilentlyContinue).$startupApprovalValueName
+    if ($value) { return ([string]$value).TrimEnd([char[]]@('.')).ToLowerInvariant() }
+    return ''
+}
+
+function Clear-PhoneStartupApproval {
+    $value = (Get-ItemProperty -LiteralPath $startupApprovalKeyPath -Name $startupApprovalValueName -ErrorAction SilentlyContinue).$startupApprovalValueName
+    if ($value) { Remove-ItemProperty -LiteralPath $startupApprovalKeyPath -Name $startupApprovalValueName -ErrorAction Stop }
+}
+
+function Get-TailscaleDnsName {
+    $tailscale = (Get-Command tailscale -ErrorAction SilentlyContinue).Source
+    if (-not $tailscale) {
+        foreach ($candidate in @((Join-Path $env:ProgramFiles 'Tailscale\tailscale.exe'), (Join-Path $env:LOCALAPPDATA 'Tailscale\tailscale.exe'))) {
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) { $tailscale = $candidate; break }
+        }
+    }
+    if (-not $tailscale) { return '' }
+    try {
+        $output = & $tailscale status --json 2>$null
+        if ($LASTEXITCODE -ne 0) { return '' }
+        $status = ($output -join [Environment]::NewLine) | ConvertFrom-Json
+        if ($status.BackendState -ne 'Running') { return '' }
+        $hostname = ([string]$status.Self.DNSName).Trim().TrimEnd([char[]]@('.')).ToLowerInvariant()
+        if ($hostname -notmatch '^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$') { return '' }
+        return $hostname
+    } catch { return '' }
+}
+
 $logDirectory = Join-Path $PSScriptRoot '.runtime\logs'
 [void][IO.Directory]::CreateDirectory($logDirectory)
 $logPython = Join-Path $PSScriptRoot 'python\python.exe'
@@ -172,7 +222,7 @@ $logTimer = [Windows.Forms.Timer]::new()
 $logTimer.Interval = 3600000
 $logTimer.Add_Tick({ Invoke-LogPrune })
 $logTimer.Start()
-$state = @{ Worker = $null; Directory = $null; StopStarted = $null; Name = 'stopped'; Closing = $false; PhonePrompted = $false; UpdateWorker = $null; UpdateDirectory = $null; UpdateMode = ''; PendingUpdate = $null; UpdateTag = '' }
+$state = @{ Worker = $null; Directory = $null; StopStarted = $null; Name = 'stopped'; Closing = $false; PhonePrompted = $false; UpdateWorker = $null; UpdateDirectory = $null; UpdateMode = ''; PendingUpdate = $null; UpdateTag = ''; StartupUpdating = $false }
 $timer = [Windows.Forms.Timer]::new()
 $timer.Interval = 250
 
@@ -214,7 +264,70 @@ function Sync-PhoneCard {
     $phoneCard.Visible = $state.Name -eq 'ready' -and $phone.Checked -and [bool]$phoneUrl.Text
     $phoneCard.Top = if ($desktopCard.Visible) { $desktopCard.Bottom + 16 } else { $statusCard.Bottom + 16 }
     $bottom = if ($phoneCard.Visible) { $phoneCard.Bottom } elseif ($desktopCard.Visible) { $desktopCard.Bottom } else { $statusCard.Bottom }
-    $window.ClientSize = [Drawing.Size]::new($window.ClientSize.Width, $bottom + 24)
+    $startupCheck.Top = $bottom + 12
+    $startupWarning.Top = $bottom + 15
+    $window.ClientSize = [Drawing.Size]::new($window.ClientSize.Width, $startupCheck.Bottom + 14)
+}
+
+function Set-PhoneStartup($Enabled) {
+    if ($state.StartupUpdating) { return }
+    $state.StartupUpdating = $true
+    $hadStartup = $false
+    $createdStartup = $false
+    try {
+        $current = (Get-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -ErrorAction SilentlyContinue).$startupValueName
+        if ($Enabled) {
+            if ($current -and $current -ne $startupCommand) {
+                Clear-PhoneStartupApproval
+                $startupCheck.Checked = $false
+                $startupWarning.Visible = $false
+                [Windows.Forms.MessageBox]::Show($window, 'Another startup entry uses this name.', 'Reality Restyling', [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+                return
+            }
+            $hostname = Get-TailscaleDnsName
+            if (-not $hostname) {
+                Clear-PhoneStartupApproval
+                $startupCheck.Checked = $false
+                [Windows.Forms.MessageBox]::Show($window, 'Connect Tailscale before enabling phone startup.', 'Reality Restyling', [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+                return
+            }
+            $question = "Allow phone access at Windows sign-in for this exact Tailscale hostname?`n`n$hostname`n`nThis name may appear in public certificate logs."
+            $reply = [Windows.Forms.MessageBox]::Show($window, $question, 'Phone startup approval', [Windows.Forms.MessageBoxButtons]::YesNo, [Windows.Forms.MessageBoxIcon]::Warning, [Windows.Forms.MessageBoxDefaultButton]::Button2)
+            if ($reply -ne [Windows.Forms.DialogResult]::Yes) {
+                Clear-PhoneStartupApproval
+                $startupCheck.Checked = $false
+                return
+            }
+            $hadStartup = $current -eq $startupCommand
+            if (-not $hadStartup) {
+                New-Item -Path $startupKeyPath -Force -ErrorAction Stop | Out-Null
+                Set-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -Value $startupCommand -ErrorAction Stop
+                $createdStartup = $true
+            }
+            New-Item -Path $startupApprovalKeyPath -Force -ErrorAction Stop | Out-Null
+            Set-ItemProperty -LiteralPath $startupApprovalKeyPath -Name $startupApprovalValueName -Value $hostname -ErrorAction Stop
+        } else {
+            Clear-PhoneStartupApproval
+            if ($current -eq $startupCommand) {
+                Remove-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -ErrorAction Stop
+            }
+        }
+        $startupWarning.Visible = $Enabled
+    } catch {
+        if ($Enabled) {
+            if ($createdStartup) {
+                $after = (Get-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -ErrorAction SilentlyContinue).$startupValueName
+                if ($after -eq $startupCommand) { Remove-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -ErrorAction SilentlyContinue }
+            }
+            try { Clear-PhoneStartupApproval } catch { }
+        }
+        $startupCheck.Checked = -not [bool]$Enabled
+        $startupWarning.Visible = $startupCheck.Checked
+        [Windows.Forms.MessageBox]::Show($window, 'Could not update Windows startup.', 'Reality Restyling', [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+    } finally {
+        $state.StartupUpdating = $false
+    }
+    Sync-PhoneCard
 }
 
 function Show-Detail($Message) {
@@ -359,10 +472,12 @@ $copyDesktop.Add_Click({ Set-ClipboardUrl $desktopUrl.Text })
 $copyPhone.Add_Click({ Set-ClipboardUrl $phoneUrl.Text })
 $log.Add_Click({ Start-Process explorer.exe -ArgumentList ('"{0}"' -f $logDirectory) })
 $phone.Add_CheckedChanged({ Sync-PhoneCard })
+$startupCheck.Add_CheckedChanged({ Set-PhoneStartup $startupCheck.Checked })
 $window.Add_Shown({
     Sync-PhoneCard
     $timer.Start()
     Start-UpdateCheck
+    if ($PhoneStartup) { $start.PerformClick() }
 })
 
 $timer.Add_Tick({
@@ -472,18 +587,32 @@ $timer.Add_Tick({
         $timer.Stop()
         try {
             $hostname = $consent.hostname
-            $question = @(
-                'Phone access may publish this exact hostname in a permanent public certificate log.',
-                $hostname,
-                'Use a generic Tailscale device name before continuing.',
-                'Enable phone access?'
-            ) -join ([Environment]::NewLine * 2)
-            $reply = [Windows.Forms.MessageBox]::Show($window, $question, 'Phone access', 'YesNo', 'Warning', 'Button2')
-            if ($reply -eq 'Yes') {
+            $savedHostname = Get-PhoneStartupApproval
+            $currentHostname = ([string]$hostname).TrimEnd([char[]]@('.'))
+            if ($savedHostname -and -not [string]::Equals($savedHostname, $currentHostname, [StringComparison]::OrdinalIgnoreCase)) {
+                Clear-PhoneStartupApproval
+                $savedHostname = ''
+            }
+            $startupValue = (Get-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -ErrorAction SilentlyContinue).$startupValueName
+            $autoApprove = $PhoneStartup -and ($startupValue -eq $startupCommand) -and $savedHostname -and [string]::Equals($savedHostname, $currentHostname, [StringComparison]::OrdinalIgnoreCase)
+            if ($autoApprove) {
                 $pending = Join-Path $state.Directory 'phone.pending'
                 [IO.File]::WriteAllText($pending, $hostname)
                 [IO.File]::Move($pending, (Join-Path $state.Directory 'phone.approved'))
-            } else { Request-Stop }
+            } else {
+                $question = @(
+                    'Phone access may publish this exact hostname in a permanent public certificate log.',
+                    $hostname,
+                    'Use a generic Tailscale device name before continuing.',
+                    'Enable phone access?'
+                ) -join ([Environment]::NewLine * 2)
+                $reply = [Windows.Forms.MessageBox]::Show($window, $question, 'Phone access', 'YesNo', 'Warning', 'Button2')
+                if ($reply -eq 'Yes') {
+                    $pending = Join-Path $state.Directory 'phone.pending'
+                    [IO.File]::WriteAllText($pending, $hostname)
+                    [IO.File]::Move($pending, (Join-Path $state.Directory 'phone.approved'))
+                } else { Request-Stop }
+            }
         } finally { $timer.Start() }
     }
     $ready = Read-SessionJson 'ready.json'

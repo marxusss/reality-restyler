@@ -57,6 +57,9 @@ Type: files; Name: "{app}\launcher.py"
 Type: files; Name: "{app}\launcher_ipc.py"
 Type: files; Name: "{group}\Reality Restyling (Phone).lnk"
 Type: files; Name: "{group}\Setup Guide.lnk"
+Type: files; Name: "{app}\web\styles\infrared-film.webp"
+Type: files; Name: "{app}\web\styles\bleach-bypass.webp"
+Type: files; Name: "{app}\web\styles\cool-chrome.webp"
 
 [Run]
 Filename: "{app}\RealityRestyling.exe"; Description: "Launch Reality Restyling"; WorkingDir: "{app}"; Flags: postinstall skipifsilent nowait runhidden; Check: IsRuntimeSetupSucceeded
@@ -256,5 +259,19 @@ begin
       RuntimeSetupSucceeded := True
     else if ResultCode = 130 then
       RuntimeSetupCanceled := True;
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  StartupCommand: String;
+  CurrentValue: String;
+begin
+  if CurUninstallStep = usUninstall then begin
+    StartupCommand := '"' + ExpandConstant('{app}\RealityRestyling.exe') + '" --phone-startup';
+    if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'RealityRestylingPhoneAccess', CurrentValue) and
+       (CompareText(CurrentValue, StartupCommand) = 0) then
+      RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'RealityRestylingPhoneAccess');
+    RegDeleteValue(HKCU, 'Software\RealityRestyling', 'PhoneStartupApprovedHostname');
   end;
 end;

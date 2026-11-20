@@ -6,7 +6,7 @@ using System.Windows.Forms;
 internal static class LauncherBootstrap
 {
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
         string root = AppDomain.CurrentDomain.BaseDirectory;
         string script = Path.Combine(root, "launcher.ps1");
@@ -17,10 +17,14 @@ internal static class LauncherBootstrap
             return 1;
         }
 
+        string arguments = "-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File \"" + script + "\"";
+        if (args.Length == 1 && String.Equals(args[0], "--phone-startup", StringComparison.Ordinal))
+            arguments += " -PhoneStartup";
+
         ProcessStartInfo start = new ProcessStartInfo
         {
             FileName = powershell,
-            Arguments = "-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File \"" + script + "\"",
+            Arguments = arguments,
             WorkingDirectory = root,
             UseShellExecute = false,
             CreateNoWindow = true,
