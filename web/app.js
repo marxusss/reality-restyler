@@ -118,7 +118,10 @@ function showError(message, source = "action") {
   errorBox.hidden = !text;
   scheduleErrorPosition();
 }
-function clearErrors() { errors.clear(); showError(""); }
+function clearErrors() {
+  errors.clear();
+  showError("");
+}
 
 const errorLayoutObserver = new MutationObserver(scheduleErrorPosition);
 for (const element of [settingsPanel, ...document.querySelectorAll("dialog")]) {
@@ -279,17 +282,23 @@ async function request(path, body) {
     try { result = JSON.parse(raw); } catch (_) {}
     if (!response.ok) {
       const failure = new Error(result.error || raw || "Request failed (" + response.status + ").");
-      failure.status = response.status; failure.data = result;
+      failure.status = response.status;
+      failure.data = result;
       throw failure;
     }
     return result;
   } finally { clearTimeout(timer); }
 }
 
+function stopHeartbeat() {
+  clearInterval(heartbeatTimer);
+  heartbeatTimer = 0;
+}
+
 function loseOwnership(message) {
   sessionToken = "";
   runtimeLoaded = false;
-  clearInterval(heartbeatTimer); heartbeatTimer = 0;
+  stopHeartbeat();
   clearCameraSession();
   setPlayback();
   showError(message || "Camera control moved to another device. Press Start to take over.", "camera");
@@ -718,7 +727,7 @@ async function start() {
         if (failure.status === 409) loseOwnership(failure.message);
       }
     }
-    if (!runtimeLoaded) { clearInterval(heartbeatTimer); heartbeatTimer = 0; }
+    if (!runtimeLoaded) stopHeartbeat();
     setPlayback();
     if (error.message !== "Start cancelled.") showError(error.message);
   } finally {
@@ -793,7 +802,9 @@ function clearCameraSession() {
 
 async function pause(preserveError = false) {
   if (busy || !started) return;
-  busy = true; startButton.disabled = true; quitModelButton.disabled = true;
+  busy = true;
+  startButton.disabled = true;
+  quitModelButton.disabled = true;
   clearCameraSession();
   try {
     const result = await pauseHostTransport();
@@ -801,35 +812,41 @@ async function pause(preserveError = false) {
     runtimeLoaded = Boolean(result.loaded);
     showError("", "pause");
     if (!preserveError) showError("", "camera");
-    if (!runtimeLoaded) { clearInterval(heartbeatTimer); heartbeatTimer = 0; }
+    if (!runtimeLoaded) stopHeartbeat();
   } catch (error) {
     if (error.status === 409) loseOwnership(error.message);
     else showError(error.message, "pause");
   } finally {
     setPlayback();
-    startButton.disabled = false; quitModelButton.disabled = false; busy = false;
+    startButton.disabled = false;
+    quitModelButton.disabled = false;
+    busy = false;
   }
 }
 
 async function stop() {
   if (busy || !sessionToken) return;
   const token = sessionToken;
-  busy = true; startButton.disabled = true;
-  clearTimeout(promptApplyTimer); promptApplyTimer = 0;
+  busy = true;
+  startButton.disabled = true;
+  clearTimeout(promptApplyTimer);
+  promptApplyTimer = 0;
   clearCameraSession();
   try {
     await transportRequest?.catch(() => {});
     if (token !== sessionToken) return;
     await request("/stop", {});
-    sessionToken = ""; runtimeLoaded = false;
-    clearInterval(heartbeatTimer); heartbeatTimer = 0;
+    sessionToken = "";
+    runtimeLoaded = false;
+    stopHeartbeat();
     clearErrors();
   } catch (error) {
     if (error.status === 409) loseOwnership(error.message);
     else showError(error.message, "stop");
   } finally {
     setPlayback();
-    startButton.disabled = false; busy = false;
+    startButton.disabled = false;
+    busy = false;
   }
 }
 

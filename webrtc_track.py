@@ -5,7 +5,9 @@ import traceback
 import av
 from aiortc import VideoStreamTrack
 from aiortc.mediastreams import MediaStreamError
+
 from timing import TimingWindow
+
 
 class RestyleTrack(VideoStreamTrack):
     def __init__(self, source, active_runtime):

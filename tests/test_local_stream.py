@@ -1,8 +1,8 @@
-from io import BytesIO
 import json
 import random
 import threading
 import unittest
+from io import BytesIO
 from unittest.mock import patch
 
 from aiohttp import WSMsgType
@@ -10,6 +10,7 @@ from aiohttp.test_utils import TestClient, TestServer
 from PIL import Image
 
 import app
+
 
 class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

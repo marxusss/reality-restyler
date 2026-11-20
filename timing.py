@@ -1,6 +1,7 @@
 """Rolling measurement summaries shared by inference and transports."""
 import time
 
+
 class TimingWindow:
     def __init__(self, path, size=30, sample_label="frames", p95_min_samples=20):
         self.path = path

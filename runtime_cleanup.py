@@ -5,7 +5,6 @@ import stat
 import subprocess
 from pathlib import Path
 
-
 REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
 WHEEL_HASH = "4cbe71d71c49590728b208ecdb9fc22e405c582def53deb6cca9cd396e598da4"
 TARGETS = {

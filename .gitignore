@@ -5,6 +5,7 @@ __pycache__/
 /dist/
 /RealityRestylingSetup.exe
 /RealityRestylingSetup.exe.sha256
+/RealityRestylingSource.zip
 *.pyc
 !/models/
 /models/*

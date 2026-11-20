@@ -1,13 +1,12 @@
 """Application-owned daily diagnostics; retain at most four UTC calendar days."""
+import os
+import re
+import stat
+import sys
+import tempfile
+import threading
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-import re
-import os
-import stat
-import tempfile
-import sys
-import threading
-import time
 
 ROOT = Path(__file__).resolve().parent / ".runtime"
 LOG_DIR = ROOT / "logs"

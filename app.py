@@ -8,9 +8,9 @@ import shutil
 import socket
 import ssl
 import subprocess
+import threading
 import time
 import traceback
-import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -18,12 +18,12 @@ from urllib.parse import urlsplit
 from aiohttp import WSMsgType, web
 from aiortc import RTCConfiguration, RTCPeerConnection, RTCSessionDescription
 
-from runtime import Runtime, combine_style_prompts
-from timing import TimingWindow
-from sessions import SESSION_KEY, SessionManager, TOKEN_HEADER, PROTOCOL_PREFIX
 from local_frames import process_frame
-from webrtc_track import RestyleTrack
 from log_retention import enable_logging, prune_logs
+from runtime import Runtime, combine_style_prompts
+from sessions import PROTOCOL_PREFIX, SESSION_KEY, TOKEN_HEADER, SessionManager
+from timing import TimingWindow
+from webrtc_track import RestyleTrack
 
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "web"

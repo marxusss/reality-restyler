@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from datetime import datetime, timezone
+from pathlib import Path
 
-from log_retention import prune_logs, prune_legacy_sessions
+from log_retention import prune_legacy_sessions, prune_logs
 
 
 class LogRetentionTests(unittest.TestCase):

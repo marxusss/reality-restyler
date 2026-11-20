@@ -1,6 +1,7 @@
 """Local transport decode, inference and encode run together on a worker."""
-from io import BytesIO
 import time
+from io import BytesIO
+
 from PIL import Image
 
 MAX_EDGE = 2048

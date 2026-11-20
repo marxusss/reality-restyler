@@ -209,7 +209,7 @@ def main():
     parser.add_argument("--non-interactive-auth", action="store_true")
     args = parser.parse_args()
     root = normalize_root(args.root)
-    base, transformer, missing = missing_files(root)
+    base, _, missing = missing_files(root)
     if args.check:
         if missing:
             print("Missing or invalid model files:")
@@ -225,7 +225,7 @@ def main():
         if size:
             print(f"Downloading about {size / 1_000_000_000:.1f} GB of missing model files.")
         download_model(root, missing, args.non_interactive_auth)
-        base, transformer, missing = missing_files(root)
+        base, _, missing = missing_files(root)
         if missing:
             raise RuntimeError("Model download is incomplete: " + ", ".join(missing))
         print(f"Model files ready: {base}")

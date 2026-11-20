@@ -8,14 +8,16 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+
 from model_setup import missing_files, model_directory, normalize_root
+from runtime_settings import DEFAULT_SETTINGS, PROMPT_TOKEN_LIMIT, normalize_settings
+from timing import TimingWindow
 
 ROOT = Path(__file__).resolve().parent
 MODELS = normalize_root(os.environ.get("REALITY_RESTYLE_MODELS_DIR", ROOT / "models"))
 UPSCALER_FILE = MODELS / "upscalers" / "2xNomosUni_compact_multijpg.safetensors"
 PROMPT_CACHE_SIZE = 5
-from runtime_settings import DEFAULT_SETTINGS, RESOLUTIONS, PROMPT_TOKEN_LIMIT, normalize_settings
-from timing import TimingWindow
+
 
 @lru_cache(maxsize=1)
 def _style_tokenizer():
@@ -157,7 +159,9 @@ class Runtime:
             torch.backends.cudnn.benchmark = False
             try:
                 from diffusers import Flux2KleinPipeline
-                from nunchaku.models.transformers.transformer_flux2 import NunchakuFlux2Transformer2DModel
+                from nunchaku.models.transformers.transformer_flux2 import (
+                    NunchakuFlux2Transformer2DModel,
+                )
                 from transformers import BitsAndBytesConfig, Qwen3ForCausalLM
                 report("text_encoder")
                 text_encoder = Qwen3ForCausalLM.from_pretrained(

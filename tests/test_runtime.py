@@ -1,14 +1,17 @@
-from pathlib import Path
 import random
 import sys
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
+from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from runtime import DEFAULT_SETTINGS, PROMPT_CACHE_SIZE, RESOLUTIONS, Runtime, TimingWindow, normalize_settings
+from runtime import PROMPT_CACHE_SIZE, Runtime
+from runtime_settings import DEFAULT_SETTINGS, RESOLUTIONS, normalize_settings
+from timing import TimingWindow
+
 
 class RuntimeSettingsTests(unittest.TestCase):
     def test_defaults_keep_optional_upscaler_enabled(self):
