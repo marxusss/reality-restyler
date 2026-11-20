@@ -9,7 +9,7 @@ test("adaptive sizing preserves landscape and portrait aspect ratios", () => {
   assert.throws(() => cameraFrameSize(0, 0, 512));
 });
 
-test("camera encoder uses scaled JPEG and returns bytes", async () => {
+test("camera encoder returns scaled JPEG bytes and timings", async () => {
   const calls = [];
   const bytes = new Uint8Array([1, 2, 3]).buffer;
   const canvas = {width: 0, height: 0, toBlob(callback, mime, quality) {
@@ -21,5 +21,8 @@ test("camera encoder uses scaled JPEG and returns bytes", async () => {
   assert.equal(canvas.width, 512);
   assert.equal(canvas.height, 288);
   assert.deepEqual(calls, [[0, 0, 512, 288], ["image/jpeg", 0.88]]);
-  assert.equal(result, bytes);
+  assert.equal(result.data, bytes);
+  for (const timing of [result.captureMs, result.encodeMs]) {
+    assert.ok(Number.isFinite(timing) && timing >= 0);
+  }
 });

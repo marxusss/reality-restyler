@@ -1,3 +1,4 @@
+import asyncio
 import json
 import tempfile
 import unittest
@@ -60,6 +61,28 @@ class UserStylePersistenceTests(unittest.IsolatedAsyncioTestCase):
 
         replace.assert_not_called()
         self.assertEqual(self.styles_path.read_bytes(), before)
+
+    async def test_simultaneous_additions_keep_library_readable_above_one_hundred_styles(self):
+        def style(index):
+            return {"id": f"style-{index}", "name": f"Style {index}", "prompt": "portrait", "updatedAt": index}
+
+        initial = [style(index) for index in range(99)]
+        response = await self.client.post("/styles/user", json={"styles": initial})
+        self.assertEqual(response.status, 200)
+        await response.read()
+
+        saves = await asyncio.gather(*(
+            self.client.post("/styles/user", json={"styles": initial + [style(index)]})
+            for index in (99, 100)
+        ))
+        for response in saves:
+            self.assertEqual(response.status, 200)
+            await response.read()
+
+        response = await self.client.get("/styles/user")
+        self.assertEqual(response.status, 200)
+        styles = (await response.json())["styles"]
+        self.assertEqual({item["id"] for item in styles}, {style(index)["id"] for index in range(101)})
 
     async def test_user_config_is_outside_install_directory(self):
         self.assertNotIn(app.ROOT.resolve(), app.USER_STYLES_PATH.resolve().parents)
