@@ -222,7 +222,7 @@ $logTimer = [Windows.Forms.Timer]::new()
 $logTimer.Interval = 3600000
 $logTimer.Add_Tick({ Invoke-LogPrune })
 $logTimer.Start()
-$state = @{ Worker = $null; Directory = $null; StopStarted = $null; Name = 'stopped'; Closing = $false; PhonePrompted = $false; UpdateWorker = $null; UpdateDirectory = $null; UpdateMode = ''; PendingUpdate = $null; UpdateTag = ''; StartupUpdating = $false }
+$state = @{ Worker = $null; Directory = $null; StopStarted = $null; Name = 'stopped'; Closing = $false; PhonePrompted = $false; UpdateWorker = $null; UpdateDirectory = $null; UpdateMode = ''; PendingUpdate = $null; UpdateTag = ''; StartupUpdating = $false; NextStartUnattended = $false; Unattended = $false; StartupFailure = '' }
 $timer = [Windows.Forms.Timer]::new()
 $timer.Interval = 250
 
@@ -443,6 +443,7 @@ function Handle-UpdateCheck {
 $start.Add_Click({
     try {
         $state.PhonePrompted = $false
+        $state.StartupFailure = ''
         $state.StopStarted = $null
         $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfff') + '-' + $PID
         $state.Directory = Join-Path ([IO.Path]::GetTempPath()) ('RealityRestyling-Session-' + [guid]::NewGuid().ToString('N'))
@@ -450,6 +451,9 @@ $start.Add_Click({
         $arguments = @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f (Join-Path $PSScriptRoot 'run.ps1')),
             '-LauncherSession', ('"{0}"' -f $state.Directory), '-LauncherProcessId', $PID)
         if ($phone.Checked) { $arguments += '-PhoneAccess' }
+        $state.Unattended = $state.NextStartUnattended -and $phone.Checked
+        $state.NextStartUnattended = $false
+        if ($state.Unattended) { $arguments += '-Unattended' }
         $workerOptions = @{
             FilePath = (Join-Path ([Environment]::SystemDirectory) 'WindowsPowerShell\v1.0\powershell.exe')
             ArgumentList = $arguments
@@ -480,8 +484,12 @@ $startupCheck.Add_CheckedChanged({ Set-PhoneStartup $startupCheck.Checked })
 $window.Add_Shown({
     Sync-PhoneCard
     $timer.Start()
-    Start-UpdateCheck
-    if ($PhoneStartup) { $start.PerformClick() }
+    if ($PhoneStartup -and $startupCheck.Checked) {
+        $state.NextStartUnattended = $true
+        $start.PerformClick()
+    } elseif (-not $PhoneStartup) {
+        Start-UpdateCheck
+    }
 })
 
 $timer.Add_Tick({
@@ -563,7 +571,9 @@ $timer.Add_Tick({
             Start-UpdateInstall
             return
         }
-        if ($state.Name -eq 'stopping' -and $exitCode -eq 0) {
+        if ($state.StartupFailure) {
+            Show-State 'error' 'Server unavailable' $state.StartupFailure
+        } elseif ($state.Name -eq 'stopping' -and $exitCode -eq 0) {
             Show-State 'stopped' 'Server stopped' ''
         } else {
             if ($failure -and $failure.message) {
@@ -598,11 +608,14 @@ $timer.Add_Tick({
                 $savedHostname = ''
             }
             $startupValue = (Get-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -ErrorAction SilentlyContinue).$startupValueName
-            $autoApprove = $PhoneStartup -and ($startupValue -eq $startupCommand) -and $savedHostname -and [string]::Equals($savedHostname, $currentHostname, [StringComparison]::OrdinalIgnoreCase)
+            $autoApprove = $state.Unattended -and ($startupValue -eq $startupCommand) -and $savedHostname -and [string]::Equals($savedHostname, $currentHostname, [StringComparison]::OrdinalIgnoreCase)
             if ($autoApprove) {
                 $pending = Join-Path $state.Directory 'phone.pending'
                 [IO.File]::WriteAllText($pending, $hostname)
                 [IO.File]::Move($pending, (Join-Path $state.Directory 'phone.approved'))
+            } elseif ($state.Unattended) {
+                $state.StartupFailure = 'Re-enable phone startup to approve the current Tailscale hostname.'
+                Request-Stop
             } else {
                 $question = @(
                     'Phone access may publish this exact hostname in a permanent public certificate log.',

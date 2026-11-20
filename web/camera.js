@@ -27,19 +27,38 @@ export async function cameraStream(deviceId = "", facingMode = "environment") {
     return stream;
   } catch (error) {
     recordCameraOpen(startedAt, "failure");
+    const failure = (message, name = error.name) => Object.assign(new Error(message), {name});
     if (["NotAllowedError", "PermissionDeniedError", "SecurityError"].includes(error.name)) {
-      throw new Error("Allow camera access in browser settings, then retry.");
+      throw failure("Allow camera access in browser settings, then retry.");
     }
     if (["NotFoundError", "DevicesNotFoundError"].includes(error.name)) {
-      throw new Error("No camera is available.");
+      throw failure("No camera is available.");
     }
     if (["NotReadableError", "TrackStartError", "AbortError"].includes(error.name) || error.message === "Load failed") {
-      throw new Error("The selected camera could not be opened. It may be busy or unavailable.");
+      throw failure("The camera is busy or unavailable. Close other apps using it and try again.",
+        error.message === "Load failed" ? "AbortError" : error.name);
     }
     if (error.name === "OverconstrainedError") {
-      throw new Error("The selected camera is unavailable. Choose another camera.");
+      throw failure("The selected camera is unavailable. Choose another camera.");
     }
     throw error;
+  }
+}
+
+export async function openStartingCamera(choice) {
+  const facing = choice?.facing || "environment";
+  let deviceId = choice?.deviceId || "";
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await cameraStream(deviceId, facing);
+    } catch (error) {
+      if (deviceId && ["NotFoundError", "DevicesNotFoundError", "OverconstrainedError"].includes(error.name)) {
+        deviceId = "";
+        continue;
+      }
+      if (attempt >= 2 || !["NotReadableError", "TrackStartError", "AbortError"].includes(error.name)) throw error;
+      await new Promise(resolve => setTimeout(resolve, 150 * (attempt + 1)));
+    }
   }
 }
 

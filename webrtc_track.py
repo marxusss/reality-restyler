@@ -5,7 +5,6 @@ import traceback
 import av
 from aiortc import VideoStreamTrack
 from aiortc.mediastreams import MediaStreamError
-from PIL import Image
 from timing import TimingWindow
 
 class RestyleTrack(VideoStreamTrack):
@@ -17,6 +16,7 @@ class RestyleTrack(VideoStreamTrack):
         self.output_frames = asyncio.Queue(maxsize=1)
         self.last_image = None
         self.last_output_ready_at = 0.0
+        self.last_fresh_at = time.perf_counter()
         self.last_error = ""
         self.input_frames_dropped = 0
         self.render_timing = TimingWindow("webrtc_render")
@@ -60,6 +60,7 @@ class RestyleTrack(VideoStreamTrack):
                 decode_ms = 0.0
                 render_ms = 0.0
                 failed = 0
+                output = None
                 try:
                     decode_started = time.perf_counter()
                     image = frame.to_image()
@@ -77,7 +78,6 @@ class RestyleTrack(VideoStreamTrack):
                             print(traceback.format_exc().rstrip(), flush=True)
                         await asyncio.to_thread(self.runtime.report_error, f"Frame processing failed: {detail}")
                         self.last_error = error
-                    output = self.last_image.copy() if self.last_image is not None else Image.new("RGB", (frame.width, frame.height))
                 else:
                     self.last_error = ""
                 self.render_timing.record(
@@ -88,7 +88,9 @@ class RestyleTrack(VideoStreamTrack):
                     failed=failed,
                 )
                 self.input_frames_dropped = 0
-                await self._replace_latest(self.output_frames, (output, time.perf_counter()))
+                if output is not None:
+                    self.last_fresh_at = time.perf_counter()
+                    await self._replace_latest(self.output_frames, (output, self.last_fresh_at))
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -128,6 +130,9 @@ class RestyleTrack(VideoStreamTrack):
             repeated_frame=repeated,
         )
         return frame
+
+    def fresh_frame_age_ms(self):
+        return (time.perf_counter() - self.last_fresh_at) * 1000.0
 
     def stop(self):
         if self.readyState != "live":

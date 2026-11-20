@@ -14,6 +14,8 @@ Uninstall removes the app's bundled Python, environment, and runtime files. Mode
 
 ## Phone access
 
+Saved styles sync between the PC and devices signed in to the PC owner's Tailscale account. Other authorized phone clients keep their styles in their own browser.
+
 1. Install [Tailscale](https://tailscale.com/download) on the PC and phone. Sign in to the same tailnet.
 2. Give the PC a generic name in Tailscale. HTTPS certificate issuance publishes its full Tailscale hostname in a permanent public log.
 3. Enable **MagicDNS** and **HTTPS Certificates** in [Tailscale Admin → DNS](https://login.tailscale.com/admin/dns).

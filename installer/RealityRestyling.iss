@@ -31,7 +31,6 @@ Source: "..\webrtc_track.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\model_setup.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\runtime_cleanup.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\requirements.txt"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\version.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\updates.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\updater.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#LauncherExe}"; DestDir: "{app}"; DestName: "RealityRestyling.exe"; Flags: ignoreversion
@@ -65,6 +64,8 @@ Type: files; Name: "{app}\web\styles\cool-chrome.webp"
 Filename: "{app}\RealityRestyling.exe"; Description: "Launch Reality Restyling"; WorkingDir: "{app}"; Flags: postinstall skipifsilent nowait runhidden; Check: IsRuntimeSetupSucceeded
 
 [UninstallDelete]
+Type: files; Name: "{app}\version.txt"
+Type: files; Name: "{app}\version.pending"
 Type: filesandordirs; Name: "{app}\.runtime"
 Type: filesandordirs; Name: "{app}\.venv"
 Type: filesandordirs; Name: "{app}\__pycache__"
@@ -80,6 +81,9 @@ var
   RuntimeSetupSucceeded: Boolean;
   RuntimeSetupCanceled: Boolean;
   IsUpdateInstall: Boolean;
+
+function MoveFileEx(ExistingFile, NewFile: String; Flags: DWORD): Boolean;
+  external 'MoveFileExW@kernel32.dll stdcall';
 
 function InitializeSetup: Boolean;
 begin
@@ -243,6 +247,7 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
   Parameters: String;
+  PendingVersion: String;
 begin
   if CurStep = ssPostInstall then begin
     RuntimeSetupAttempted := True;
@@ -255,9 +260,13 @@ begin
     if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode) then begin
       if not WizardSilent then
         MsgBox('The setup wizard could not start the local runtime setup.', mbError, MB_OK);
-    end else if ResultCode = 0 then
-      RuntimeSetupSucceeded := True
-    else if ResultCode = 130 then
+    end else if ResultCode = 0 then begin
+      PendingVersion := ExpandConstant('{app}\version.pending');
+      if SaveStringToFile(PendingVersion, '{#AppVersion}' + #13#10, False) then
+        RuntimeSetupSucceeded := MoveFileEx(PendingVersion, ExpandConstant('{app}\version.txt'), 9);
+      if not RuntimeSetupSucceeded then
+        DeleteFile(PendingVersion);
+    end else if ResultCode = 130 then
       RuntimeSetupCanceled := True;
   end;
 end;

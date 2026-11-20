@@ -43,8 +43,24 @@ function Get-VersionValue {
 
 function Get-AppVersion {
     $path = Join-Path $InstallRoot 'version.txt'
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'The installed version file is missing.' }
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return '0.0.0' }
     return (Get-Content -LiteralPath $path -Raw).Trim()
+}
+
+function Test-ReleaseNeeded {
+    param([string]$Target, [string]$Current)
+    $targetVersion = Get-VersionValue -Value $Target
+    $currentVersion = Get-VersionValue -Value $Current
+    if ($targetVersion -ne $currentVersion) { return $targetVersion -gt $currentVersion }
+    $python = Join-Path $InstallRoot 'python\python.exe'
+    $check = Join-Path $InstallRoot 'runtime_cleanup.py'
+    if (-not (Test-Path -LiteralPath $python -PathType Leaf) -or -not (Test-Path -LiteralPath $check -PathType Leaf)) { return $true }
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $python -B $check --root $InstallRoot --verify-ready *> $null
+        return $LASTEXITCODE -ne 0
+    } finally { $ErrorActionPreference = $previousPreference }
 }
 
 function Get-Release {
@@ -155,8 +171,7 @@ function Install-Release {
     $currentVersion = Get-AppVersion
     $release = Get-Release -Config $Config -Tag $VersionTag
     if ($release.tag_name -ne $VersionTag) { throw 'The selected release changed.' }
-    $targetVersion = Get-VersionValue -Value $release.tag_name
-    if ($targetVersion -le (Get-VersionValue -Value $currentVersion)) { throw 'The installed version is already current.' }
+    if (-not (Test-ReleaseNeeded -Target $release.tag_name -Current $currentVersion)) { throw 'The installed version is already current.' }
     $assets = Get-ReleaseAssets -Release $release -Config $Config
     $installerAsset = $assets[0]
     $checksumAsset = $assets[1]
@@ -180,6 +195,7 @@ function Install-Release {
     Write-ProgressState -Phase 'installing' -Bytes ([long]$installerAsset.size) -Total ([long]$installerAsset.size) -Message $release.tag_name
     $setup = Start-Process -FilePath $installerPath -ArgumentList '/SILENT /NORESTART /SP- /CLOSEAPPLICATIONS' -Wait -PassThru
     if ($setup.ExitCode -ne 0) { throw "Setup exited with code $($setup.ExitCode)." }
+    if (Test-ReleaseNeeded -Target $release.tag_name -Current (Get-AppVersion)) { throw 'Setup did not finish repairing the app.' }
     Write-ProgressState -Phase 'complete' -Message $release.tag_name
     Start-UpdatedLauncher
     Remove-SafeSessionPath
@@ -194,7 +210,7 @@ try {
         try {
             $current = Get-AppVersion
             $release = Get-Release -Config $config
-            $available = (Get-VersionValue -Value $release.tag_name) -gt (Get-VersionValue -Value $current)
+            $available = Test-ReleaseNeeded -Target $release.tag_name -Current $current
             $assets = if ($available) { Get-ReleaseAssets -Release $release -Config $config }
             Write-State @{
                 phase = 'checked'

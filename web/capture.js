@@ -8,6 +8,7 @@ export function mountCapture({getFrame, isMirrored, reportError}) {
   const context = surface.getContext("2d", {alpha: false});
   const canRecord = Boolean(window.MediaRecorder && surface.captureStream);
   const touch = window.matchMedia("(any-pointer: coarse)");
+  const recordingBudget = 64 * 1024 * 1024;
   let videoMode = false;
   let available = false;
   let finishing = false;
@@ -73,10 +74,14 @@ export function mountCapture({getFrame, isMirrored, reportError}) {
       const mimeType = formats.find(type => MediaRecorder.isTypeSupported(type));
       active = new MediaRecorder(tracks, mimeType ? {mimeType} : undefined);
       const chunks = [];
+      let bytes = 0;
       let frameRequest = 0;
       let failed = false;
       active.ondataavailable = event => {
-        if (event.data.size) chunks.push(event.data);
+        if (!event.data.size) return;
+        chunks.push(event.data);
+        bytes += event.data.size;
+        if (bytes >= recordingBudget) stopRecording();
       };
       active.onerror = () => {
         failed = true;

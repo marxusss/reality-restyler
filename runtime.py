@@ -8,12 +8,10 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from model_setup import missing_files, model_directory, normalize_root, transformer_file
+from model_setup import missing_files, model_directory, normalize_root
 
 ROOT = Path(__file__).resolve().parent
 MODELS = normalize_root(os.environ.get("REALITY_RESTYLE_MODELS_DIR", ROOT / "models"))
-BASE_DIR = model_directory(MODELS)
-TRANSFORMER_FILE = transformer_file(MODELS, BASE_DIR)
 UPSCALER_FILE = MODELS / "upscalers" / "2xNomosUni_compact_multijpg.safetensors"
 PROMPT_CACHE_SIZE = 5
 from runtime_settings import DEFAULT_SETTINGS, RESOLUTIONS, PROMPT_TOKEN_LIMIT, normalize_settings
@@ -24,7 +22,7 @@ def _style_tokenizer():
     from jinja2.sandbox import ImmutableSandboxedEnvironment
     from tokenizers import Tokenizer
 
-    folder = BASE_DIR / "tokenizer"
+    folder = model_directory(MODELS) / "tokenizer"
     template = ImmutableSandboxedEnvironment(trim_blocks=True, lstrip_blocks=True).from_string(
         (folder / "chat_template.jinja").read_text(encoding="utf-8")
     )
@@ -140,7 +138,7 @@ class Runtime:
                 self.heartbeat()
                 return {"ok": True, "low_vram": False, "upscaler_available": UPSCALER_FILE.is_file()}
             report("checking")
-            _, _, missing = missing_files(MODELS)
+            base_dir, transformer_path, missing = missing_files(MODELS)
             if missing:
                 raise RuntimeError("Required files are missing or invalid. Restart from the Reality Restyling launcher to set them up.")
             import torch
@@ -163,7 +161,7 @@ class Runtime:
                 from transformers import BitsAndBytesConfig, Qwen3ForCausalLM
                 report("text_encoder")
                 text_encoder = Qwen3ForCausalLM.from_pretrained(
-                    str(BASE_DIR),
+                    str(base_dir),
                     subfolder="text_encoder",
                     quantization_config=BitsAndBytesConfig(load_in_8bit=True),
                     torch_dtype=torch.float16,
@@ -172,12 +170,12 @@ class Runtime:
                 )
                 report("model")
                 transformer = NunchakuFlux2Transformer2DModel.from_pretrained(
-                    str(TRANSFORMER_FILE),
+                    str(transformer_path),
                     torch_dtype=torch.bfloat16,
                 )
                 report("pipeline")
                 pipe = Flux2KleinPipeline.from_pretrained(
-                    str(BASE_DIR),
+                    str(base_dir),
                     transformer=transformer,
                     text_encoder=text_encoder,
                     torch_dtype=torch.bfloat16,

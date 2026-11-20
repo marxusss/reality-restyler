@@ -1,5 +1,6 @@
 param(
     [switch]$PhoneAccess,
+    [switch]$Unattended,
     [string]$LauncherSession,
     [int]$LauncherProcessId
 )
@@ -55,10 +56,13 @@ $env:HF_HUB_CACHE = Join-Path $runtimeDir 'cache\huggingface'
 $python = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
 $modelsPathFile = Join-Path $runtimeDir 'models.path'
 $modelSetup = Join-Path $PSScriptRoot 'model_setup.py'
-if (-not (Test-Path -LiteralPath $modelsPathFile -PathType Leaf)) {
+$savedRoot = if (Test-Path -LiteralPath $modelsPathFile -PathType Leaf) {
+    [IO.File]::ReadAllText($modelsPathFile, [Text.Encoding]::UTF8).Trim()
+} elseif ($Unattended) {
+    Join-Path $env:LOCALAPPDATA 'Reality Restyling\Models'
+} else {
     Stop-Launcher 'The model folder has not been set up. Run RealityRestylingSetup.exe again and choose a model folder.'
 }
-$savedRoot = [IO.File]::ReadAllText($modelsPathFile, [Text.Encoding]::UTF8).Trim()
 if (-not $savedRoot -or -not [IO.Path]::IsPathRooted($savedRoot)) {
     Stop-Launcher 'The saved model folder is invalid. Run RealityRestylingSetup.exe again and choose a model folder.'
 }
@@ -127,45 +131,47 @@ function Select-ModelsRoot {
 }
 
 $env:REALITY_RESTYLE_MODELS_DIR = $modelsRoot
-Set-LauncherStage 'Checking model files'
-$modelArguments = @('--root', $modelsRoot, '--check')
-$modelState = Invoke-ModelSetup -Arguments $modelArguments
-while ($modelState -ne 0) {
-    Set-LauncherStage 'Waiting for a model folder choice'
-    $selectedRoot = Select-ModelsRoot
-    if (-not $selectedRoot) { break }
-    $selectedRoot = Normalize-ModelsRoot -Path $selectedRoot
-    if (-not (Test-ExternalModelsRoot -Path $selectedRoot)) {
-        [System.Windows.Forms.MessageBox]::Show('Choose a model folder outside the Reality Restyling app folder.', 'Reality Restyling', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
-        continue
-    }
-    $modelsRoot = $selectedRoot
-    $env:REALITY_RESTYLE_MODELS_DIR = $modelsRoot
-    Save-ModelsRoot -Path $modelsRoot
+if (-not $Unattended) {
+    Set-LauncherStage 'Checking model files'
     $modelArguments = @('--root', $modelsRoot, '--check')
     $modelState = Invoke-ModelSetup -Arguments $modelArguments
-    if ($modelState -ne 0) {
-        Set-LauncherStage 'The selected model folder is incomplete'
-        $browseAgain = [System.Windows.Forms.MessageBox]::Show('Required model files were not found in this folder. Browse another folder?', 'Reality Restyling', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Error)
-        if ($browseAgain -ne [System.Windows.Forms.DialogResult]::Yes) { break }
-    }
-}
-if ($modelState -ne 0) {
-    Set-LauncherStage 'Waiting for a model download choice'
-    $download = [System.Windows.Forms.MessageBox]::Show('Download the missing model files now?', 'Reality Restyling', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
-    if ($download -eq [System.Windows.Forms.DialogResult]::Yes) {
-        Set-LauncherStage 'Downloading model files'
-        $modelArguments = @('--root', $modelsRoot, '--download-required')
+    while ($modelState -ne 0) {
+        Set-LauncherStage 'Waiting for a model folder choice'
+        $selectedRoot = Select-ModelsRoot
+        if (-not $selectedRoot) { break }
+        $selectedRoot = Normalize-ModelsRoot -Path $selectedRoot
+        if (-not (Test-ExternalModelsRoot -Path $selectedRoot)) {
+            [System.Windows.Forms.MessageBox]::Show('Choose a model folder outside the Reality Restyling app folder.', 'Reality Restyling', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+            continue
+        }
+        $modelsRoot = $selectedRoot
+        $env:REALITY_RESTYLE_MODELS_DIR = $modelsRoot
+        Save-ModelsRoot -Path $modelsRoot
+        $modelArguments = @('--root', $modelsRoot, '--check')
         $modelState = Invoke-ModelSetup -Arguments $modelArguments
+        if ($modelState -ne 0) {
+            Set-LauncherStage 'The selected model folder is incomplete'
+            $browseAgain = [System.Windows.Forms.MessageBox]::Show('Required model files were not found in this folder. Browse another folder?', 'Reality Restyling', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Error)
+            if ($browseAgain -ne [System.Windows.Forms.DialogResult]::Yes) { break }
+        }
     }
-}
-if ($modelState -eq 0 -or (Test-Path -LiteralPath $modelsRoot -PathType Container)) { Save-ModelsRoot -Path $modelsRoot }
+    if ($modelState -ne 0) {
+        Set-LauncherStage 'Waiting for a model download choice'
+        $download = [System.Windows.Forms.MessageBox]::Show('Download the missing model files now?', 'Reality Restyling', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+        if ($download -eq [System.Windows.Forms.DialogResult]::Yes) {
+            Set-LauncherStage 'Downloading model files'
+            $modelArguments = @('--root', $modelsRoot, '--download-required')
+            $modelState = Invoke-ModelSetup -Arguments $modelArguments
+        }
+    }
+    if ($modelState -eq 0 -or (Test-Path -LiteralPath $modelsRoot -PathType Container)) { Save-ModelsRoot -Path $modelsRoot }
 
-$upscalerState = Invoke-ModelSetup -Arguments @('--root', $modelsRoot, '--check-upscaler')
-if ($upscalerState -ne 0) {
-    Set-LauncherStage 'Downloading the optional upscaler'
-    $upscalerState = Invoke-ModelSetup -Arguments @('--root', $modelsRoot, '--download-upscaler')
-    if ($upscalerState -ne 0) { Write-Host 'Compact 2x is unavailable. It will retry the next time you start the app.' }
+    $upscalerState = Invoke-ModelSetup -Arguments @('--root', $modelsRoot, '--check-upscaler')
+    if ($upscalerState -ne 0) {
+        Set-LauncherStage 'Downloading the optional upscaler'
+        $upscalerState = Invoke-ModelSetup -Arguments @('--root', $modelsRoot, '--download-upscaler')
+        if ($upscalerState -ne 0) { Write-Host 'Compact 2x is unavailable. It will retry the next time you start the app.' }
+    }
 }
 
 function Find-Tailscale {
@@ -187,6 +193,7 @@ if ($PhoneAccess) {
     $tailscale = Find-Tailscale
     if ($tailscale) { $env:Path = "$(Split-Path -Parent $tailscale);$env:Path" }
     $serverArguments += '--phone-access'
+    if ($Unattended) { $serverArguments += '--wait-for-tailscale' }
 }
 
 $previousPreference = $ErrorActionPreference

@@ -14,6 +14,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   let appliedStyleSelection = { prompt: "", styles: [] };
   let editingStyleId = null;
   let customStylesSync = Promise.resolve();
+  let syncedStyles = null;
   const maxStyles = 5;
 
   function setStyleError(element, message = "") {
@@ -41,11 +42,15 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     }));
   }
 
-  function customStyles() {
+  function browserStyles() {
     try {
       return normalizeStyles(JSON.parse(localStorage.getItem(customStyleStorageKey) || "[]"));
     } catch (_) {}
     return [];
+  }
+
+  function customStyles() {
+    return syncedStyles ?? browserStyles();
   }
 
   function saveLocalCustomStyles(styles) {
@@ -66,26 +71,33 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     return [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
-  function sameCustomStyles(left, right) {
-    const stable = styles => normalizeStyles(styles)
-      .sort((a, b) => a.id.localeCompare(b.id));
-    return JSON.stringify(stable(left)) === JSON.stringify(stable(right));
-  }
-
-  function syncCustomStyles(localOverride = null) {
+  function syncCustomStyles(newStyle = null) {
     const operation = customStylesSync.then(async () => {
-      const local = normalizeStyles(localOverride || customStyles());
-      const remote = normalizeStyles((await request("/styles/user")).styles);
-      let styles = mergeCustomStyles(remote, local);
-      saveLocalCustomStyles(styles);
-      if (!sameCustomStyles(styles, remote)) {
-        const saved = await request("/styles/user", { styles });
-        styles = mergeCustomStyles(saved.styles, styles);
-        saveLocalCustomStyles(styles);
+      const local = mergeCustomStyles(browserStyles(), newStyle ? [newStyle] : []);
+      const localBackup = newStyle && saveLocalCustomStyles(local);
+      if (localBackup) syncedStyles = mergeCustomStyles(customStyles(), local);
+      let remote;
+      try {
+        remote = normalizeStyles((await request("/styles/user")).styles);
+      } catch (error) {
+        if (error.status !== 403) throw error;
+      }
+      if (remote) {
+        const remoteTimestamps = new Map(remote.map(style => [style.id, style.updatedAt]));
+        const updates = local.filter(style => style.updatedAt > (remoteTimestamps.get(style.id) ?? -1));
+        for (let index = 0; index < updates.length; index += 10) {
+          const styles = updates.slice(index, index + 10);
+          remote = normalizeStyles((await request("/styles/user", { styles })).styles);
+        }
+        syncedStyles = remote;
+        saveLocalCustomStyles(remote);
+      } else {
+        if (newStyle && !localBackup) throw new Error("Could not save the style on this device.");
+        syncedStyles = local;
       }
       setStyleError($("styleStorageError"));
       renderCustomStyles();
-      return styles;
+      return syncedStyles;
     }).catch(error => {
       setStyleError($("styleStorageError"), "Could not sync custom styles.");
       throw error;
@@ -257,15 +269,15 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
 
   async function saveStyle(event) {
     event.preventDefault();
+    const save = styleForm.querySelector('button[type="submit"]');
+    if (save.disabled) return;
     const name = styleName.value.trim();
     const prompt = stylePrompt.value;
     if (!name || !prompt.trim()) {
       setStyleError(styleEditorError, "Enter a name and prompt.");
       return;
     }
-    const styles = customStyles();
-    const savedIndex = editingStyleId ? styles.findIndex(item => item.id === editingStyleId) : -1;
-    const previous = savedIndex >= 0 ? styles[savedIndex] : null;
+    const previous = editingStyleId ? customStyles().find(item => item.id === editingStyleId) : null;
     const style = {
       id: editingStyleId || (crypto.randomUUID ? crypto.randomUUID() : `style-${Date.now()}-${Math.random().toString(16).slice(2)}`),
       name,
@@ -273,19 +285,18 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       thumbnail: styleCapturePreview.getAttribute("src"),
       updatedAt: Math.max(Date.now(), (previous?.updatedAt || 0) + 1)
     };
-    if (savedIndex < 0) styles.unshift(style);
-    else styles[savedIndex] = style;
     editingStyleId = style.id;
-    if (previous && styleSelection?.includes(previous.prompt)) {
-      styleSelection = styleSelection.map(selected => selected === previous.prompt ? prompt : selected);
-    }
-    saveLocalCustomStyles(styles);
-    renderCustomStyles();
+    save.disabled = true;
     try {
-      await syncCustomStyles(styles);
+      await syncCustomStyles(style);
     } catch (_) {
       setStyleError(styleEditorError, "Could not save the style.");
       return;
+    } finally {
+      save.disabled = false;
+    }
+    if (previous && styleSelection?.includes(previous.prompt)) {
+      styleSelection = styleSelection.map(selected => selected === previous.prompt ? prompt : selected);
     }
     styleEditor.close();
     renderCustomStyles();

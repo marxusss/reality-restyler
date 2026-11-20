@@ -39,6 +39,7 @@ STARTUP_PROGRESS_KEY = web.AppKey("startup_progress", dict)
 TLS_CONTEXT_KEY = web.AppKey("tls_context", ssl.SSLContext)
 TLS_RENEW_TASK_KEY = web.AppKey("tls_renew_task", asyncio.Task)
 PHONE_DNS_NAME_KEY = web.AppKey("phone_dns_name", str)
+PHONE_OWNER_KEY = web.AppKey("phone_owner", int)
 PORT_OVERRIDE = os.environ.get("REALITY_RESTYLE_PORT")
 PORT_IS_EXPLICIT = bool(PORT_OVERRIDE)
 PORT = int(PORT_OVERRIDE or "8781")
@@ -160,7 +161,7 @@ def _legacy_style_id(name, prompt):
     return f"legacy-{value:08x}"
 
 def _normalize_user_styles(styles):
-    if not isinstance(styles, list) or len(styles) > 100:
+    if not isinstance(styles, list):
         raise ValueError("The style list is invalid.")
     normalized = []
     seen = set()
@@ -189,7 +190,7 @@ def _normalize_user_styles(styles):
         updated_at = item.get("updatedAt", 0)
         if isinstance(updated_at, bool) or not isinstance(updated_at, (int, float)):
             updated_at = 0
-        updated_at = max(0, min(int(updated_at), 9007199254740991))
+        updated_at = int(max(0, min(updated_at, 9007199254740991)))
         normalized.append({
             "id": style_id,
             "name": name.strip(),
@@ -241,7 +242,27 @@ def _write_user_styles(styles):
             pending.unlink(missing_ok=True)
     return normalized
 
-async def get_user_styles(_request):
+async def _require_style_access(request):
+    try:
+        address = ipaddress.ip_address(str(request.remote or "").split("%")[0])
+    except ValueError:
+        raise web.HTTPForbidden() from None
+    if getattr(address, "ipv4_mapped", None):
+        address = address.ipv4_mapped
+    if address.is_loopback:
+        return
+    owner = request.app.get(PHONE_OWNER_KEY)
+    if request.secure and owner:
+        identity = await asyncio.to_thread(_tailscale_json, "whois", "--json", address.compressed)
+        node = identity.get("Node") or {}
+        user = identity.get("UserProfile") or {}
+        if not node.get("Tags") and node.get("User") == owner and user.get("ID") == owner:
+            return
+    raise web.HTTPForbidden(text="This device cannot access the host's saved styles.")
+
+
+async def get_user_styles(request):
+    await _require_style_access(request)
     try:
         styles = await asyncio.to_thread(_read_user_styles)
     except Exception as exc:
@@ -250,6 +271,7 @@ async def get_user_styles(_request):
     return web.json_response({"styles": styles})
 
 async def save_user_styles(request):
+    await _require_style_access(request)
     data = await _json(request)
     try:
         styles = await asyncio.to_thread(_write_user_styles, data.get("styles"))
@@ -263,8 +285,20 @@ async def save_user_styles(request):
 async def health(_request):
     return web.json_response({"ok": True, "loaded": await asyncio.to_thread(runtime.loaded)})
 
-async def metrics(_request):
-    return web.json_response(await asyncio.to_thread(runtime.metrics))
+async def metrics(request):
+    result = await asyncio.to_thread(runtime.metrics)
+    manager = request.app[SESSION_KEY]
+    if isinstance(manager.transport, RTCPeerConnection):
+        try:
+            require_owner(request, touch=False)
+        except web.HTTPConflict:
+            pass
+        else:
+            for sender in manager.transport.getSenders():
+                if isinstance(sender.track, RestyleTrack):
+                    result["fresh_frame_age_ms"] = sender.track.fresh_frame_age_ms()
+                    break
+    return web.json_response(result)
 
 async def transport_mode(request):
     local = await asyncio.to_thread(_is_local_peer, request.remote)
@@ -522,15 +556,20 @@ async def on_cleanup(app):
     app[SESSION_KEY].release()
 
 
-def _tailscale_status():
+def _tailscale_json(*arguments):
     executable = shutil.which("tailscale")
     if not executable:
         return {}
     try:
-        result = subprocess.run([executable, "status", "--json"], capture_output=True, text=True, timeout=5, check=True)
-        return json.loads(result.stdout)
+        result = subprocess.run([executable, *arguments], capture_output=True, text=True, timeout=5, check=True)
+        data = json.loads(result.stdout)
+        return data if isinstance(data, dict) else {}
     except Exception:
         return {}
+
+
+def _tailscale_status():
+    return _tailscale_json("status", "--json")
 
 def _tailscale_dns_name(status=None):
     status = status if status is not None else _tailscale_status()
@@ -729,7 +768,7 @@ def _write_launcher_json(directory, filename, data):
     pending.replace(directory / filename)
 
 
-async def _run_launcher_server(directory, stopped, phone_access):
+async def _run_launcher_server(directory, stopped, phone_access, wait_for_tailscale=False):
     global PORT
     if stopped():
         return
@@ -738,13 +777,21 @@ async def _run_launcher_server(directory, stopped, phone_access):
     tls = None
     if phone_access:
         (directory / "stage.txt").write_text("Checking Tailscale", encoding="utf-8")
-        status = await asyncio.to_thread(_tailscale_status)
-        dns_name = _tailscale_dns_name(status)
-        addresses = _tailscale_addresses(status)
-        if not dns_name:
-            raise RuntimeError("Sign in to Tailscale before starting phone mode.")
-        if not addresses:
-            raise RuntimeError("Tailscale did not report a usable local IP address.")
+        deadline = time.monotonic() + (45 if wait_for_tailscale else 0)
+        while not stopped():
+            status = await asyncio.to_thread(_tailscale_status)
+            dns_name = _tailscale_dns_name(status)
+            addresses = _tailscale_addresses(status)
+            if dns_name and addresses:
+                break
+            if time.monotonic() >= deadline:
+                if not dns_name:
+                    raise RuntimeError("Sign in to Tailscale before starting phone mode.")
+                raise RuntimeError("Tailscale did not report a usable local IP address.")
+            (directory / "stage.txt").write_text("Waiting for Tailscale", encoding="utf-8")
+            await asyncio.sleep(1)
+        else:
+            return
         _write_launcher_json(directory, "phone.json", {"hostname": dns_name})
         approval = directory / "phone.approved"
         while not approval.exists():
@@ -756,7 +803,8 @@ async def _run_launcher_server(directory, stopped, phone_access):
         approved = approval.read_text(encoding="utf-8")
         if approved != dns_name:
             raise RuntimeError("The selected Tailscale hostname changed. Start phone mode again.")
-        if await asyncio.to_thread(_tailscale_dns_name) != dns_name:
+        status = await asyncio.to_thread(_tailscale_status)
+        if _tailscale_dns_name(status) != dns_name:
             raise RuntimeError("The selected Tailscale hostname changed. Start phone mode again.")
         if stopped():
             return
@@ -764,6 +812,9 @@ async def _run_launcher_server(directory, stopped, phone_access):
         tls = await asyncio.to_thread(_tls_context, dns_name)
         application[TLS_CONTEXT_KEY] = tls
         application[PHONE_DNS_NAME_KEY] = dns_name
+        owner = (status.get("Self") or {}).get("UserID")
+        if type(owner) is int and owner > 0:
+            application[PHONE_OWNER_KEY] = owner
 
     if stopped():
         return
@@ -806,7 +857,7 @@ async def _shutdown_launcher_sessions(application):
         await application[SESSION_KEY].close_transport()
 
 
-def _run_from_launcher(directory, parent_pid, phone_access):
+def _run_from_launcher(directory, parent_pid, phone_access, wait_for_tailscale=False):
     from ctypes import WinDLL, wintypes
 
     kernel = WinDLL("kernel32", use_last_error=True)
@@ -825,7 +876,7 @@ def _run_from_launcher(directory, parent_pid, phone_access):
             return (directory / "stop").exists() or kernel.WaitForSingleObject(parent, 0) != wait_timeout
 
         try:
-            asyncio.run(_run_launcher_server(directory, stopped, phone_access))
+            asyncio.run(_run_launcher_server(directory, stopped, phone_access, wait_for_tailscale))
         except Exception as exc:
             message = str(exc).strip() or type(exc).__name__
             _write_launcher_json(directory, "error.json", {"message": message})
@@ -837,6 +888,7 @@ def _run_from_launcher(directory, parent_pid, phone_access):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--phone-access", action="store_true")
+    parser.add_argument("--wait-for-tailscale", action="store_true")
     parser.add_argument("--launcher-session", type=Path)
     parser.add_argument("--launcher-process-id", type=int)
     args = parser.parse_args()
@@ -845,7 +897,7 @@ def main():
     if not args.launcher_process_id:
         parser.error("--launcher-process-id is required with --launcher-session")
     enable_logging(echo=False)
-    _run_from_launcher(args.launcher_session, args.launcher_process_id, args.phone_access)
+    _run_from_launcher(args.launcher_session, args.launcher_process_id, args.phone_access, args.wait_for_tailscale)
 
 if __name__ == "__main__":
     main()

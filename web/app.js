@@ -1,4 +1,4 @@
-import { cameraFacing, cameraLenses, cameraStream, currentRotation, setCameraZoom } from "./camera.js";
+import { cameraFacing, cameraLenses, cameraStream, currentRotation, openStartingCamera, setCameraZoom } from "./camera.js";
 import { mountCapture } from "./capture.js";
 import { encodeCameraFrame } from "./transport.js";
 import { mountStyles } from "./styles.js";
@@ -38,6 +38,12 @@ let localFailures = 0;
 let metricsPending = false;
 let heartbeatPending = false;
 let disconnectTimer = 0;
+let cameraWatch = null;
+let muteTimer = 0;
+let cameraSwitchErrorTimer = 0;
+let presentationCallback = 0;
+let lastPresentation = 0;
+let visibleSince = 0;
 let started = false;
 let busy = false;
 let runtimeLoaded = false;
@@ -64,6 +70,7 @@ let previousStats = null;
 let jitterMs = 0;
 let decodeMs = 0;
 let firstFrameReceived = false;
+const cameraFrameTimeout = 15000;
 const modelStartupStages = {
   checking: ["Checking model files and GPU", 1],
   text_encoder: ["Loading text encoder", 2],
@@ -168,6 +175,52 @@ function setPlayback(playing = false) {
   startButton.classList.toggle("playing", playing);
   startButton.setAttribute("aria-label", label);
   startButton.title = label;
+}
+
+function cameraLost(message) {
+  if (!started || busy || document.hidden) return;
+  showError(message, "camera");
+  void pause(true);
+}
+
+function showCameraSwitchError(message = "") {
+  clearTimeout(cameraSwitchErrorTimer);
+  showError(message, "camera-switch");
+  if (message) {
+    cameraSwitchErrorTimer = setTimeout(() => showError("", "camera-switch"), 6000);
+  }
+}
+
+function checkCameraTrack() {
+  if (!started || document.hidden) return;
+  const track = stream?.getVideoTracks()[0];
+  if (!track || track.readyState === "ended") {
+    cameraLost("Camera disconnected. Resume to reconnect.");
+  } else if (track.muted && !muteTimer) {
+    muteTimer = setTimeout(() => {
+      muteTimer = 0;
+      if (stream?.getVideoTracks()[0] === track && track.muted) cameraLost("Camera stopped sending video. Resume to reconnect.");
+    }, 5000);
+  } else if (!track.muted) {
+    clearTimeout(muteTimer);
+    muteTimer = 0;
+  }
+}
+
+function watchCameraTrack(track) {
+  cameraWatch?.abort();
+  clearTimeout(muteTimer);
+  muteTimer = 0;
+  cameraWatch = new AbortController();
+  for (const name of ["ended", "mute", "unmute"]) {
+    track.addEventListener(name, checkCameraTrack, {signal: cameraWatch.signal});
+  }
+  checkCameraTrack();
+}
+
+function notePresentation() {
+  lastPresentation = performance.now();
+  showFirstFrame();
 }
 
 function readSettings() {
@@ -349,9 +402,13 @@ async function startPeer() {
     const renderedStream = event.streams[0] || new MediaStream([event.track]);
     output.srcObject = renderedStream;
     if (output.requestVideoFrameCallback) {
-      output.requestVideoFrameCallback(() => {
-        if (peer === activePeer && output.srcObject === renderedStream) showFirstFrame();
-      });
+      if (presentationCallback) output.cancelVideoFrameCallback(presentationCallback);
+      const presented = () => {
+        if (peer !== activePeer || output.srcObject !== renderedStream) return;
+        notePresentation();
+        presentationCallback = output.requestVideoFrameCallback(presented);
+      };
+      presentationCallback = output.requestVideoFrameCallback(presented);
     }
     output.play().catch(() => {});
   });
@@ -361,8 +418,7 @@ async function startPeer() {
     if (["failed", "closed", "disconnected"].includes(activePeer.connectionState)) {
       disconnectTimer = setTimeout(() => {
         if (peer !== activePeer || !started || busy || activePeer.connectionState === "connected") return;
-        showError("Camera connection lost. Resume to reconnect.", "camera");
-        void pause(true);
+        cameraLost("Camera connection lost. Resume to reconnect.");
       }, activePeer.connectionState === "disconnected" ? 3000 : 0);
     }
   });
@@ -446,7 +502,7 @@ async function handleLocalMessage(event, sourceSocket) {
     localRoundTripMs = performance.now() - localFrameSentAt;
     recordLocalFrameTiming();
     localOutput.hidden = false;
-    showFirstFrame();
+    notePresentation();
     output.hidden = false;
     output.classList.add("camera-source");
     latency.hidden = false;
@@ -490,8 +546,7 @@ function scheduleLocalFrame(delay = 0) {
 function retryFrame(error) {
   localFramePending = false;
   localFailures += 1;
-  showError(error.message, "camera");
-  if (localFailures >= 3) void pause(true);
+  if (localFailures >= 3) cameraLost(error.message);
   else scheduleLocalFrame(250 * localFailures);
 }
 
@@ -577,16 +632,8 @@ async function start() {
   localDrawMs = 0;
   localFrameTimingSamples = [];
   try {
-    sessionToken = (await request("/session", {})).token;
-    runtimeLoaded = Boolean((await request("/health")).loaded);
-    if (runtimeLoaded && !heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
     const requestedCamera = selectedCamera;
-    try {
-      stream = await cameraStream(requestedCamera?.deviceId, requestedCamera?.facing || "environment");
-    } catch (error) {
-      if (!requestedCamera?.deviceId || !/unavailable/.test(error.message)) throw error;
-      stream = await cameraStream("", requestedCamera.facing || "environment");
-    }
+    stream = await openStartingCamera(requestedCamera);
     const cameraTrack = stream.getVideoTracks()[0];
     if (!cameraTrack) throw new Error("The selected camera returned no video.");
     output.srcObject = stream;
@@ -596,11 +643,14 @@ async function start() {
     await output.play().catch(() => {});
     if (requestedCamera?.zoom !== undefined && cameraTrack.getSettings().deviceId === requestedCamera.deviceId) {
       try { await setCameraZoom(cameraTrack, requestedCamera.zoom); }
-      catch (error) { showError(error.message, "camera-switch"); }
+      catch (error) { showCameraSwitchError(error.message); }
     }
     await populateCameras(cameraTrack);
     updateFlashVisibility(cameraTrack);
     applyCameraMirror(cameraTrack, selectedCamera);
+    sessionToken = (await request("/session", {})).token;
+    runtimeLoaded = Boolean((await request("/health")).loaded);
+    if (runtimeLoaded && !heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
     const connection = await request("/transport");
     transportMode = connection.mode;
     await startRuntime();
@@ -610,7 +660,10 @@ async function start() {
     showStartup("Connecting camera", 6);
     if (transportMode === "local") await openLocalStream();
     else await startPeer();
+    if (cameraTrack.readyState === "ended") throw new Error("Camera disconnected during startup. Try again.");
     started = true;
+    visibleSince = performance.now();
+    watchCameraTrack(cameraTrack);
     setPlayback(true);
     latency.hidden = false;
     if (firstFrameReceived) {
@@ -642,6 +695,14 @@ async function start() {
 
 function clearCameraSession() {
   capture.setAvailable(false);
+  cameraWatch?.abort();
+  cameraWatch = null;
+  clearTimeout(muteTimer);
+  muteTimer = 0;
+  showCameraSwitchError();
+  if (presentationCallback) output.cancelVideoFrameCallback(presentationCallback);
+  presentationCallback = 0;
+  lastPresentation = 0;
   cameraSwitchSequence += 1;
   const currentPeer = peer;
   const currentStream = stream;
@@ -752,12 +813,24 @@ async function heartbeat() {
 }
 
 async function updateMetrics() {
-  if (!started || metricsPending || document.visibilityState !== "visible") return;
+  if (!started || document.visibilityState !== "visible") return;
+  checkCameraTrack();
+  if (!started) return;
+  const now = performance.now();
+  if (now - Math.max(lastPresentation, visibleSince) > (peer ? cameraFrameTimeout : 30000)) {
+    cameraLost(firstFrameReceived ? "Video stopped arriving. Resume to reconnect." : "No video arrived. Resume to reconnect.");
+    return;
+  }
+  if (metricsPending) return;
   metricsPending = true;
   const current = generation;
   try {
     const metrics = await request("/metrics");
     if (!started || current !== generation) return;
+    if (peer && performance.now() - visibleSince > cameraFrameTimeout && metrics.fresh_frame_age_ms > cameraFrameTimeout) {
+      cameraLost(metrics.error || "No new restyled frames arrived. Resume to reconnect.");
+      return;
+    }
     showError(metrics.error || "", "model");
     showError("", "metrics");
     let roundTrip = 0;
@@ -804,7 +877,7 @@ async function switchCamera(lens, sequence) {
   const previous = stream;
   const previousTrack = previous.getVideoTracks()[0];
   if (!previousTrack) {
-    showError("The current camera is unavailable.", "camera-switch");
+    showCameraSwitchError("The current camera is unavailable.");
     return;
   }
   const activePeer = peer;
@@ -813,7 +886,7 @@ async function switchCamera(lens, sequence) {
     if (previousTrack.getSettings().deviceId === lens.deviceId) {
       await setCameraZoom(previousTrack, lens.zoom);
       if (started && stream === previous) renderLenses(previousTrack);
-      showError("", "camera-switch");
+      showCameraSwitchError();
       return;
     }
     next = await cameraStream(lens.deviceId, lens.facing || "environment");
@@ -834,6 +907,7 @@ async function switchCamera(lens, sequence) {
       }
     }
     stream = next;
+    watchCameraTrack(nextTrack);
     flashButton.setAttribute("aria-pressed", "false");
     updateFlashVisibility(nextTrack);
     renderLenses(nextTrack);
@@ -846,15 +920,16 @@ async function switchCamera(lens, sequence) {
     }
     if (previous) for (const track of previous.getTracks()) track.stop();
     if (transportMode === "local") scheduleLocalFrame();
-    showError("", "camera-switch");
+    showCameraSwitchError();
   } catch (error) {
     if (next) for (const track of next.getTracks()) track.stop();
     if (sequence !== cameraSwitchSequence) return;
-    showError(error.message || "Could not switch camera.", "camera-switch");
+    showCameraSwitchError(error.message || "Could not switch camera.");
   }
 }
 
 function queueCameraSwitch(lens) {
+  showCameraSwitchError();
   const sequence = ++cameraSwitchSequence;
   cameraSwitchQueue = cameraSwitchQueue.catch(() => {}).then(() => switchCamera(lens, sequence));
 }
@@ -940,8 +1015,8 @@ promptInput.addEventListener("keydown", event => {
   }
 });
 if (!output.requestVideoFrameCallback) {
-  output.addEventListener("loadeddata", () => {
-    if (peer && !output.classList.contains("camera-source")) showFirstFrame();
+  output.addEventListener("timeupdate", () => {
+    if (peer && !output.classList.contains("camera-source")) notePresentation();
   });
 }
 for (const eventName of ["orientationchange", "resize"]) {
@@ -956,8 +1031,16 @@ document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible") {
     clearTimeout(localFrameTimer);
     localFrameTimer = 0;
+    clearTimeout(muteTimer);
+    muteTimer = 0;
     return;
   }
+  visibleSince = performance.now();
+  if (peer && ["failed", "closed"].includes(peer.connectionState)) {
+    cameraLost("Camera connection lost. Resume to reconnect.");
+    return;
+  }
+  checkCameraTrack();
   if (!runtimeLoaded) return;
   await heartbeat();
   if (runtimeLoaded && transportMode === "local") scheduleLocalFrame();
