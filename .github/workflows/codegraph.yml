@@ -27,6 +27,24 @@ jobs:
         run: python -m pip install tree-sitter-language-pack==1.25.0
       - name: Generate complete offline HTML and machine-readable JSON
         run: python scripts/build_codegraph.py --root source --out dist/reality-restyler-codegraph.html
+      - name: Validate generated graph and inline browser script
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("dist/reality-restyler-codegraph.json").read_text())
+          html = Path("dist/reality-restyler-codegraph.html").read_text()
+          assert data["sha"] and data["stats"]["files"] >= 100
+          assert data["stats"]["routines"] >= 400
+          assert "__GRAPH_DATA__" not in html
+          assert html.count('<script>') == 1
+          js = html.split('<script>', 1)[1].split('</script>', 1)[0]
+          Path("/tmp/reality-codegraph-ui.js").write_text(js)
+          print("Validated routines:", data["stats"]["routines"])
+          PY
+          node --check /tmp/reality-codegraph-ui.js
+
       - name: Publish generated HTML to documentation branch
         shell: bash
         run: |
