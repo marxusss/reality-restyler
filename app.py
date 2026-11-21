@@ -169,6 +169,17 @@ def _normalize_user_styles(styles):
     for item in styles:
         if not isinstance(item, dict):
             raise ValueError("A style is invalid.")
+        if item.get("deleted", False) is True:
+            style_id = item.get("id")
+            updated_at = item.get("updatedAt", 0)
+            if not isinstance(style_id, str) or not style_id or len(style_id) > 100:
+                raise ValueError("A deleted style identifier is invalid.")
+            if isinstance(updated_at, bool) or not isinstance(updated_at, (int, float)):
+                raise ValueError("A deletion timestamp is invalid.")
+            if style_id not in seen:
+                seen.add(style_id)
+                normalized.append({"id": style_id, "updatedAt": int(max(0, min(updated_at, 9007199254740991))), "deleted": True})
+            continue
         name = item.get("name")
         prompt = item.get("prompt")
         if not isinstance(name, str) or not name.strip() or len(name) > 120:
@@ -192,19 +203,15 @@ def _normalize_user_styles(styles):
         if isinstance(updated_at, bool) or not isinstance(updated_at, (int, float)):
             updated_at = 0
         updated_at = int(max(0, min(updated_at, 9007199254740991)))
-        deleted = item.get("deleted", False)
-        if not isinstance(deleted, bool):
+        if "deleted" in item and item["deleted"] is not False:
             raise ValueError("A style deletion marker is invalid.")
-        normalized_style = {
+        normalized.append({
             "id": style_id,
             "name": name.strip(),
             "prompt": prompt,
             "thumbnail": thumbnail,
             "updatedAt": updated_at,
-        }
-        if deleted:
-            normalized_style["deleted"] = True
-        normalized.append(normalized_style)
+        })
     return normalized
 
 def _read_user_styles():

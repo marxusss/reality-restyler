@@ -33,15 +33,20 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
 
   function normalizeStyles(styles) {
     if (!Array.isArray(styles)) return [];
-    return styles.filter(style => style && typeof style.name === "string" && style.name.trim() &&
-      typeof style.prompt === "string" && style.prompt.trim()).map(style => ({
-      id: typeof style.id === "string" && style.id ? style.id : legacyStyleId(style),
-      name: style.name.trim(),
-      prompt: style.prompt,
-      thumbnail: typeof style.thumbnail === "string" && style.thumbnail.startsWith("data:image/webp;base64,") ? style.thumbnail : null,
-      updatedAt: Number.isFinite(style.updatedAt) ? Math.max(0, Math.trunc(style.updatedAt)) : 0,
-      ...(style.deleted === true ? {deleted: true} : {})
-    }));
+    return styles.filter(style => style && (style.deleted === true
+      ? typeof style.id === "string" && style.id
+      : typeof style.name === "string" && style.name.trim() &&
+        typeof style.prompt === "string" && style.prompt.trim())).map(style => {
+      const updatedAt = Number.isFinite(style.updatedAt) ? Math.max(0, Math.trunc(style.updatedAt)) : 0;
+      if (style.deleted === true) return {id: style.id, updatedAt, deleted: true};
+      return {
+        id: typeof style.id === "string" && style.id ? style.id : legacyStyleId(style),
+        name: style.name.trim(),
+        prompt: style.prompt,
+        thumbnail: typeof style.thumbnail === "string" && style.thumbnail.startsWith("data:image/webp;base64,") ? style.thumbnail : null,
+        updatedAt
+      };
+    });
   }
 
   function browserStyles() {
@@ -279,8 +284,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     deleteStyleButton.disabled = true;
     try {
       await syncCustomStyles({
-        ...previous,
-        thumbnail: null,
+        id: previous.id,
         deleted: true,
         updatedAt: Math.max(Date.now(), previous.updatedAt + 1)
       });

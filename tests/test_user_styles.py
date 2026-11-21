@@ -58,6 +58,9 @@ class UserStylePersistenceTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.post("/styles/user", json={"styles": [active]})
         self.assertEqual(response.status, 200)
         self.assertTrue((await response.json())["styles"][0]["deleted"])
+        persisted = json.loads(self.styles_path.read_text(encoding="utf-8"))[0]
+        self.assertEqual(set(persisted), {"id", "updatedAt", "deleted"})
+        self.assertNotIn("portrait", self.styles_path.read_text(encoding="utf-8"))
         response = await self.client.get("/styles/user")
         self.assertTrue((await response.json())["styles"][0]["deleted"])
 
