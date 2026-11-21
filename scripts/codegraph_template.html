@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Reality Restyler · Complete Code Atlas</title>
+<style>
+:root{color-scheme:dark;--bg:#070d19;--panel:#0e1929;--panel2:#122037;--border:#263750;--text:#e8eef9;--muted:#94a7bf;--accent:#76e0c0;--mono:ui-monospace,SFMono-Regular,Consolas,monospace;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--text)}button,input,select{font:inherit}
+button{cursor:pointer}.app{height:100dvh;min-height:560px;display:grid;grid-template-rows:auto 1fr}
+.header{display:flex;gap:24px;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--border);background:#0b1424}
+.brand{display:flex;align-items:center;gap:13px}.brand-mark{width:35px;height:35px;display:grid;place-items:center;border:1px solid #386c74;background:linear-gradient(135deg,#124f55,#152c50);border-radius:11px;color:var(--accent);font-size:18px}
+h1{margin:0;font-size:17px;letter-spacing:-.02em} .sub{font-size:11px;color:var(--muted);margin-top:3px} .metrics{display:flex;gap:20px;flex-wrap:wrap}
+.metric{text-align:right}.metric strong{display:block;font-size:18px;font-variant-numeric:tabular-nums}.metric span{font-size:10px;text-transform:uppercase;letter-spacing:.11em;color:var(--muted)}
+.shell{display:grid;grid-template-columns:290px minmax(0,1fr) 310px;min-height:0}
+aside{min-height:0;overflow:auto;background:var(--panel);padding:16px;border-right:1px solid var(--border)}aside.right{border-right:0;border-left:1px solid var(--border);background:#0b1525}
+h2{font-size:11px;text-transform:uppercase;letter-spacing:.13em;color:var(--muted);font-weight:700;margin:4px 0 12px}
+.search{display:flex;gap:8px;align-items:center;background:#0a1424;border:1px solid #31445d;padding:10px 12px;border-radius:10px}
+.search input{background:transparent;border:0;outline:0;color:var(--text);width:100%;font-size:13px}.controls{margin:13px 0 17px;display:grid;gap:10px}
+select{width:100%;background:#0a1424;color:var(--text);border:1px solid #31445d;border-radius:9px;padding:9px 10px;font-size:12px}
+.segmented{display:flex;padding:3px;gap:3px;background:#091322;border:1px solid #293b54;border-radius:10px}.segmented button{background:transparent;border:0;color:var(--muted);border-radius:7px;padding:9px 6px;flex:1;font-size:11px}
+.segmented button.active{background:#274b61;color:#e5fff6;font-weight:650}
+.toggle{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:12px;cursor:pointer}.toggle input{accent-color:var(--accent)}
+.label-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0}.count{font-size:11px;color:var(--muted)}
+.items{display:grid;gap:4px;padding-bottom:20px}.item{display:flex;flex-direction:column;text-align:left;gap:3px;min-width:0;width:100%;color:var(--text);background:transparent;border:1px solid transparent;border-radius:9px;padding:9px 10px}
+.item:hover{border-color:#395674;background:#1a2b42}.item.selected{border-color:#54ae9d;background:#123a40}.item strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:650}.item small{color:var(--muted);font:10px var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.canvas-wrap{position:relative;overflow:hidden;background:radial-gradient(ellipse at 47% 34%,#12253a 0%,#070e1c 70%);min-height:0}
+canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}canvas.grabbing{cursor:grabbing}
+.overlay{position:absolute;top:16px;left:16px;max-width:min(390px,calc(100% - 32px));pointer-events:none}.hint{display:flex;align-items:center;gap:8px;background:#0d192bd9;backdrop-filter:blur(12px);border:1px solid #29405c;padding:10px 12px;border-radius:9px;color:#acbfd5;font-size:11px;line-height:1.5}
+.tools{position:absolute;right:16px;bottom:16px;display:flex;gap:6px}.tools button{background:#15273d;border:1px solid #37516d;border-radius:10px;color:var(--text);padding:9px 13px;font-size:13px}.tools button:hover{background:#23465d}
+.legend{position:absolute;bottom:17px;left:16px;display:flex;gap:12px;flex-wrap:wrap;pointer-events:none}.key{font-size:10px;color:var(--muted);display:flex;gap:6px;align-items:center}.dot{height:8px;width:8px;border-radius:50%}
+.summary{background:#111f32;border:1px solid #2d455e;border-radius:12px;padding:13px;margin-bottom:16px}.summary h3{font-size:15px;margin:0 0 8px;overflow-wrap:anywhere}.summary p{color:var(--muted);font-size:12px;line-height:1.6;margin:0}.chip{display:inline-flex;border:1px solid #3e6170;background:#153440;color:#abeee1;border-radius:100px;padding:4px 8px;font-size:10px;margin-bottom:9px}
+.link{color:var(--accent);font-size:12px;text-decoration:none;display:inline-block;margin:10px 0 0}.link:hover{text-decoration:underline}
+.group{margin:0 0 16px}.group h3{font-size:11px;color:var(--muted);margin:0 0 8px;font-weight:650;text-transform:uppercase;letter-spacing:.07em}
+.neighbor{display:block;width:100%;border:1px solid transparent;background:#152339;color:#cbd9eb;border-radius:7px;padding:8px 9px;margin:3px 0;text-align:left;font:11px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.neighbor:hover{border-color:#4c8c92}.muted{color:var(--muted);font-size:12px;line-height:1.65}
+.pill{display:inline-block;font:10px var(--mono);color:#acc2da;background:#15263c;border:1px solid #28435c;border-radius:7px;padding:4px 6px}
+details{margin-top:18px;border-top:1px solid var(--border);padding-top:12px;color:var(--muted);font-size:11px}details summary{cursor:pointer;color:#c8d9e9}details ul{padding-left:16px;line-height:1.6}
+.footer{color:var(--muted);font:10px var(--mono);padding-top:12px;border-top:1px solid var(--border);overflow-wrap:anywhere}
+@media(max-width:1040px){.shell{grid-template-columns:230px minmax(0,1fr)}.right{display:none}.metrics{gap:10px}}
+@media(max-width:680px){.app{min-height:100dvh}.header{padding:11px}.metrics .metric:nth-child(n+3){display:none}.shell{grid-template-columns:1fr;grid-template-rows:230px minmax(380px,1fr)}aside.left{border-right:0;border-bottom:1px solid var(--border)}.items{grid-template-columns:repeat(2,minmax(0,1fr))}.overlay{top:10px;left:10px}.legend{gap:6px;max-width:75%}.brand-mark{display:none}.metric strong{font-size:14px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div class="brand"><div class="brand-mark">⌘</div><div><h1>Reality Restyler <span style="color:var(--accent)">/ Code Atlas</span></h1><div class="sub" id="revision">Loading source graph…</div></div></div>
+    <div class="metrics" id="stats"></div>
+  </header>
+  <div class="shell">
+    <aside class="left">
+      <h2>Explore source</h2>
+      <label class="search"><span style="color:#81a0b7">⌕</span><input id="search" type="search" placeholder="Find any file, function, callback…" autocomplete="off" aria-label="Search all functions"></label>
+      <div class="controls">
+        <div class="segmented"><button id="files-mode" class="active">Files &amp; imports</button><button id="functions-mode">All routines</button></div>
+        <select id="language" aria-label="Filter language"><option value="">All languages</option></select>
+        <select id="file-filter" aria-label="Filter file"><option value="">Every file</option></select>
+        <label class="toggle"><input id="assets" type="checkbox"> Show image/video assets</label>
+        <label class="toggle"><input id="calls" type="checkbox" checked> Show call relationships</label>
+      </div>
+      <div class="label-row"><h2 id="list-label">Complete inventory</h2><span class="count" id="list-count"></span></div>
+      <div class="items" id="inventory" aria-live="polite"></div>
+    </aside>
+    <main class="canvas-wrap">
+      <canvas id="map" aria-label="Interactive code dependency graph"></canvas>
+      <div class="overlay"><div class="hint" id="tip">File view: select a source file to reveal every function. Switch to All routines for the complete function graph. Drag to pan, scroll to zoom, double-click to open source.</div></div>
+      <div class="legend" id="legend"></div>
+      <div class="tools"><button id="zoom-out" aria-label="Zoom out">−</button><button id="fit" aria-label="Fit graph">Fit</button><button id="zoom-in" aria-label="Zoom in">+</button></div>
+    </main>
+    <aside class="right"><h2>Inspector</h2><div id="inspector"><div class="summary"><h3>Select a file or function</h3><p>Each routine links directly to its line in the source at the pinned Git commit. Call connections are statically inferred; dynamic dispatch and callbacks can add runtime edges.</p></div></div>
+    <details><summary>Coverage and limitations</summary><ul id="diagnostics"></ul></details><div class="footer" id="footer"></div></aside>
+  </div>
+</div>
+<script type="application/json" id="graph-data">__GRAPH_DATA__</script>
+<script>
+"use strict";
+const D=JSON.parse(document.getElementById("graph-data").textContent);
+const N=D.nodes, E=D.edges;
+const allById=new Map(N.map(n=>[n.id,n]));
+const files=N.filter(n=>n.kind==="file");
+const routines=N.filter(n=>n.kind!=="file");
+const byFile=new Map(files.map(f=>[f.path,routines.filter(n=>n.path===f.path)]));
+const color={python:"#69a4fb",javascript:"#e9bc66",powershell:"#bc92f4",csharp:"#dd83ae",inno:"#f7a882",yaml:"#78d4c4",asset:"#65748a",document:"#8d9eb5"};
+const source=n=>"https://github.com/"+D.repository+"/blob/"+D.sha+"/"+n.path+(n.kind==="file"?"":"#L"+n.line);
+const $=id=>document.getElementById(id);
+$("revision").textContent="Pinned source · "+D.sha.slice(0,12)+" · "+D.repository;
+$("footer").textContent="Offline graph · commit "+D.sha+" · No source code is uploaded by this viewer";
+$("stats").innerHTML=[["Files",D.stats.files],["Routines",D.stats.routines],["Call links",D.stats.call_edges],["Classes",D.stats.classes]].map(a=>'<div class="metric"><strong>'+a[1]+'</strong><span>'+a[0]+'</span></div>').join("");
+$("legend").innerHTML=Object.entries(color).filter(p=>p[0]!=="asset"&&p[0]!=="document").map(p=>'<span class="key"><span class="dot" style="background:'+p[1]+'"></span>'+p[0]+'</span>').join("");
+const diagnostics=["Every parsed function, method, constructor, lambda and callback is included in the inventory.","The graph includes test routines and build scripts, not just production files.","Solid edges denote containment and imports; dotted edges denote static lexical call candidates.","Dynamic dispatch, reflection, third-party calls and runtime event ordering cannot be proven from static source alone."].concat(D.findings);
+$("diagnostics").innerHTML=diagnostics.map(x=>"<li>"+escapeHtml(x)+"</li>").join("");
+function escapeHtml(x){return String(x).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+const langTypes=[...new Set(N.map(n=>n.lang))].sort();
+for(const lang of langTypes){const opt=document.createElement("option");opt.value=lang;opt.textContent=lang;$("language").append(opt);}
+for(const f of files.filter(x=>!["asset","document"].includes(x.lang))){const opt=document.createElement("option");opt.value=f.path;opt.textContent=f.path;$("file-filter").append(opt);}
+const canvas=$("map"),ctx=canvas.getContext("2d");
+let width=100,height=100,dpr=1;
+let mode="files",selected=null,hovered=null,query="",activeFile="",scale=0.72,offsetX=0,offsetY=0;
+const positions=new Map();
+const nonAssets=files.filter(f=>!["asset","document"].includes(f.lang));
+const folders=[...new Set(nonAssets.map(f=>f.folder))];
+const clusterCenters=new Map(folders.map((folder,i)=>[folder,{x:(i%3)*950,y:Math.floor(i/3)*760}]));
+for(const folder of folders){
+ const group=nonAssets.filter(f=>f.folder===folder);
+ const center=clusterCenters.get(folder);
+ group.forEach((f,i)=>{
+  const angle=i*2.3999632297;
+  const radius=120+105*Math.sqrt(i);
+  positions.set(f.id,{x:center.x+Math.cos(angle)*radius,y:center.y+Math.sin(angle)*radius});
+ });
+}
+files.filter(f=>!positions.has(f.id)).forEach((f,i)=>positions.set(f.id,{x:2600+(i%10)*110,y:-500+Math.floor(i/10)*125}));
+for(const f of files){
+ const base=positions.get(f.id),members=byFile.get(f.path)||[];
+ members.forEach((n,i)=>{
+  const angle=i*2.3999632297,radius=48+23*Math.sqrt(i);
+  positions.set(n.id,{x:base.x+Math.cos(angle)*radius,y:base.y+Math.sin(angle)*radius});
+ });
+}
+function visibleNodes(){
+ let nodes=mode==="files"?files:routines.concat(nonAssets);
+ const language=$("language").value,filter=$("file-filter").value;
+ nodes=nodes.filter(n=>(!language||n.lang===language)&&(!filter||n.path===filter));
+ if(!$("assets").checked)nodes=nodes.filter(n=>n.lang!=="asset");
+ if(query)nodes=nodes.filter(n=>n.name.toLowerCase().includes(query)||n.path.toLowerCase().includes(query));
+ return nodes;
+}
+function fit(nodes=visibleNodes()){
+ if(!nodes.length)return;
+ const ps=nodes.map(n=>positions.get(n.id));
+ const minX=Math.min(...ps.map(p=>p.x))-90,maxX=Math.max(...ps.map(p=>p.x))+90;
+ const minY=Math.min(...ps.map(p=>p.y))-90,maxY=Math.max(...ps.map(p=>p.y))+90;
+ scale=Math.min(2.25,Math.max(.06,Math.min((width-80)/(maxX-minX),(height-80)/(maxY-minY))));
+ offsetX=width/2-(minX+maxX)/2*scale;offsetY=height/2-(minY+maxY)/2*scale;draw();
+}
+function resize(){
+ const box=canvas.getBoundingClientRect();width=box.width;height=box.height;
+ dpr=Math.min(2,window.devicePixelRatio||1);canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
+ fit();
+}
+function moveTo(n){
+ const p=positions.get(n.id);if(!p)return;
+ scale=Math.max(scale,0.65);offsetX=width/2-p.x*scale;offsetY=height/2-p.y*scale;draw();
+}
+function picked(px,py){
+ let best=null,d=Infinity;for(const n of visibleNodes()){
+ const p=positions.get(n.id);const x=p.x*scale+offsetX,y=p.y*scale+offsetY;const dist=Math.hypot(x-px,y-py);
+ if(dist<Math.max(11,n.kind==="file"?17:12)&&dist<d){best=n;d=dist;}
+ }return best;
+}
+function select(n,focus=false){
+ selected=n;if(n&&focus){if(n.kind==="file"&&!["asset","document"].includes(n.lang)){mode="functions";$("file-filter").value=n.path;$("functions-mode").classList.add("active");$("files-mode").classList.remove("active");fit();}else moveTo(n);}
+ inspector();inventory();draw();
+}
+function inspector(){
+ if(!selected){$("inspector").innerHTML='<div class="summary"><h3>Select a file or function</h3><p>Click any node or inventory item to inspect its direct relationships and open its source.</p></div>';return;}
+ const n=selected;
+ const outgoing=E.filter(e=>e[0]===n.id&&e[2]!=="contains");
+ const incoming=E.filter(e=>e[1]===n.id&&e[2]!=="contains");
+ const housed=(byFile.get(n.path)||[]);
+ const heading='<div class="summary"><span class="chip">'+escapeHtml(n.kind)+' · '+escapeHtml(n.lang)+'</span><h3>'+escapeHtml(n.name)+'</h3><p>'+escapeHtml(n.path)+'<br>Line '+n.line+(n.end>n.line?"–"+n.end:"")+'</p><a class="link" href="'+source(n)+'" target="_blank" rel="noopener">Open GitHub source ↗</a></div>';
+ function group(label,list){
+  if(!list.length)return '<div class="group"><h3>'+label+'</h3><div class="muted">No statically resolved connections</div></div>';
+  return '<div class="group"><h3>'+label+' · '+list.length+'</h3>'+list.slice(0,80).map(edge=>{
+   const other=allById.get(edge[0]===n.id?edge[1]:edge[0]);
+   return other?'<button class="neighbor" data-inspect="'+other.id+'" title="'+escapeHtml(other.path)+'">'+escapeHtml(other.name)+' <span style="color:#7388a2">('+edge[2]+')</span></button>':'';
+  }).join("")+(list.length>80?'<p class="muted">Use the inventory to browse remaining connections.</p>':'')+'</div>';
+ }
+ $("inspector").innerHTML=heading+(n.kind==="file"?'<div class="group"><h3>Contained symbols · '+housed.length+'</h3>'+housed.slice(0,50).map(x=>'<button class="neighbor" data-inspect="'+x.id+'">'+escapeHtml(x.name)+'</button>').join("")+'</div>':'')+group("References / imports",outgoing)+group("Referenced by",incoming);
+ $("inspector").querySelectorAll("[data-inspect]").forEach(b=>b.addEventListener("click",()=>select(allById.get(Number(b.dataset.inspect)),true)));
+}
+function inventory(){
+ const nodes=visibleNodes();
+ $("list-count").textContent=nodes.length+" / "+N.length;
+ $("list-label").textContent=mode==="files"?"File inventory":"Function inventory";
+ const fragment=document.createDocumentFragment();
+ for(const n of nodes){
+  const b=document.createElement("button");b.type="button";b.className="item"+(selected&&selected.id===n.id?" selected":"");
+  const strong=document.createElement("strong");strong.textContent=n.kind==="file"?n.path:n.name;
+  const sm=document.createElement("small");sm.textContent=n.kind==="file"?n.lang:n.path+":"+n.line+" · "+n.kind;
+  b.append(strong,sm);b.onclick=()=>select(n,true);b.ondblclick=()=>window.open(source(n),"_blank","noopener");
+  fragment.append(b);
+ }
+ $("inventory").replaceChildren(fragment);
+}
+function draw(){
+ ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
+ ctx.save();ctx.translate(offsetX,offsetY);ctx.scale(scale,scale);
+ const world={x0:-offsetX/scale,y0:-offsetY/scale,x1:(width-offsetX)/scale,y1:(height-offsetY)/scale};
+ ctx.strokeStyle="#28435b";ctx.lineWidth=1/scale;ctx.globalAlpha=.12;
+ const grid=100;
+ for(let x=Math.floor(world.x0/grid)*grid;x<world.x1;x+=grid){ctx.beginPath();ctx.moveTo(x,world.y0);ctx.lineTo(x,world.y1);ctx.stroke();}
+ for(let y=Math.floor(world.y0/grid)*grid;y<world.y1;y+=grid){ctx.beginPath();ctx.moveTo(world.x0,y);ctx.lineTo(world.x1,y);ctx.stroke();}
+ ctx.globalAlpha=1;
+ const nodes=visibleNodes(),set=new Set(nodes.map(n=>n.id));
+ const selectedNeighbors=new Set(selected?E.filter(e=>e[0]===selected.id||e[1]===selected.id).flatMap(e=>[e[0],e[1]]):[]);
+ for(const e of E){
+  if(!set.has(e[0])||!set.has(e[1]))continue;
+  if(mode==="files"&&e[2]!=="imports")continue;
+  if(mode==="functions"&&(e[2]!=="calls"||!$("calls").checked))continue;
+  const a=positions.get(e[0]),b=positions.get(e[1]);
+  ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);
+  ctx.strokeStyle=e[2]==="imports"?"#547b99":"#7eb1aa";
+  ctx.globalAlpha=selected?(selected.id===e[0]||selected.id===e[1]?.8:.04):.10;
+  ctx.lineWidth=(selected&&(selected.id===e[0]||selected.id===e[1])?2.0:.8)/scale**.3;
+  ctx.stroke();
+ }
+ ctx.globalAlpha=1;
+ for(const n of nodes){
+  const p=positions.get(n.id);
+  const highlighted=selected&&selected.id===n.id;
+  const dim=selected&&!highlighted&&!selectedNeighbors.has(n.id);
+  const r=n.kind==="file"?12:4.5;
+  ctx.globalAlpha=dim?.30:1;
+  ctx.beginPath();ctx.arc(p.x,p.y,highlighted?r+5:r,0,Math.PI*2);
+  ctx.fillStyle=highlighted?"#e7fff8":(color[n.lang]||"#a1b2ca");ctx.fill();
+  if(highlighted){ctx.strokeStyle="#77f3d0";ctx.lineWidth=2;ctx.stroke();}
+  const showLabel=(n.kind==="file"&&scale>.25)||(n.kind!=="file"&&scale>.70)||highlighted||n===hovered;
+  if(showLabel){
+   ctx.font=(n.kind==="file"?"600 13px ":"11px ")+"system-ui";
+   ctx.fillStyle=highlighted?"#ffffff":"#d4e2f5";
+   let label=n.kind==="file"?n.path.split("/").at(-1):n.name;
+   if(label.length>30)label=label.slice(0,28)+"…";
+   ctx.textBaseline="middle";ctx.fillText(label,p.x+r+5,p.y);
+  }
+ }
+ ctx.restore();ctx.globalAlpha=1;
+}
+let drag=null,moved=false;
+canvas.addEventListener("pointerdown",ev=>{canvas.setPointerCapture(ev.pointerId);drag={x:ev.clientX,y:ev.clientY,ox:offsetX,oy:offsetY};moved=false;canvas.classList.add("grabbing");});
+canvas.addEventListener("pointermove",ev=>{
+ const box=canvas.getBoundingClientRect(),x=ev.clientX-box.left,y=ev.clientY-box.top;
+ if(drag){if(Math.hypot(ev.clientX-drag.x,ev.clientY-drag.y)>4)moved=true;offsetX=drag.ox+ev.clientX-drag.x;offsetY=drag.oy+ev.clientY-drag.y;}
+ hovered=picked(x,y);canvas.style.cursor=hovered?"pointer":drag?"grabbing":"grab";draw();
+});
+canvas.addEventListener("pointerup",ev=>{
+ const box=canvas.getBoundingClientRect();if(drag&&!moved)select(picked(ev.clientX-box.left,ev.clientY-box.top));
+ drag=null;canvas.classList.remove("grabbing");
+});
+canvas.addEventListener("dblclick",ev=>{const box=canvas.getBoundingClientRect(),n=picked(ev.clientX-box.left,ev.clientY-box.top);if(n)window.open(source(n),"_blank","noopener");});
+function zoom(factor,x=width/2,y=height/2){const next=Math.max(.04,Math.min(5,scale*factor));offsetX=x-(x-offsetX)*next/scale;offsetY=y-(y-offsetY)*next/scale;scale=next;draw();}
+canvas.addEventListener("wheel",ev=>{ev.preventDefault();const b=canvas.getBoundingClientRect();zoom(Math.exp(-ev.deltaY*.001),ev.clientX-b.left,ev.clientY-b.top);},{passive:false});
+$("zoom-in").onclick=()=>zoom(1.25);$("zoom-out").onclick=()=>zoom(.8);$("fit").onclick=()=>fit();
+function setMode(m){mode=m;$("files-mode").classList.toggle("active",m==="files");$("functions-mode").classList.toggle("active",m==="functions");inventory();fit();}
+$("files-mode").onclick=()=>setMode("files");$("functions-mode").onclick=()=>setMode("functions");
+$("search").addEventListener("input",ev=>{query=ev.target.value.toLowerCase().trim();inventory();fit();});
+$("language").addEventListener("change",()=>{inventory();fit();});
+$("file-filter").addEventListener("change",()=>{inventory();fit();});
+$("assets").onchange=()=>{inventory();fit();};
+$("calls").onchange=draw;
+inventory();inspector();new ResizeObserver(resize).observe(canvas);window.addEventListener("resize",resize);
+</script>
+</body>
+</html>
