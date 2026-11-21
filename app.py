@@ -298,7 +298,8 @@ async def save_user_styles(request):
         return web.json_response({"error": "Could not save custom styles."}, status=500)
     return web.json_response({"styles": styles})
 
-async def get_preferences(_request):
+async def get_preferences(request):
+    await _require_style_access(request)
     try:
         settings = await asyncio.to_thread(read_preferences)
     except RuntimeError as exc:
@@ -307,6 +308,7 @@ async def get_preferences(_request):
 
 
 async def update_preferences(request):
+    await _require_style_access(request)
     data = await _json(request)
     if set(data) != {"settings"} or not isinstance(data["settings"], dict):
         raise web.HTTPBadRequest(text="Invalid settings.")
