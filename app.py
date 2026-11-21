@@ -1,17 +1,12 @@
 import argparse
 import asyncio
-import errno
 import ipaddress
 import json
 import os
-import shutil
 import socket
 import ssl
-import subprocess
-import threading
 import time
 import traceback
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -21,20 +16,20 @@ from aiortc import RTCConfiguration, RTCPeerConnection, RTCSessionDescription
 from local_frames import process_frame
 from preferences import read_preferences, save_preferences
 from log_retention import enable_logging, prune_logs
+from phone_access import (
+    tailscale_json, tailscale_status, tailscale_dns_name, tailscale_addresses,
+    reserve_listener_sockets, tls_context, tls_renewal_loop,
+)
 from runtime import Runtime, combine_style_prompts
 from sessions import PROTOCOL_PREFIX, SESSION_KEY, TOKEN_HEADER, SessionManager
 from timing import TimingWindow
+from user_styles import read_user_styles, write_user_styles
 from webrtc_track import RestyleTrack
 
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "web"
-RUNTIME_DIR = ROOT / ".runtime"
-if os.name == "nt":
-    USER_DATA_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Reality Restyling"
-else:
-    USER_DATA_ROOT = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "reality-restyling"
-USER_STYLES_PATH = USER_DATA_ROOT / "user_styles.json"
-USER_STYLES_LOCK = threading.Lock()
+MODEL_LIFECYCLE_KEY = web.AppKey("model_lifecycle", asyncio.Lock)
+PREFERENCES_LOCK_KEY = web.AppKey("preferences_write", asyncio.Lock)
 REAPER_TASK_KEY = web.AppKey("reaper_task", asyncio.Task)
 STARTUP_PROGRESS_KEY = web.AppKey("startup_progress", dict)
 TLS_CONTEXT_KEY = web.AppKey("tls_context", ssl.SSLContext)
@@ -45,7 +40,6 @@ PORT_OVERRIDE = os.environ.get("REALITY_RESTYLE_PORT")
 PORT_IS_EXPLICIT = bool(PORT_OVERRIDE)
 PORT = int(PORT_OVERRIDE or "8781")
 IDLE_SECONDS = min(3600, max(5, int(os.environ.get("REALITY_RESTYLE_IDLE_SECONDS", "30"))))
-TLS_RENEW_SECONDS = 6 * 60 * 60
 ALLOW_LAN = os.environ.get("REALITY_RESTYLE_ALLOW_LAN", "").strip().lower() in {"1", "true", "yes", "on"}
 runtime = Runtime()
 local_peer_addresses = None
@@ -68,15 +62,7 @@ def _local_addresses():
             addresses.add(ipaddress.ip_address(info[4][0].split("%")[0]).compressed)
     except Exception:
         pass
-    executable = shutil.which("tailscale")
-    if executable:
-        try:
-            result = subprocess.run([executable, "status", "--json"], capture_output=True, text=True, timeout=5, check=True)
-            data = json.loads(result.stdout)
-            for value in (data.get("Self") or {}).get("TailscaleIPs") or []:
-                addresses.add(ipaddress.ip_address(str(value).split("%")[0]).compressed)
-        except Exception:
-            pass
+    addresses.update(tailscale_addresses())
     return addresses
 
 def _is_local_peer(value):
@@ -96,7 +82,7 @@ def _is_local_peer(value):
     return address.compressed in local_peer_addresses
 
 @web.middleware
-async def boundary(request, handler):
+async def security_middleware(request, handler):
     if not _trusted_peer(request.remote):
         raise web.HTTPForbidden()
     host = request.headers.get("Host", "")
@@ -155,110 +141,7 @@ async def combine_styles(request):
         return web.json_response({"error": "Could not check the style prompt. Check the model files."}, status=503)
     return web.json_response({"prompt": prompt, "tokens": tokens})
 
-def _legacy_style_id(name, prompt):
-    value = 2166136261
-    for byte in (name + "\0" + prompt).encode("utf-8"):
-        value = ((value ^ byte) * 16777619) & 0xFFFFFFFF
-    return f"legacy-{value:08x}"
-
-def _normalize_user_styles(styles):
-    if not isinstance(styles, list):
-        raise ValueError("The style list is invalid.")
-    normalized = []
-    seen = set()
-    for item in styles:
-        if not isinstance(item, dict):
-            raise ValueError("A style is invalid.")
-        if item.get("deleted", False) is True:
-            style_id = item.get("id")
-            updated_at = item.get("updatedAt", 0)
-            if not isinstance(style_id, str) or not style_id or len(style_id) > 100:
-                raise ValueError("A deleted style identifier is invalid.")
-            if isinstance(updated_at, bool) or not isinstance(updated_at, (int, float)):
-                raise ValueError("A deletion timestamp is invalid.")
-            if style_id not in seen:
-                seen.add(style_id)
-                normalized.append({"id": style_id, "updatedAt": int(max(0, min(updated_at, 9007199254740991))), "deleted": True})
-            continue
-        name = item.get("name")
-        prompt = item.get("prompt")
-        if not isinstance(name, str) or not name.strip() or len(name) > 120:
-            raise ValueError("A style name is invalid.")
-        if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 12000:
-            raise ValueError("A style prompt is invalid.")
-        style_id = item.get("id")
-        if not isinstance(style_id, str) or not style_id or len(style_id) > 100:
-            style_id = _legacy_style_id(name, prompt)
-        if style_id in seen:
-            continue
-        seen.add(style_id)
-        thumbnail = item.get("thumbnail")
-        if thumbnail is not None and (
-            not isinstance(thumbnail, str)
-            or len(thumbnail) > 600000
-            or not thumbnail.startswith("data:image/webp;base64,")
-        ):
-            raise ValueError("A style thumbnail is invalid.")
-        updated_at = item.get("updatedAt", 0)
-        if isinstance(updated_at, bool) or not isinstance(updated_at, (int, float)):
-            updated_at = 0
-        updated_at = int(max(0, min(updated_at, 9007199254740991)))
-        if "deleted" in item and item["deleted"] is not False:
-            raise ValueError("A style deletion marker is invalid.")
-        normalized.append({
-            "id": style_id,
-            "name": name.strip(),
-            "prompt": prompt,
-            "thumbnail": thumbnail,
-            "updatedAt": updated_at,
-        })
-    return normalized
-
-def _read_user_styles():
-    with USER_STYLES_LOCK:
-        if not USER_STYLES_PATH.exists():
-            return []
-        data = json.loads(USER_STYLES_PATH.read_text(encoding="utf-8"))
-        return _normalize_user_styles(data)
-
-def _merge_user_styles(existing, incoming):
-    merged = {}
-    for style in existing + incoming:
-        previous = merged.get(style["id"])
-        if (previous is None or style["updatedAt"] > previous["updatedAt"]
-                or (style["updatedAt"] == previous["updatedAt"] and
-                    style.get("deleted", False) and not previous.get("deleted", False))):
-            merged[style["id"]] = style
-    return sorted(merged.values(), key=lambda style: style["updatedAt"], reverse=True)
-
-def _write_user_styles(styles):
-    incoming = _normalize_user_styles(styles)
-    with USER_STYLES_LOCK:
-        existing = []
-        if USER_STYLES_PATH.exists():
-            try:
-                existing = _normalize_user_styles(json.loads(USER_STYLES_PATH.read_text(encoding="utf-8")))
-            except Exception as exc:
-                raise RuntimeError("The custom style store is invalid.") from exc
-        normalized = _merge_user_styles(existing, incoming)
-        if {style["id"]: style for style in normalized} == {style["id"]: style for style in existing}:
-            return existing
-        payload = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
-        USER_STYLES_PATH.parent.mkdir(parents=True, exist_ok=True)
-        pending = USER_STYLES_PATH.with_name(
-            f".{USER_STYLES_PATH.name}.{os.getpid()}.{threading.get_ident()}.tmp"
-        )
-        try:
-            with pending.open("w", encoding="utf-8", newline="") as output:
-                output.write(payload)
-                output.flush()
-                os.fsync(output.fileno())
-            os.replace(pending, USER_STYLES_PATH)
-        finally:
-            pending.unlink(missing_ok=True)
-    return normalized
-
-async def _require_style_access(request):
+async def _require_user_data_access(request):
     try:
         address = ipaddress.ip_address(str(request.remote or "").split("%")[0])
     except ValueError:
@@ -269,7 +152,7 @@ async def _require_style_access(request):
         return
     owner = request.app.get(PHONE_OWNER_KEY)
     if request.secure and owner:
-        identity = await asyncio.to_thread(_tailscale_json, "whois", "--json", address.compressed)
+        identity = await asyncio.to_thread(tailscale_json, "whois", "--json", address.compressed)
         node = identity.get("Node") or {}
         user = identity.get("UserProfile") or {}
         if not node.get("Tags") and node.get("User") == owner and user.get("ID") == owner:
@@ -278,19 +161,19 @@ async def _require_style_access(request):
 
 
 async def get_user_styles(request):
-    await _require_style_access(request)
+    await _require_user_data_access(request)
     try:
-        styles = await asyncio.to_thread(_read_user_styles)
+        styles = await asyncio.to_thread(read_user_styles)
     except Exception as exc:
         print(f"Could not read custom styles: {type(exc).__name__}: {exc}", flush=True)
         return web.json_response({"error": "Could not load custom styles."}, status=500)
     return web.json_response({"styles": styles})
 
 async def save_user_styles(request):
-    await _require_style_access(request)
+    await _require_user_data_access(request)
     data = await _json(request)
     try:
-        styles = await asyncio.to_thread(_write_user_styles, data.get("styles"))
+        styles = await asyncio.to_thread(write_user_styles, data.get("styles"))
     except ValueError as exc:
         return web.json_response({"error": str(exc)}, status=422)
     except Exception as exc:
@@ -299,32 +182,42 @@ async def save_user_styles(request):
     return web.json_response({"styles": styles})
 
 async def get_preferences(request):
-    await _require_style_access(request)
+    await _require_user_data_access(request)
     try:
         settings = await asyncio.to_thread(read_preferences)
-    except RuntimeError as exc:
-        return web.json_response({"error": str(exc)}, status=500)
+    except (OSError, RuntimeError):
+        return web.json_response({"error": "Could not read camera settings."}, status=500)
     return web.json_response({"settings": settings})
 
 
+async def _persist_preferences(settings):
+    try:
+        await asyncio.to_thread(save_preferences, settings)
+        return True
+    except (OSError, RuntimeError) as exc:
+        print(f"Could not persist camera settings: {type(exc).__name__}: {exc}", flush=True)
+        return False
+
+
 async def update_preferences(request):
-    await _require_style_access(request)
+    await _require_user_data_access(request)
     data = await _json(request)
     if set(data) != {"settings"} or not isinstance(data["settings"], dict):
         raise web.HTTPBadRequest(text="Invalid settings.")
     if set(data["settings"]) - {"prompt", "steps", "resolution", "upscale"}:
         raise web.HTTPBadRequest(text="Unsupported preference.")
-    async with request.app[SESSION_KEY].lock:
-        manager = request.app[SESSION_KEY]
-        if manager.token:
-            require_owner(request)
+    manager = request.app[SESSION_KEY]
+    async with request.app[PREFERENCES_LOCK_KEY]:
+        async with manager.lock:
+            if manager.token:
+                require_owner(request)
         try:
             previous = await asyncio.to_thread(read_preferences)
             updated = {**previous, **data["settings"]}
             stored = await asyncio.to_thread(save_preferences, updated)
         except ValueError as exc:
             return web.json_response({"error": str(exc)}, status=422)
-        except (OSError, RuntimeError) as exc:
+        except (OSError, RuntimeError):
             return web.json_response({"error": "Could not save camera settings."}, status=500)
     return web.json_response({"ok": True, "settings": stored})
 
@@ -354,7 +247,7 @@ async def transport_mode(request):
 async def claim_session(request):
     manager = request.app[SESSION_KEY]
     async with manager.lock:
-        token = await manager.claim()
+        token = await manager.transfer_control()
         await asyncio.to_thread(runtime.heartbeat)
     return web.json_response({"token": token})
 
@@ -381,11 +274,11 @@ async def local_stream(request):
         manager.require(token)
         if not runtime.loaded():
             raise web.HTTPConflict(text="The model is not loaded.")
-        manager.reserve(token, socket)
+        manager.attach_transport(token, socket)
         try:
             await socket.prepare(request)
         except BaseException:
-            manager.discard(socket)
+            manager.detach_transport(socket)
             raise
     try:
         async for message in socket:
@@ -427,7 +320,7 @@ async def local_stream(request):
                 break
     finally:
         timing.flush()
-        manager.discard(socket)
+        manager.detach_transport(socket)
     return socket
 
 
@@ -442,27 +335,37 @@ async def start_runtime(request):
         raise web.HTTPBadRequest(text="Invalid settings.")
     if not isinstance(startup_id, str) or len(startup_id) > 64:
         raise web.HTTPBadRequest(text="Invalid startup identifier.")
+
+    manager = request.app[SESSION_KEY]
+    progress = request.app[STARTUP_PROGRESS_KEY]
+    stage = {"value": "checking"}
+
+    def report_stage(value):
+        stage["value"] = value
+
+    async with manager.lock:
+        require_owner(request)
+        if startup_id:
+            progress[startup_id] = stage
+
     try:
-        async with request.app[SESSION_KEY].lock:
-            require_owner(request)
-            progress = request.app[STARTUP_PROGRESS_KEY]
-            stage = {"value": "checking"}
-            if startup_id:
-                progress[startup_id] = stage
-
-            def report_stage(value):
-                stage["value"] = value
-
-            try:
-                result = await asyncio.to_thread(runtime.start, settings, allow_low_vram, report_stage)
-                if result.get("ok"):
-                    await asyncio.to_thread(save_preferences, runtime.settings())
-            finally:
-                progress.pop(startup_id, None)
-                require_owner(request)
-        if result.get("ok"):
-            return web.json_response(result)
-        return web.json_response(result, status=409)
+        # The model lock serializes GPU start/unload without blocking another
+        # device from claiming control via the much shorter session lock.
+        async with request.app[MODEL_LIFECYCLE_KEY]:
+            async with manager.lock:
+                require_owner(request, touch=False)
+            result = await asyncio.to_thread(runtime.start, settings, allow_low_vram, report_stage)
+            async with manager.lock:
+                require_owner(request, touch=False)
+            if result.get("ok"):
+                async with request.app[PREFERENCES_LOCK_KEY]:
+                    async with manager.lock:
+                        require_owner(request, touch=False)
+                    persisted = await _persist_preferences(runtime.settings())
+                result["preferences_saved"] = persisted
+                if not persisted:
+                    result["warning"] = "Camera settings are active but could not be saved."
+        return web.json_response(result, status=200 if result.get("ok") else 409)
     except web.HTTPException:
         raise
     except ValueError as exc:
@@ -472,6 +375,9 @@ async def start_runtime(request):
     except Exception as exc:
         print(f"Runtime startup failed: {type(exc).__name__}: {exc}", flush=True)
         return web.json_response({"ok": False, "error": f"Start failed: {type(exc).__name__}: {exc}"}, status=503)
+    finally:
+        if startup_id and progress.get(startup_id) is stage:
+            progress.pop(startup_id, None)
 
 
 async def startup_progress(request):
@@ -484,17 +390,23 @@ async def update_settings(request):
     data = await _json(request)
     if set(data) != {"settings"} or not isinstance(data["settings"], dict):
         raise web.HTTPBadRequest(text="Invalid settings.")
+    manager = request.app[SESSION_KEY]
     try:
-        async with request.app[SESSION_KEY].lock:
-            require_owner(request)
-            result = runtime.set_settings(data["settings"])
+        async with request.app[PREFERENCES_LOCK_KEY]:
+            async with manager.lock:
+                require_owner(request)
+                result = runtime.set_settings(data["settings"])
+            persisted = True
             if set(data["settings"]) & {"prompt", "steps", "resolution", "upscale"}:
-                await asyncio.to_thread(save_preferences, result)
-        return web.json_response({"ok": True, "settings": result})
+                async with manager.lock:
+                    require_owner(request, touch=False)
+                persisted = await _persist_preferences(result)
+        response = {"ok": True, "settings": result, "preferences_saved": persisted}
+        if not persisted:
+            response["warning"] = "Camera settings are active but could not be saved."
+        return web.json_response(response)
     except ValueError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=422)
-    except (OSError, RuntimeError) as exc:
-        return web.json_response({"ok": False, "error": "Could not save the camera settings."}, status=500)
 
 
 async def heartbeat(request):
@@ -509,9 +421,15 @@ async def stop_runtime(request):
     async with manager.lock:
         require_owner(request)
         await manager.close_transport()
-        await asyncio.to_thread(runtime.unload)
         manager.release()
-    return web.json_response({"ok": True})
+    # A new device can claim immediately. Its subsequent Start waits for the
+    # GPU lifecycle lock instead of being blocked behind session ownership.
+    async with request.app[MODEL_LIFECYCLE_KEY]:
+        async with manager.lock:
+            should_unload = manager.token is None
+        if should_unload:
+            await asyncio.to_thread(runtime.unload)
+    return web.json_response({"ok": True, "unloaded": should_unload})
 
 
 async def pause_runtime(request):
@@ -519,8 +437,10 @@ async def pause_runtime(request):
     async with manager.lock:
         require_owner(request)
         await manager.close_transport()
-        await asyncio.to_thread(runtime.flush_timings)
-        loaded = await asyncio.to_thread(runtime.heartbeat)
+    await asyncio.to_thread(runtime.flush_timings)
+    async with manager.lock:
+        require_owner(request)
+        loaded = runtime.heartbeat()
     return web.json_response({"ok": True, "loaded": loaded})
 
 
@@ -536,7 +456,7 @@ async def offer(request):
         if manager.transport is not None:
             raise web.HTTPConflict(text="A camera session is already active.")
         pc = RTCPeerConnection(RTCConfiguration(iceServers=[]))
-        manager.reserve(request.headers.get(TOKEN_HEADER), pc)
+        manager.attach_transport(request.headers.get(TOKEN_HEADER), pc)
 
         @pc.on("track")
         def on_track(track):
@@ -546,7 +466,7 @@ async def offer(request):
         @pc.on("connectionstatechange")
         async def on_connectionstatechange():
             if pc.connectionState in {"failed", "closed"}:
-                manager.discard(pc)
+                manager.detach_transport(pc)
                 if pc.connectionState != "closed":
                     await pc.close()
 
@@ -562,7 +482,7 @@ async def offer(request):
         try:
             return await asyncio.wait_for(negotiate(), timeout=20)
         except (Exception, asyncio.CancelledError) as exc:
-            manager.discard(pc)
+            manager.detach_transport(pc)
             try:
                 await pc.close()
             except Exception:
@@ -582,10 +502,16 @@ async def idle_reaper(app):
             await asyncio.to_thread(prune_logs)
             last_prune = time.monotonic()
         async with manager.lock:
-            if manager.expired(IDLE_SECONDS):
+            expired = manager.expired(IDLE_SECONDS)
+            if expired:
                 await manager.close_transport()
-                await asyncio.to_thread(runtime.unload)
                 manager.release()
+        if expired:
+            async with app[MODEL_LIFECYCLE_KEY]:
+                async with manager.lock:
+                    should_unload = manager.token is None
+                if should_unload:
+                    await asyncio.to_thread(runtime.unload)
 
 
 async def on_startup(app):
@@ -609,187 +535,14 @@ async def on_cleanup(app):
     app[SESSION_KEY].release()
 
 
-def _tailscale_json(*arguments):
-    executable = shutil.which("tailscale")
-    if not executable:
-        return {}
-    try:
-        result = subprocess.run([executable, *arguments], capture_output=True, text=True, timeout=5, check=True)
-        data = json.loads(result.stdout)
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
-
-
-def _tailscale_status():
-    return _tailscale_json("status", "--json")
-
-def _tailscale_dns_name(status=None):
-    status = status if status is not None else _tailscale_status()
-    if status.get("BackendState") != "Running":
-        return ""
-    return str((status.get("Self") or {}).get("DNSName") or "").rstrip(".")
-
-def _tailscale_addresses(status=None):
-    status = status if status is not None else _tailscale_status()
-    if status.get("BackendState") != "Running":
-        return []
-    addresses = []
-    seen = set()
-    for value in (status.get("Self") or {}).get("TailscaleIPs") or []:
-        try:
-            address = ipaddress.ip_address(str(value).split("%")[0])
-        except ValueError:
-            continue
-        tailscale_ip = (
-            address in ipaddress.ip_network("100.64.0.0/10")
-            if address.version == 4
-            else address in ipaddress.ip_network("fd7a:115c:a1e0::/48")
-        )
-        if tailscale_ip and not address.is_unspecified and not address.is_loopback and address.compressed not in seen:
-            addresses.append(address.compressed)
-            seen.add(address.compressed)
-    return addresses
-
-def _listener_socket(address, port):
-    family = socket.AF_INET6 if ":" in address else socket.AF_INET
-    info = socket.getaddrinfo(address, port, family, socket.SOCK_STREAM)[0]
-    listener = socket.socket(info[0], info[1], info[2])
-    try:
-        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 0)
-        if info[0] == socket.AF_INET6:
-            listener.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-        listener.bind(info[4])
-        listener.listen(socket.SOMAXCONN)
-        listener.setblocking(False)
-        return listener
-    except Exception:
-        listener.close()
-        raise
-
-def _reserve_listener_sockets(addresses):
-    candidates = [PORT] if PORT_IS_EXPLICIT else [PORT, 0, 0, 0, 0, 0]
-    last_error = None
-    for candidate in candidates:
-        listeners = []
-        try:
-            loopback = _listener_socket("127.0.0.1", candidate)
-            listeners.append(loopback)
-            port = loopback.getsockname()[1]
-            for address in addresses:
-                listeners.append(_listener_socket(address, port))
-            return port, listeners
-        except OSError as exc:
-            last_error = exc
-            for listener in listeners:
-                listener.close()
-            if exc.errno != errno.EADDRINUSE or PORT_IS_EXPLICIT:
-                break
-    if last_error and last_error.errno == errno.EADDRINUSE:
-        raise RuntimeError("The requested local camera port is already in use. Close the other app and try again.") from last_error
-    raise RuntimeError("Could not open a local camera server port.") from last_error
-
-def _certificate_covers(cert_path, dns_name, minimum_validity=timedelta(0)):
-    try:
-        from cryptography import x509
-        certificate = x509.load_pem_x509_certificate(cert_path.read_bytes())
-        if certificate.not_valid_after_utc - datetime.now(timezone.utc) < minimum_validity:
-            return False
-        if dns_name:
-            names = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(x509.DNSName)
-            if dns_name.rstrip(".").lower() not in {name.rstrip(".").lower() for name in names}:
-                return False
-        return True
-    except Exception:
-        return False
-
-def _certificate_is_self_signed(cert_path):
-    try:
-        from cryptography import x509
-        certificate = x509.load_pem_x509_certificate(cert_path.read_bytes())
-        return certificate.issuer == certificate.subject
-    except Exception:
-        return True
-
-def _create_tailscale_certificate(dns_name, cert_path, key_path):
-    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    next_cert = RUNTIME_DIR / "tls.next.crt"
-    next_key = RUNTIME_DIR / "tls.next.key"
-    next_cert.unlink(missing_ok=True)
-    next_key.unlink(missing_ok=True)
-    executable = shutil.which("tailscale")
-    if not executable:
-        raise RuntimeError("The Tailscale command is unavailable.")
-    subprocess.run(
-        [executable, "cert", f"--cert-file={next_cert}", f"--key-file={next_key}", dns_name],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=True,
-    )
-    if not next_cert.is_file() or not next_key.is_file() or not _certificate_covers(next_cert, dns_name) or _certificate_is_self_signed(next_cert):
-        raise RuntimeError("Tailscale did not return a valid certificate for this device.")
-    validation_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    validation_context.load_cert_chain(str(next_cert), str(next_key))
-    os.replace(next_cert, cert_path)
-    os.replace(next_key, key_path)
-
-def _refresh_tailscale_certificate(context, dns_name):
-    if os.environ.get("REALITY_RESTYLE_CERT") or os.environ.get("REALITY_RESTYLE_KEY"):
-        return False
-    if _tailscale_dns_name() != dns_name:
-        return False
-    cert_path = RUNTIME_DIR / "tls.crt"
-    key_path = RUNTIME_DIR / "tls.key"
-    if cert_path.is_file() and key_path.is_file() and _certificate_covers(cert_path, dns_name, timedelta(days=30)) and not _certificate_is_self_signed(cert_path):
-        return False
-    _create_tailscale_certificate(dns_name, cert_path, key_path)
-    context.load_cert_chain(str(cert_path), str(key_path))
-    print("Tailscale HTTPS certificate renewed.", flush=True)
-    return True
-
-async def tls_renewal_loop(context, dns_name):
-    while True:
-        await asyncio.sleep(TLS_RENEW_SECONDS)
-        try:
-            await asyncio.to_thread(_refresh_tailscale_certificate, context, dns_name)
-        except Exception as exc:
-            detail = " ".join(str(exc).split())[:400]
-            print(f"Tailscale HTTPS renewal failed: {detail or type(exc).__name__}", flush=True)
-
-def _tls_context(dns_name):
-    configured_cert = os.environ.get("REALITY_RESTYLE_CERT", "")
-    configured_key = os.environ.get("REALITY_RESTYLE_KEY", "")
-    if configured_cert or configured_key:
-        if not (configured_cert and configured_key):
-            raise RuntimeError("Set both the HTTPS certificate and key paths.")
-        cert_path, key_path = Path(configured_cert), Path(configured_key)
-        if not cert_path.is_file() or not key_path.is_file():
-            raise RuntimeError("The configured HTTPS certificate or key file is missing.")
-        if not _certificate_covers(cert_path, dns_name) or _certificate_is_self_signed(cert_path):
-            raise RuntimeError("The configured HTTPS certificate is not trusted for this Tailscale device.")
-    else:
-        cert_path, key_path = RUNTIME_DIR / "tls.crt", RUNTIME_DIR / "tls.key"
-        usable_certificate = key_path.is_file() and _certificate_covers(cert_path, dns_name) and not _certificate_is_self_signed(cert_path)
-        if not usable_certificate or not _certificate_covers(cert_path, dns_name, timedelta(days=30)):
-            try:
-                _create_tailscale_certificate(dns_name, cert_path, key_path)
-            except Exception as exc:
-                detail = getattr(exc, "stderr", None) or getattr(exc, "stdout", None) or str(exc)
-                detail = " ".join(str(detail).split())[:500]
-                print(f"Tailscale certificate unavailable: {detail or type(exc).__name__}", flush=True)
-                if not usable_certificate:
-                    raise RuntimeError("Enable MagicDNS and HTTPS Certificates in Tailscale Admin → DNS, then restart. https://login.tailscale.com/admin/dns") from None
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context.load_cert_chain(str(cert_path), str(key_path))
-    return context
-
 def create_app():
-    app = web.Application(middlewares=[boundary], client_max_size=8 * 1024 * 1024)
+    app = web.Application(middlewares=[security_middleware], client_max_size=8 * 1024 * 1024)
     app[SESSION_KEY] = SessionManager()
+    app[MODEL_LIFECYCLE_KEY] = asyncio.Lock()
+    app[PREFERENCES_LOCK_KEY] = asyncio.Lock()
     app[STARTUP_PROGRESS_KEY] = {}
     app.router.add_get("/", index)
-    for script in ("app.js", "camera.js", "capture.js", "transport.js", "styles.js", "errors.js"):
+    for script in ("app.js", "camera.js", "capture.js", "frame_encoding.js", "styles.js", "errors.js"):
         app.router.add_get("/" + script, app_script)
     app.router.add_get("/style.css", style_sheet)
     app.router.add_get("/favicon.svg", favicon)
@@ -834,9 +587,9 @@ async def _run_launcher_server(directory, stopped, phone_access, wait_for_tailsc
         (directory / "stage.txt").write_text("Checking Tailscale", encoding="utf-8")
         deadline = time.monotonic() + (45 if wait_for_tailscale else 0)
         while not stopped():
-            status = await asyncio.to_thread(_tailscale_status)
-            dns_name = _tailscale_dns_name(status)
-            addresses = _tailscale_addresses(status)
+            status = await asyncio.to_thread(tailscale_status)
+            dns_name = tailscale_dns_name(status)
+            addresses = tailscale_addresses(status)
             if dns_name and addresses:
                 break
             if time.monotonic() >= deadline:
@@ -858,13 +611,13 @@ async def _run_launcher_server(directory, stopped, phone_access, wait_for_tailsc
         approved = approval.read_text(encoding="utf-8")
         if approved != dns_name:
             raise RuntimeError("The selected Tailscale hostname changed. Start phone mode again.")
-        status = await asyncio.to_thread(_tailscale_status)
-        if _tailscale_dns_name(status) != dns_name:
+        status = await asyncio.to_thread(tailscale_status)
+        if tailscale_dns_name(status) != dns_name:
             raise RuntimeError("The selected Tailscale hostname changed. Start phone mode again.")
         if stopped():
             return
         (directory / "stage.txt").write_text("Preparing phone HTTPS", encoding="utf-8")
-        tls = await asyncio.to_thread(_tls_context, dns_name)
+        tls = await asyncio.to_thread(tls_context, dns_name)
         application[TLS_CONTEXT_KEY] = tls
         application[PHONE_DNS_NAME_KEY] = dns_name
         owner = (status.get("Self") or {}).get("UserID")
@@ -873,7 +626,7 @@ async def _run_launcher_server(directory, stopped, phone_access, wait_for_tailsc
 
     if stopped():
         return
-    PORT, listeners = await asyncio.to_thread(_reserve_listener_sockets, addresses)
+    PORT, listeners = await asyncio.to_thread(reserve_listener_sockets, addresses, PORT, PORT_IS_EXPLICIT)
     ready = {
         "desktop": f"http://127.0.0.1:{PORT}/",
         "phone": f"https://{dns_name}:{PORT}/" if phone_access else "",

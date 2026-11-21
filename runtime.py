@@ -63,7 +63,6 @@ class Runtime:
         self._upscaler = None
         self._upscaler_attempted = False
         self._prompt_cache = OrderedDict()
-        self._last_heartbeat = 0.0
         self._metrics = {
             "loaded": False,
             "model_ms": 0.0,
@@ -104,26 +103,7 @@ class Runtime:
 
     def heartbeat(self):
         with self._status_lock:
-            if self._pipe is None:
-                self._last_heartbeat = 0.0
-                return False
-            self._last_heartbeat = time.monotonic()
-            return True
-
-    def idle_expired(self, idle_seconds):
-        with self._status_lock:
-            return self._idle_expired_locked(idle_seconds)
-
-    def _idle_expired_locked(self, idle_seconds):
-        return self._pipe is not None and self._last_heartbeat > 0.0 and time.monotonic() - self._last_heartbeat >= idle_seconds
-
-    def unload_if_idle(self, idle_seconds):
-        with self._lock:
-            with self._status_lock:
-                if not self._idle_expired_locked(idle_seconds):
-                    return False
-                self._unload_locked()
-                return True
+            return self._pipe is not None
 
     def report_error(self, message):
         with self._status_lock:
@@ -204,7 +184,6 @@ class Runtime:
                 self._upscaler = None
                 self._upscaler_attempted = False
                 self._prompt_cache.clear()
-                self._last_heartbeat = time.monotonic()
                 self._metrics.update({
                     "loaded": True,
                     "model_ms": 0.0,
@@ -230,7 +209,6 @@ class Runtime:
             self._upscaler = None
             self._upscaler_attempted = False
             self._prompt_cache.clear()
-            self._last_heartbeat = 0.0
             self._metrics.update({
                 "loaded": False,
                 "model_ms": 0.0,

@@ -21,8 +21,8 @@ def normalize_settings(raw, previous=None):
     if not isinstance(prompt, str) or len(prompt) > 2000:
         raise ValueError("Prompt must be text under 2000 characters.")
     steps = source.get("steps")
-    if isinstance(steps, bool) or not isinstance(steps, int) or not 1 <= steps <= 12:
-        raise ValueError("Steps must be between 1 and 12.")
+    if isinstance(steps, bool) or not isinstance(steps, int) or not 1 <= steps <= 4:
+        raise ValueError("Steps must be between 1 and 4.")
     resolution = source.get("resolution")
     if type(resolution) is not int or resolution not in RESOLUTIONS:
         raise ValueError("Resolution is not supported.")

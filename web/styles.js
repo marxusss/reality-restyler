@@ -1,4 +1,15 @@
 // Own the style catalog, editor, selection state and event handlers.
+
+// Keep client conflict resolution consistent with the server: a deletion
+// wins over a live style with the same revision timestamp.
+export function stylesToSync(local, remote) {
+  const remoteStyles = new Map(remote.map(style => [style.id, style]));
+  return local.filter(style => {
+    const previous = remoteStyles.get(style.id);
+    return !previous || style.updatedAt > previous.updatedAt ||
+      (style.updatedAt === previous.updatedAt && style.deleted === true && previous.deleted !== true);
+  });
+}
 export function mountStyles({promptInput, applyPromptNow, request, getRenderedFrame, isMirrored}) {
   const $ = id => document.getElementById(id);
   const stylesDialog = $("stylesDialog");
@@ -93,8 +104,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
         if (error.status !== 403) throw error;
       }
       if (remote) {
-        const remoteTimestamps = new Map(remote.map(style => [style.id, style.updatedAt]));
-        const updates = local.filter(style => style.updatedAt > (remoteTimestamps.get(style.id) ?? -1));
+        const updates = stylesToSync(local, remote);
         for (let index = 0; index < updates.length; index += 10) {
           const styles = updates.slice(index, index + 10);
           remote = normalizeStyles((await request("/styles/user", { styles })).styles);

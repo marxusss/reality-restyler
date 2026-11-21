@@ -1,3 +1,4 @@
+import asyncio
 import json
 import random
 import threading
@@ -106,6 +107,32 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
         self.token = new_token
         new_socket = await self.open_socket()
         await new_socket.close()
+
+    async def test_taking_control_does_not_wait_for_model_initialization(self):
+        started_loading = threading.Event()
+        finish_loading = threading.Event()
+
+        def slow_load(*_args, **_kwargs):
+            started_loading.set()
+            finish_loading.wait(timeout=5)
+            return {"ok": True}
+
+        with patch.object(app.runtime, "start", side_effect=slow_load):
+            pending_start = asyncio.create_task(self.client.post(
+                "/start", json={"settings": {}}, headers=self.headers))
+            try:
+                self.assertTrue(await asyncio.to_thread(started_loading.wait, 2))
+                new_owner = await asyncio.wait_for(
+                    self.client.post("/session", json={}), timeout=1.5)
+                self.assertEqual(new_owner.status, 200)
+                token = (await new_owner.json())["token"]
+                self.assertNotEqual(token, self.token)
+            finally:
+                finish_loading.set()
+            stale = await pending_start
+        self.assertEqual(stale.status, 409)
+        app.runtime.unload.assert_not_called()
+
 
     async def test_same_client_start_rotates_token(self):
         response = await self.client.post("/session", json={}, headers=self.headers)

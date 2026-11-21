@@ -26,7 +26,7 @@ class RestyleTrack(VideoStreamTrack):
         self.reader_task = asyncio.create_task(self._read())
         self.render_task = asyncio.create_task(self._render())
 
-    async def _replace_latest(self, queue, item):
+    def _replace_latest(self, queue, item):
         replaced = False
         if queue.full():
             try:
@@ -41,7 +41,7 @@ class RestyleTrack(VideoStreamTrack):
         try:
             while self.readyState == "live":
                 frame = await self.source.recv()
-                if await self._replace_latest(self.input_frames, frame):
+                if self._replace_latest(self.input_frames, frame):
                     self.input_frames_dropped += 1
         except asyncio.CancelledError:
             raise
@@ -92,7 +92,7 @@ class RestyleTrack(VideoStreamTrack):
                 self.input_frames_dropped = 0
                 if output is not None:
                     self.last_fresh_at = time.perf_counter()
-                    await self._replace_latest(self.output_frames, (output, self.last_fresh_at))
+                    self._replace_latest(self.output_frames, (output, self.last_fresh_at))
         except asyncio.CancelledError:
             raise
         except Exception:

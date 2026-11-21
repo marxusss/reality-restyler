@@ -1,6 +1,6 @@
 import { cameraFacing, cameraLenses, currentRotation, openStartingCamera, setCameraZoom } from "./camera.js";
 import { mountCapture } from "./capture.js";
-import { encodeCameraFrame } from "./transport.js";
+import { encodeCameraFrame } from "./frame_encoding.js";
 import { mountStyles } from "./styles.js";
 import { ErrorState } from "./errors.js";
 
@@ -242,13 +242,13 @@ function readSettings() {
   };
 }
 
-function saveSettings() {
+function markSettingsDirty() {
   // Before Start, preserve edits in memory. Only the active controller writes
   // preferences to the host through /start and /settings.
   settingsDirty = true;
 }
 
-async function restoreSettings() {
+async function loadHostPreferences() {
   try {
     const {settings} = await request("/preferences");
     if (settingsDirty) return;
@@ -345,6 +345,7 @@ async function startRuntime() {
   }
   if (!result.ok) throw new Error("Could not start the local runtime.");
   runtimeLoaded = true;
+  if (result.preferences_saved === false) showError(result.warning, "preferences");
 }
 
 function applyCameraMirror(track, choice) {
@@ -409,7 +410,7 @@ function setMirror(value) {
   mirrorButton.setAttribute("aria-pressed", String(mirror));
 }
 
-async function startPeer() {
+async function connectWebRTC() {
   peer = new RTCPeerConnection({ iceServers: [] });
   const activePeer = peer;
   peer.addEventListener("track", event => {
@@ -495,7 +496,7 @@ async function pauseHostTransport(current = () => true) {
   return request("/pause", {});
 }
 
-function openLocalStream() {
+function connectLocalWebSocket() {
   const url = new URL("/local-stream", window.location.href);
   url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const socket = new WebSocket(url, ["restyle." + sessionToken]);
@@ -627,7 +628,7 @@ async function sendRotation() {
 }
 
 async function applySettings() {
-  saveSettings();
+  markSettingsDirty();
   if (!runtimeLoaded) {
     const settings = readSettings();
     const stored = {
@@ -653,8 +654,8 @@ async function applySettings() {
   const pending = settingsApplyQueue.catch(() => {}).then(async () => {
     if (!runtimeLoaded || token !== sessionToken || pending !== settingsApplyQueue) return;
     try {
-      await request("/settings", { settings });
-      if (token === sessionToken) showError("", "settings");
+      const response = await request("/settings", { settings });
+      if (token === sessionToken) showError(response.warning || "", "settings");
     } catch (error) {
       if (token === sessionToken) showError(error.message, "settings");
     }
@@ -664,7 +665,7 @@ async function applySettings() {
 }
 
 function schedulePromptApply() {
-  saveSettings();
+  markSettingsDirty();
   clearTimeout(promptApplyTimer);
   promptApplyTimer = setTimeout(() => {
     promptApplyTimer = 0;
@@ -673,7 +674,7 @@ function schedulePromptApply() {
 }
 
 function applyPromptNow() {
-  saveSettings();
+  markSettingsDirty();
   clearTimeout(promptApplyTimer);
   promptApplyTimer = 0;
   void applySettings();
@@ -721,10 +722,9 @@ async function start() {
     await startRuntime();
     if (!heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
     if (!(await heartbeat())) throw new Error("The model stopped during startup. Press Start to retry.");
-    await request("/settings", { settings: readSettings() });
     showStartup("Connecting camera", 6);
-    if (transportMode === "local") await openLocalStream();
-    else await startPeer();
+    if (transportMode === "local") await connectLocalWebSocket();
+    else await connectWebRTC();
     if (cameraTrack.readyState === "ended") throw new Error("Camera disconnected during startup. Try again.");
     started = true;
     visibleSince = performance.now();
@@ -988,9 +988,9 @@ async function restartTransport(current) {
   }
   if (transportMode === "local") {
     showLocalInput();
-    await openLocalStream();
+    await connectLocalWebSocket();
   } else {
-    await startPeer();
+    await connectWebRTC();
   }
 }
 
@@ -1170,7 +1170,7 @@ upscaleButton.addEventListener("click", () => {
 stepsInput.addEventListener("input", () => {
   stepsValue.value = stepsInput.value;
   stepsValue.textContent = stepsInput.value;
-  saveSettings();
+  markSettingsDirty();
 });
 stepsInput.addEventListener("change", () => void applySettings());
 resolutionInput.addEventListener("change", () => void applySettings());
@@ -1217,5 +1217,5 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 // A passive page never acquires or extends ownership of another camera.
-const preferencesReady = restoreSettings();
+const preferencesReady = loadHostPreferences();
 

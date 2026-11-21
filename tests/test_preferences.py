@@ -3,9 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import preferences
 import app
+from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
 
@@ -85,3 +87,52 @@ class CameraPreferencesApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(own.status, 200)
         response = await self.client.get("/preferences")
         self.assertEqual((await response.json())["settings"]["prompt"], "owner")
+
+    async def test_preference_routes_require_the_same_device_access_as_styles(self):
+        with patch.object(app, "_require_user_data_access", side_effect=web.HTTPForbidden()):
+            read = await self.client.get("/preferences")
+            write = await self.client.post("/preferences", json={"settings": {"prompt": "untrusted"}})
+        self.assertEqual(read.status, 403)
+        self.assertEqual(write.status, 403)
+
+    async def test_successful_model_start_survives_settings_disk_failure(self):
+        token_response = await self.client.post("/session", json={})
+        token = (await token_response.json())["token"]
+        with patch.object(app.runtime, "start", return_value={"ok": True}), \
+             patch.object(app, "save_preferences", side_effect=OSError("disk is full")):
+            response = await self.client.post("/start", json={"settings": {}},
+                                              headers={"X-Restyle-Session": token})
+        self.assertEqual(response.status, 200)
+        result = await response.json()
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["preferences_saved"])
+        self.assertIn("could not be saved", result["warning"])
+
+    async def test_live_settings_are_not_reported_failed_after_save_error(self):
+        token_response = await self.client.post("/session", json={})
+        token = (await token_response.json())["token"]
+        new_settings = {"prompt": "ink", "steps": 3, "resolution": 640,
+                        "upscale": False, "rotation": 0}
+        with patch.object(app.runtime, "set_settings", return_value=new_settings), \
+             patch.object(app, "save_preferences", side_effect=OSError("disk is full")):
+            response = await self.client.post("/settings", json={"settings": {"prompt": "ink"}},
+                                              headers={"X-Restyle-Session": token})
+        self.assertEqual(response.status, 200)
+        result = await response.json()
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["settings"], new_settings)
+        self.assertFalse(result["preferences_saved"])
+        self.assertIn("could not be saved", result["warning"])
+
+    async def test_tailnet_access_requires_matching_owner_identity(self):
+        remote = SimpleNamespace(remote="100.101.102.103", secure=True,
+                                 app={app.PHONE_OWNER_KEY: 123})
+        stranger = {"Node": {"User": 456, "Tags": []},
+                    "UserProfile": {"ID": 456}}
+        with patch.object(app, "tailscale_json", return_value=stranger):
+            with self.assertRaises(web.HTTPForbidden):
+                await app._require_user_data_access(remote)
+        owner = {"Node": {"User": 123, "Tags": []},
+                 "UserProfile": {"ID": 123}}
+        with patch.object(app, "tailscale_json", return_value=owner):
+            await app._require_user_data_access(remote)

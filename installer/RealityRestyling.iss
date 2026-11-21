@@ -21,6 +21,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 
 [Files]
 Source: "..\app.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\phone_access.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\user_styles.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\log_retention.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\runtime.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\runtime_settings.py"; DestDir: "{app}"; Flags: ignoreversion
@@ -52,6 +54,7 @@ Name: "{group}\Reality Restyling"; Filename: "{app}\RealityRestyling.exe"; Worki
 Name: "{autodesktop}\Reality Restyling"; Filename: "{app}\RealityRestyling.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [InstallDelete]
+Type: files; Name: "{app}\web\transport.js"
 Type: files; Name: "{app}\run.bat"
 Type: files; Name: "{app}\launcher.py"
 Type: files; Name: "{app}\launcher_ipc.py"
