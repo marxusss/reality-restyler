@@ -91,10 +91,14 @@ class CameraPreferencesApiTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_preference_routes_require_the_same_device_access_as_styles(self):
         with patch.object(app, "_require_user_data_access", side_effect=web.HTTPForbidden()):
-            read = await self.client.get("/preferences")
-            write = await self.client.post("/preferences", json={"settings": {"prompt": "untrusted"}})
-        self.assertEqual(read.status, 403)
-        self.assertEqual(write.status, 403)
+            read = await asyncio.wait_for(self.client.get("/preferences"), timeout=3)
+            self.assertEqual(read.status, 403)
+            await read.read()
+            write = await asyncio.wait_for(
+                self.client.post("/preferences", json={"settings": {"prompt": "untrusted"}}),
+                timeout=3)
+            self.assertEqual(write.status, 403)
+            await write.read()
 
     async def test_successful_model_start_survives_settings_disk_failure(self):
         token_response = await self.client.post("/session", json={})
