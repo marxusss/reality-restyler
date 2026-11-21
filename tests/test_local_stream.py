@@ -129,7 +129,7 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotEqual(token, self.token)
             finally:
                 finish_loading.set()
-            stale = await pending_start
+            stale = await asyncio.wait_for(pending_start, timeout=3)
         self.assertEqual(stale.status, 409)
         app.runtime.unload.assert_not_called()
 
