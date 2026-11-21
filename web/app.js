@@ -628,7 +628,26 @@ async function sendRotation() {
 
 async function applySettings() {
   saveSettings();
-  if (!runtimeLoaded) return Promise.resolve();
+  if (!runtimeLoaded) {
+    const settings = readSettings();
+    const stored = {
+      prompt: settings.prompt, steps: settings.steps,
+      resolution: settings.resolution, upscale: settings.upscale
+    };
+    const pending = settingsApplyQueue.catch(() => {}).then(async () => {
+      if (runtimeLoaded || pending !== settingsApplyQueue) return;
+      try {
+        await request("/preferences", {settings: stored});
+        showError("", "settings");
+      } catch (error) {
+        // A passive browser can customize its pending settings, but only the
+        // active controller is permitted to change shared host preferences.
+        if (error.status !== 409) showError(error.message, "settings");
+      }
+    });
+    settingsApplyQueue = pending;
+    return pending;
+  }
   const settings = readSettings();
   const token = sessionToken;
   const pending = settingsApplyQueue.catch(() => {}).then(async () => {

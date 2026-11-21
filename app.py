@@ -299,6 +299,27 @@ async def get_preferences(_request):
     return web.json_response({"settings": settings})
 
 
+async def update_preferences(request):
+    data = await _json(request)
+    if set(data) != {"settings"} or not isinstance(data["settings"], dict):
+        raise web.HTTPBadRequest(text="Invalid settings.")
+    if set(data["settings"]) - {"prompt", "steps", "resolution", "upscale"}:
+        raise web.HTTPBadRequest(text="Unsupported preference.")
+    async with request.app[SESSION_KEY].lock:
+        manager = request.app[SESSION_KEY]
+        if manager.token:
+            require_owner(request)
+        try:
+            previous = await asyncio.to_thread(read_preferences)
+            updated = {**previous, **data["settings"]}
+            stored = await asyncio.to_thread(save_preferences, updated)
+        except ValueError as exc:
+            return web.json_response({"error": str(exc)}, status=422)
+        except (OSError, RuntimeError) as exc:
+            return web.json_response({"error": "Could not save camera settings."}, status=500)
+    return web.json_response({"ok": True, "settings": stored})
+
+
 async def health(_request):
     return web.json_response({"ok": True, "loaded": await asyncio.to_thread(runtime.loaded)})
 
@@ -768,6 +789,7 @@ def create_app():
     app.router.add_get("/styles/user", get_user_styles)
     app.router.add_post("/styles/user", save_user_styles)
     app.router.add_get("/preferences", get_preferences)
+    app.router.add_post("/preferences", update_preferences)
     app.router.add_get("/health", health)
     app.router.add_get("/metrics", metrics)
     app.router.add_get("/transport", transport_mode)
