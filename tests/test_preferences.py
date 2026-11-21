@@ -1,3 +1,4 @@
+import asyncio
 import json
 import tempfile
 import unittest
@@ -100,8 +101,9 @@ class CameraPreferencesApiTests(unittest.IsolatedAsyncioTestCase):
         token = (await token_response.json())["token"]
         with patch.object(app.runtime, "start", return_value={"ok": True}), \
              patch.object(app, "save_preferences", side_effect=OSError("disk is full")):
-            response = await self.client.post("/start", json={"settings": {}},
-                                              headers={"X-Restyle-Session": token})
+            response = await asyncio.wait_for(
+                self.client.post("/start", json={"settings": {}},
+                                 headers={"X-Restyle-Session": token}), timeout=3)
         self.assertEqual(response.status, 200)
         result = await response.json()
         self.assertTrue(result["ok"])
@@ -115,8 +117,9 @@ class CameraPreferencesApiTests(unittest.IsolatedAsyncioTestCase):
                         "upscale": False, "rotation": 0}
         with patch.object(app.runtime, "set_settings", return_value=new_settings), \
              patch.object(app, "save_preferences", side_effect=OSError("disk is full")):
-            response = await self.client.post("/settings", json={"settings": {"prompt": "ink"}},
-                                              headers={"X-Restyle-Session": token})
+            response = await asyncio.wait_for(
+                self.client.post("/settings", json={"settings": {"prompt": "ink"}},
+                                 headers={"X-Restyle-Session": token}), timeout=3)
         self.assertEqual(response.status, 200)
         result = await response.json()
         self.assertTrue(result["ok"])
