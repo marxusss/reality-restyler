@@ -7,6 +7,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   const styleName = $("styleName");
   const stylePrompt = $("stylePrompt");
   const styleCapturePreview = $("styleCapturePreview");
+  const deleteStyleButton = $("deleteStyleButton");
   const styleEditorError = $("styleEditorError");
   const customStyleStorageKey = "reality-restyle-custom-styles";
 
@@ -32,14 +33,20 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
 
   function normalizeStyles(styles) {
     if (!Array.isArray(styles)) return [];
-    return styles.filter(style => style && typeof style.name === "string" && style.name.trim() &&
-      typeof style.prompt === "string" && style.prompt.trim()).map(style => ({
-      id: typeof style.id === "string" && style.id ? style.id : legacyStyleId(style),
-      name: style.name.trim(),
-      prompt: style.prompt,
-      thumbnail: typeof style.thumbnail === "string" && style.thumbnail.startsWith("data:image/webp;base64,") ? style.thumbnail : null,
-      updatedAt: Number.isFinite(style.updatedAt) ? Math.max(0, Math.trunc(style.updatedAt)) : 0
-    }));
+    return styles.filter(style => style && (style.deleted === true
+      ? typeof style.id === "string" && style.id
+      : typeof style.name === "string" && style.name.trim() &&
+        typeof style.prompt === "string" && style.prompt.trim())).map(style => {
+      const updatedAt = Number.isFinite(style.updatedAt) ? Math.max(0, Math.trunc(style.updatedAt)) : 0;
+      if (style.deleted === true) return {id: style.id, updatedAt, deleted: true};
+      return {
+        id: typeof style.id === "string" && style.id ? style.id : legacyStyleId(style),
+        name: style.name.trim(),
+        prompt: style.prompt,
+        thumbnail: typeof style.thumbnail === "string" && style.thumbnail.startsWith("data:image/webp;base64,") ? style.thumbnail : null,
+        updatedAt
+      };
+    });
   }
 
   function browserStyles() {
@@ -66,7 +73,10 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     const merged = new Map();
     for (const style of [...normalizeStyles(remote), ...normalizeStyles(local)]) {
       const previous = merged.get(style.id);
-      if (!previous || style.updatedAt > previous.updatedAt) merged.set(style.id, style);
+      if (!previous || style.updatedAt > previous.updatedAt ||
+          (style.updatedAt === previous.updatedAt && style.deleted && !previous.deleted)) {
+        merged.set(style.id, style);
+      }
     }
     return [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt);
   }
@@ -202,7 +212,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   }
 
   function renderCustomStyles() {
-    const styles = customStyles();
+    const styles = customStyles().filter(style => !style.deleted);
     $("customStyleSection").hidden = !styles.length;
     renderStyleCards($("customStyles"), styles, true);
   }
@@ -227,6 +237,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
 
   function openStyleEditor(style = null) {
     editingStyleId = style?.id || null;
+    deleteStyleButton.hidden = !editingStyleId;
     styleForm.reset();
     $("styleEditorTitle").textContent = style ? "Edit style" : "Add style";
     styleName.value = style?.name || "";
@@ -264,6 +275,25 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       styleCapturePreview.hidden = false;
     } catch (_) {
       setStyleError(styleEditorError, "Could not capture the AI frame.");
+    }
+  }
+
+  async function deleteStyle() {
+    const previous = editingStyleId ? customStyles().find(item => item.id === editingStyleId && !item.deleted) : null;
+    if (!previous || !window.confirm(`Delete "${previous.name}"? This removes it from synced devices.`)) return;
+    deleteStyleButton.disabled = true;
+    try {
+      await syncCustomStyles({
+        id: previous.id,
+        deleted: true,
+        updatedAt: Math.max(Date.now(), previous.updatedAt + 1)
+      });
+      styleEditor.close();
+      renderCustomStyles();
+    } catch (_) {
+      setStyleError(styleEditorError, "Could not delete the style.");
+    } finally {
+      deleteStyleButton.disabled = false;
     }
   }
 
@@ -313,6 +343,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   $("addStyleButton").addEventListener("click", () => openStyleEditor());
   $("closeStyleEditorButton").addEventListener("click", () => styleEditor.close());
   $("captureStyleButton").addEventListener("click", captureStyle);
+  deleteStyleButton.addEventListener("click", () => void deleteStyle());
   styleForm.addEventListener("submit", event => { void saveStyle(event); });
   void syncCustomStyles().catch(() => {});
 }

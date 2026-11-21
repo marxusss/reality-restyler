@@ -54,6 +54,7 @@ let heartbeatTimer = 0;
 let metricsTimer = 0;
 let promptApplyTimer = 0;
 let settingsApplyQueue = Promise.resolve();
+let settingsDirty = false;
 let cameraSwitchQueue = Promise.resolve();
 let cameraSwitchSequence = 0;
 let cameraChanging = false;
@@ -242,28 +243,27 @@ function readSettings() {
 }
 
 function saveSettings() {
-  try {
-    localStorage.setItem("reality-restyle-settings", JSON.stringify({
-      prompt: promptInput.value,
-      steps: Number(stepsInput.value),
-      resolution: Number(resolutionInput.value),
-      upscale,
-      version: 2
-    }));
-  } catch (_) {}
+  // Before Start, preserve edits in memory. Only the active controller writes
+  // preferences to the host through /start and /settings.
+  settingsDirty = true;
 }
 
-function restoreSettings() {
+async function restoreSettings() {
   try {
-    const saved = JSON.parse(localStorage.getItem("reality-restyle-settings") || "{}");
-    if (typeof saved.prompt === "string") promptInput.value = saved.prompt;
-    if (Number.isInteger(saved.steps)) stepsInput.value = String(Math.max(1, Math.min(4, saved.steps)));
-    if ([512, 640, 768, 896, 1024].includes(Number(saved.resolution))) resolutionInput.value = String(saved.resolution);
-    if (typeof saved.upscale === "boolean") upscale = saved.upscale;
-  } catch (_) {}
-  stepsValue.value = stepsInput.value;
-  stepsValue.textContent = stepsInput.value;
-  upscaleButton.setAttribute("aria-pressed", String(upscale));
+    const {settings} = await request("/preferences");
+    if (settingsDirty) return;
+    if (typeof settings.prompt === "string") promptInput.value = settings.prompt;
+    if (Number.isInteger(settings.steps)) stepsInput.value = String(Math.max(1, Math.min(4, settings.steps)));
+    if ([512, 640, 768, 896, 1024].includes(settings.resolution)) resolutionInput.value = String(settings.resolution);
+    if (typeof settings.upscale === "boolean") upscale = settings.upscale;
+    showError("", "preferences");
+  } catch (error) {
+    showError(error.message || "Could not load saved settings.", "preferences");
+  } finally {
+    stepsValue.value = stepsInput.value;
+    stepsValue.textContent = stepsInput.value;
+    upscaleButton.setAttribute("aria-pressed", String(upscale));
+  }
 }
 
 async function request(path, body) {
@@ -628,7 +628,26 @@ async function sendRotation() {
 
 async function applySettings() {
   saveSettings();
-  if (!runtimeLoaded) return Promise.resolve();
+  if (!runtimeLoaded) {
+    const settings = readSettings();
+    const stored = {
+      prompt: settings.prompt, steps: settings.steps,
+      resolution: settings.resolution, upscale: settings.upscale
+    };
+    const pending = settingsApplyQueue.catch(() => {}).then(async () => {
+      if (runtimeLoaded || pending !== settingsApplyQueue) return;
+      try {
+        await request("/preferences", {settings: stored});
+        showError("", "settings");
+      } catch (error) {
+        // A passive browser can customize its pending settings, but only the
+        // active controller is permitted to change shared host preferences.
+        if (error.status !== 409) showError(error.message, "settings");
+      }
+    });
+    settingsApplyQueue = pending;
+    return pending;
+  }
   const settings = readSettings();
   const token = sessionToken;
   const pending = settingsApplyQueue.catch(() => {}).then(async () => {
@@ -654,6 +673,7 @@ function schedulePromptApply() {
 }
 
 function applyPromptNow() {
+  saveSettings();
   clearTimeout(promptApplyTimer);
   promptApplyTimer = 0;
   void applySettings();
@@ -676,6 +696,7 @@ async function start() {
   localDrawMs = 0;
   localFrameTimingSamples = [];
   try {
+    await preferencesReady;
     const requestedCamera = selectedCamera;
     stream = await openStartingCamera(requestedCamera);
     const cameraTrack = stream.getVideoTracks()[0];
@@ -1196,5 +1217,5 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 // A passive page never acquires or extends ownership of another camera.
-restoreSettings();
+const preferencesReady = restoreSettings();
 

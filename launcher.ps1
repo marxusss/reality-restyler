@@ -170,6 +170,48 @@ $startupWarning = Add-Control $window Label 'Starts at sign-in; model stays unlo
 $startupWarning.ForeColor = $muted
 $startupWarning.Font = [Drawing.Font]::new('Segoe UI', 8.5)
 
+$autoUnloadLabel = Add-Control $window Label 'Auto-unload after' 24 0 177 24
+$autoUnloadInput = Add-Control $window NumericUpDown '' 208 0 86 26
+$autoUnloadInput.Minimum = 5
+$autoUnloadInput.Maximum = 3600
+$autoUnloadInput.Increment = 5
+$autoUnloadInput.Value = 30
+$autoUnloadInput.AccessibleName = 'Auto-unload after seconds'
+$autoUnloadUnit = Add-Control $window Label 'seconds' 303 0 105 24
+$autoUnloadUnit.ForeColor = $muted
+$autoUnloadHint = [Windows.Forms.ToolTip]::new()
+$autoUnloadHint.SetToolTip($autoUnloadInput, 'The change applies the next time the server starts.')
+
+$autoUnloadDir = Join-Path $env:LOCALAPPDATA 'Reality Restyling'
+$autoUnloadPath = Join-Path $autoUnloadDir 'launcher-settings.json'
+try {
+    if (Test-Path -LiteralPath $autoUnloadPath -PathType Leaf) {
+        $saved = Get-Content -LiteralPath $autoUnloadPath -Raw | ConvertFrom-Json
+        $savedSeconds = 0
+        if ([int]::TryParse([string]$saved.autoUnloadSeconds, [ref]$savedSeconds) -and
+            $savedSeconds -ge 5 -and $savedSeconds -le 3600) {
+            $autoUnloadInput.Value = $savedSeconds
+        }
+    }
+} catch {
+    # Invalid configuration falls back to the existing 30-second default.
+}
+$autoUnloadInput.Add_ValueChanged({
+    try {
+        [void][IO.Directory]::CreateDirectory($autoUnloadDir)
+        $json = @{ autoUnloadSeconds = [int]$autoUnloadInput.Value } | ConvertTo-Json -Compress
+        $temporary = $autoUnloadPath + '.tmp'
+        [IO.File]::WriteAllText($temporary, $json, [Text.UTF8Encoding]::new($false))
+        if (Test-Path -LiteralPath $autoUnloadPath) {
+            [IO.File]::Replace($temporary, $autoUnloadPath, $null)
+        } else {
+            [IO.File]::Move($temporary, $autoUnloadPath)
+        }
+    } catch {
+        [Windows.Forms.MessageBox]::Show($window, 'Could not save the auto-unload setting.', 'Reality Restyling', 'OK', 'Warning') | Out-Null
+    }
+})
+
 $startupKeyPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $startupValueName = 'RealityRestylingPhoneAccess'
 $startupCommand = '"' + (Join-Path $PSScriptRoot 'RealityRestyling.exe') + '" --phone-startup'
@@ -266,7 +308,10 @@ function Sync-PhoneCard {
     $bottom = if ($phoneCard.Visible) { $phoneCard.Bottom } elseif ($desktopCard.Visible) { $desktopCard.Bottom } else { $statusCard.Bottom }
     $startupCheck.Top = $bottom + 12
     $startupWarning.Top = $bottom + 15
-    $window.ClientSize = [Drawing.Size]::new($window.ClientSize.Width, $startupCheck.Bottom + 14)
+    $autoUnloadLabel.Top = $startupCheck.Bottom + 12
+    $autoUnloadInput.Top = $autoUnloadLabel.Top
+    $autoUnloadUnit.Top = $autoUnloadLabel.Top + 3
+    $window.ClientSize = [Drawing.Size]::new($window.ClientSize.Width, $autoUnloadInput.Bottom + 16)
 }
 
 function Set-PhoneStartup($Enabled) {
@@ -449,7 +494,8 @@ $start.Add_Click({
         $state.Directory = Join-Path ([IO.Path]::GetTempPath()) ('RealityRestyling-Session-' + [guid]::NewGuid().ToString('N'))
         [void][IO.Directory]::CreateDirectory($state.Directory)
         $arguments = @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f (Join-Path $PSScriptRoot 'run.ps1')),
-            '-LauncherSession', ('"{0}"' -f $state.Directory), '-LauncherProcessId', $PID)
+            '-LauncherSession', ('"{0}"' -f $state.Directory), '-LauncherProcessId', $PID,
+            '-AutoUnloadSeconds', [int]$autoUnloadInput.Value)
         if ($phone.Checked) { $arguments += '-PhoneAccess' }
         $state.Unattended = $state.NextStartUnattended -and $phone.Checked
         $state.NextStartUnattended = $false

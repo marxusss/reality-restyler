@@ -19,6 +19,7 @@ from aiohttp import WSMsgType, web
 from aiortc import RTCConfiguration, RTCPeerConnection, RTCSessionDescription
 
 from local_frames import process_frame
+from preferences import read_preferences, save_preferences
 from log_retention import enable_logging, prune_logs
 from runtime import Runtime, combine_style_prompts
 from sessions import PROTOCOL_PREFIX, SESSION_KEY, TOKEN_HEADER, SessionManager
@@ -168,6 +169,17 @@ def _normalize_user_styles(styles):
     for item in styles:
         if not isinstance(item, dict):
             raise ValueError("A style is invalid.")
+        if item.get("deleted", False) is True:
+            style_id = item.get("id")
+            updated_at = item.get("updatedAt", 0)
+            if not isinstance(style_id, str) or not style_id or len(style_id) > 100:
+                raise ValueError("A deleted style identifier is invalid.")
+            if isinstance(updated_at, bool) or not isinstance(updated_at, (int, float)):
+                raise ValueError("A deletion timestamp is invalid.")
+            if style_id not in seen:
+                seen.add(style_id)
+                normalized.append({"id": style_id, "updatedAt": int(max(0, min(updated_at, 9007199254740991))), "deleted": True})
+            continue
         name = item.get("name")
         prompt = item.get("prompt")
         if not isinstance(name, str) or not name.strip() or len(name) > 120:
@@ -191,6 +203,8 @@ def _normalize_user_styles(styles):
         if isinstance(updated_at, bool) or not isinstance(updated_at, (int, float)):
             updated_at = 0
         updated_at = int(max(0, min(updated_at, 9007199254740991)))
+        if "deleted" in item and item["deleted"] is not False:
+            raise ValueError("A style deletion marker is invalid.")
         normalized.append({
             "id": style_id,
             "name": name.strip(),
@@ -211,7 +225,9 @@ def _merge_user_styles(existing, incoming):
     merged = {}
     for style in existing + incoming:
         previous = merged.get(style["id"])
-        if previous is None or style["updatedAt"] > previous["updatedAt"]:
+        if (previous is None or style["updatedAt"] > previous["updatedAt"]
+                or (style["updatedAt"] == previous["updatedAt"] and
+                    style.get("deleted", False) and not previous.get("deleted", False))):
             merged[style["id"]] = style
     return sorted(merged.values(), key=lambda style: style["updatedAt"], reverse=True)
 
@@ -281,6 +297,37 @@ async def save_user_styles(request):
         print(f"Could not save custom styles: {type(exc).__name__}: {exc}", flush=True)
         return web.json_response({"error": "Could not save custom styles."}, status=500)
     return web.json_response({"styles": styles})
+
+async def get_preferences(request):
+    await _require_style_access(request)
+    try:
+        settings = await asyncio.to_thread(read_preferences)
+    except RuntimeError as exc:
+        return web.json_response({"error": str(exc)}, status=500)
+    return web.json_response({"settings": settings})
+
+
+async def update_preferences(request):
+    await _require_style_access(request)
+    data = await _json(request)
+    if set(data) != {"settings"} or not isinstance(data["settings"], dict):
+        raise web.HTTPBadRequest(text="Invalid settings.")
+    if set(data["settings"]) - {"prompt", "steps", "resolution", "upscale"}:
+        raise web.HTTPBadRequest(text="Unsupported preference.")
+    async with request.app[SESSION_KEY].lock:
+        manager = request.app[SESSION_KEY]
+        if manager.token:
+            require_owner(request)
+        try:
+            previous = await asyncio.to_thread(read_preferences)
+            updated = {**previous, **data["settings"]}
+            stored = await asyncio.to_thread(save_preferences, updated)
+        except ValueError as exc:
+            return web.json_response({"error": str(exc)}, status=422)
+        except (OSError, RuntimeError) as exc:
+            return web.json_response({"error": "Could not save camera settings."}, status=500)
+    return web.json_response({"ok": True, "settings": stored})
+
 
 async def health(_request):
     return web.json_response({"ok": True, "loaded": await asyncio.to_thread(runtime.loaded)})
@@ -408,6 +455,8 @@ async def start_runtime(request):
 
             try:
                 result = await asyncio.to_thread(runtime.start, settings, allow_low_vram, report_stage)
+                if result.get("ok"):
+                    await asyncio.to_thread(save_preferences, runtime.settings())
             finally:
                 progress.pop(startup_id, None)
                 require_owner(request)
@@ -439,9 +488,13 @@ async def update_settings(request):
         async with request.app[SESSION_KEY].lock:
             require_owner(request)
             result = runtime.set_settings(data["settings"])
+            if set(data["settings"]) & {"prompt", "steps", "resolution", "upscale"}:
+                await asyncio.to_thread(save_preferences, result)
         return web.json_response({"ok": True, "settings": result})
     except ValueError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=422)
+    except (OSError, RuntimeError) as exc:
+        return web.json_response({"ok": False, "error": "Could not save the camera settings."}, status=500)
 
 
 async def heartbeat(request):
@@ -744,6 +797,8 @@ def create_app():
     app.router.add_post("/styles/combine", combine_styles)
     app.router.add_get("/styles/user", get_user_styles)
     app.router.add_post("/styles/user", save_user_styles)
+    app.router.add_get("/preferences", get_preferences)
+    app.router.add_post("/preferences", update_preferences)
     app.router.add_get("/health", health)
     app.router.add_get("/metrics", metrics)
     app.router.add_get("/transport", transport_mode)
