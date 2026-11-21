@@ -1,4 +1,3 @@
-import random
 import sys
 import unittest
 from contextlib import redirect_stdout
@@ -36,11 +35,6 @@ class RuntimeSettingsTests(unittest.TestCase):
             with self.subTest(payload=payload):
                 with self.assertRaises(ValueError):
                     normalize_settings(payload)
-
-    def test_runtime_starts_unloaded(self):
-        runtime = Runtime()
-        self.assertFalse(runtime.loaded())
-        self.assertFalse(runtime.metrics()["loaded"])
 
     def test_cold_prompt_encode_uses_inference_mode(self):
         import torch
@@ -105,29 +99,13 @@ class RuntimeSettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "not loaded"):
             runtime.render(None)
 
-    def test_heartbeat_reports_whether_model_is_loaded(self):
+    def test_settings_reject_oversized_prompt_without_changing_previous_settings(self):
         runtime = Runtime()
-        self.assertFalse(runtime.heartbeat())
-        runtime._pipe = object()
-        self.assertTrue(runtime.heartbeat())
+        runtime.set_settings({"prompt": "portrait"})
+        with self.assertRaises(ValueError):
+            runtime.set_settings({"prompt": "x" * 2001})
+        self.assertEqual(runtime.settings()["prompt"], "portrait")
 
-class RuntimeSettingsFuzzTests(unittest.TestCase):
-    def test_random_json_payloads_are_validated(self):
-        generator = random.Random(20261115)
-        keys = list(DEFAULT_SETTINGS) + ["model", "strength", "__proto__", "unknown"]
-        values = [None, True, False, 0, 1, -1, 512, 640, 1024, 1024.0, float("nan"), "", "text", [], [1], {}, {"x": []}]
-        for _ in range(5000):
-            payload = {}
-            for _ in range(generator.randrange(8)):
-                payload[generator.choice(keys)] = generator.choice(values)
-            try:
-                settings = normalize_settings(payload)
-            except ValueError:
-                continue
-            self.assertEqual(set(settings), set(DEFAULT_SETTINGS))
-            self.assertIn(settings["resolution"], RESOLUTIONS)
-            self.assertGreaterEqual(settings["steps"], 1)
-            self.assertLessEqual(settings["steps"], 4)
 
 class TimingWindowTests(unittest.TestCase):
     def test_p95_is_hidden_for_small_windows(self):

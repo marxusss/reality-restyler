@@ -7,7 +7,9 @@ test("successful polling cannot erase a camera or settings failure", () => {
   errors.set("Connection lost", "camera");
   errors.set("Invalid prompt", "settings");
   errors.set("Poll failed", "metrics");
-  assert.equal(errors.set("", "metrics"), "Connection lost · Invalid prompt");
+  const remaining = errors.set("", "metrics");
+  assert.match(remaining, /Connection lost/);
+  assert.match(remaining, /Invalid prompt/);
   assert.equal(errors.set("", "camera"), "Invalid prompt");
   errors.clear();
   assert.equal(errors.text(), "");

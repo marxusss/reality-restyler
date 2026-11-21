@@ -641,9 +641,7 @@ async function applySettings() {
         await request("/preferences", {settings: stored});
         showError("", "settings");
       } catch (error) {
-        // A passive browser can customize its pending settings, but only the
-        // active controller is permitted to change shared host preferences.
-        if (error.status !== 409) showError(error.message, "settings");
+        showError(error.message, "settings");
       }
     });
     settingsApplyQueue = pending;
