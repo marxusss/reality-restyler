@@ -2,10 +2,13 @@ param(
     [switch]$PhoneAccess,
     [switch]$Unattended,
     [string]$LauncherSession,
-    [int]$LauncherProcessId
+    [int]$LauncherProcessId,
+    [ValidateRange(5, 3600)]
+    [int]$AutoUnloadSeconds = 30
 )
 
 $ErrorActionPreference = 'Stop'
+$env:REALITY_RESTYLE_IDLE_SECONDS = [string]$AutoUnloadSeconds
 Add-Type -AssemblyName System.Windows.Forms
 if (-not $LauncherSession -or $LauncherProcessId -le 0) {
     Write-Error 'Start Reality Restyling from its launcher.'
