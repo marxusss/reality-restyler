@@ -90,7 +90,10 @@ class CameraPreferencesApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await response.json())["settings"]["prompt"], "owner")
 
     async def test_preference_routes_require_the_same_device_access_as_styles(self):
-        with patch.object(app, "_require_user_data_access", side_effect=web.HTTPForbidden()):
+        async def deny_access(_request):
+            raise web.HTTPForbidden()
+
+        with patch.object(app, "_require_user_data_access", side_effect=deny_access):
             read = await asyncio.wait_for(self.client.get("/preferences"), timeout=3)
             self.assertEqual(read.status, 403)
             await read.read()
