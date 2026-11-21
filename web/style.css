@@ -697,3 +697,6 @@ textarea:focus, select:focus {
     overscroll-behavior: contain;
   }
 }
+
+/* Delete is only shown while editing an existing custom style. */
+.style-delete { color: #f5a5a5; }

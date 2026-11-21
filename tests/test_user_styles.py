@@ -47,6 +47,29 @@ class UserStylePersistenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(len((await response.json())["styles"]), 2)
 
+    async def test_deleted_style_remains_deleted_after_stale_device_sync(self):
+        active = {"id": "one", "name": "First", "prompt": "portrait",
+                  "thumbnail": None, "updatedAt": 100}
+        deleted = {**active, "thumbnail": None, "deleted": True, "updatedAt": 200}
+        response = await self.client.post("/styles/user", json={"styles": [active]})
+        self.assertEqual(response.status, 200)
+        response = await self.client.post("/styles/user", json={"styles": [deleted]})
+        self.assertEqual(response.status, 200)
+        response = await self.client.post("/styles/user", json={"styles": [active]})
+        self.assertEqual(response.status, 200)
+        self.assertTrue((await response.json())["styles"][0]["deleted"])
+        response = await self.client.get("/styles/user")
+        self.assertTrue((await response.json())["styles"][0]["deleted"])
+
+    async def test_deletion_wins_equal_timestamp_conflict(self):
+        style = {"id": "one", "name": "First", "prompt": "portrait",
+                 "thumbnail": None, "updatedAt": 200}
+        tombstone = {**style, "deleted": True}
+        await self.client.post("/styles/user", json={"styles": [style]})
+        await self.client.post("/styles/user", json={"styles": [tombstone]})
+        response = await self.client.post("/styles/user", json={"styles": [style]})
+        self.assertTrue((await response.json())["styles"][0]["deleted"])
+
     async def test_read_and_empty_sync_do_not_rewrite_user_config(self):
         saved = {"id": "one", "name": "First", "prompt": "current", "thumbnail": None, "updatedAt": 100}
         response = await self.client.post("/styles/user", json={"styles": [saved]})

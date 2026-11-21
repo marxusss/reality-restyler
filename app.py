@@ -192,13 +192,19 @@ def _normalize_user_styles(styles):
         if isinstance(updated_at, bool) or not isinstance(updated_at, (int, float)):
             updated_at = 0
         updated_at = int(max(0, min(updated_at, 9007199254740991)))
-        normalized.append({
+        deleted = item.get("deleted", False)
+        if not isinstance(deleted, bool):
+            raise ValueError("A style deletion marker is invalid.")
+        normalized_style = {
             "id": style_id,
             "name": name.strip(),
             "prompt": prompt,
             "thumbnail": thumbnail,
             "updatedAt": updated_at,
-        })
+        }
+        if deleted:
+            normalized_style["deleted"] = True
+        normalized.append(normalized_style)
     return normalized
 
 def _read_user_styles():
@@ -212,7 +218,9 @@ def _merge_user_styles(existing, incoming):
     merged = {}
     for style in existing + incoming:
         previous = merged.get(style["id"])
-        if previous is None or style["updatedAt"] > previous["updatedAt"]:
+        if (previous is None or style["updatedAt"] > previous["updatedAt"]
+                or (style["updatedAt"] == previous["updatedAt"] and
+                    style.get("deleted", False) and not previous.get("deleted", False))):
             merged[style["id"]] = style
     return sorted(merged.values(), key=lambda style: style["updatedAt"], reverse=True)
 
