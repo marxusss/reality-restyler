@@ -3,15 +3,10 @@ name: Interactive codebase graph
 on:
   push:
     branches: [docs/interactive-codebase-graph]
-  pull_request:
-    paths:
-      - scripts/build_codegraph.py
-      - scripts/codegraph_template.html
-      - .github/workflows/codegraph.yml
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   code-atlas:
@@ -32,12 +27,18 @@ jobs:
         run: python -m pip install tree-sitter-language-pack==1.25.0
       - name: Generate complete offline HTML and machine-readable JSON
         run: python scripts/build_codegraph.py --root source --out dist/reality-restyler-codegraph.html
-      - name: Upload graph
-        uses: actions/upload-artifact@v4
-        with:
-          name: reality-restyler-codegraph
-          path: |
-            dist/reality-restyler-codegraph.html
-            dist/reality-restyler-codegraph.json
-          if-no-files-found: error
-          retention-days: 30
+      - name: Publish generated HTML to documentation branch
+        shell: bash
+        run: |
+          mkdir -p docs
+          cp dist/reality-restyler-codegraph.html docs/reality-restyler-codegraph.html
+          cp dist/reality-restyler-codegraph.json docs/reality-restyler-codegraph.json
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add docs/reality-restyler-codegraph.html docs/reality-restyler-codegraph.json
+          if git diff --cached --quiet; then
+            echo "Graph is already current"
+            exit 0
+          fi
+          git commit -m "Generate offline code atlas for current main"
+          git push origin HEAD:docs/interactive-codebase-graph
