@@ -14,7 +14,7 @@ Uninstall removes the app's bundled Python, environment, and runtime files. Mode
 
 ## Phone access
 
-Saved styles sync between the PC and devices signed in to the PC owner's Tailscale account. Other authorized phone clients keep their styles in their own browser.
+Saved styles and preferences sync through the PC for devices allowed by your tailnet policy.
 
 1. Install [Tailscale](https://tailscale.com/download) on the PC and phone. Sign in to the same tailnet.
 2. Give the PC a generic name in Tailscale. HTTPS certificate issuance publishes its full Tailscale hostname in a permanent public log.
@@ -24,7 +24,7 @@ Saved styles sync between the PC and devices signed in to the PC owner's Tailsca
 
 If Hugging Face requests model access, approve it on the opened page. The installer retries with a locally saved Hugging Face token. If needed, save a read token and rerun the installer.
 
-Anyone allowed by your tailnet policy to reach the phone port can press Start and take control. Only the active controller can change settings, pause, or unload the model. Restrict access to trusted devices.
+Devices allowed by your tailnet policy can read and save shared styles and preferences. Pressing Start takes camera control; only the current controller can change live settings, pause, or unload the model. Restrict access to trusted devices.
 
 ## Troubleshooting
 

@@ -7,8 +7,8 @@ try {
     & (Join-Path $root 'updater.ps1') -Action Check -SessionPath $session -InstallRoot $root
     if ($LASTEXITCODE -ne 0) { throw 'Updater check failed.' }
     $state = Get-Content -LiteralPath (Join-Path $session 'update-state.json') -Raw | ConvertFrom-Json
-    if ($state.phase -notin @('checked', 'unavailable')) {
-        throw 'Updater did not return a recognizable result.'
+    if ($state.phase -ne 'checked') {
+        throw 'The updater could not complete its release check.'
     }
     Write-Host "Updater check completed: $($state.phase)"
 } finally {

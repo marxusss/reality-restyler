@@ -4,7 +4,7 @@ The default CI runs fast unit/API tests and compiles the Windows installer. It d
 
 - **GPU inference:** On a CUDA machine with an existing model installation, from the project's Python environment run `python smoke/gpu_inference.py --models PATH_TO_MODELS --output gpu-smoke-output.png`. Loads the actual model, renders one frame, and checks that it produces an image. No time limit or performance threshold. Upscaler is disabled to isolate core inference.
 - **Windows installer:** On a **clean disposable Windows VM**, build the installer, then run `powershell -File smoke/installer.ps1 -Installer .\RealityRestylingSetup.exe`. This performs a real silent install (including its dependency setup), checks the installed app and imports the server. It may take a long time or require network access; it intentionally leaves the install in place for inspection. Never run on a machine with an existing install.
-- **Updater check:** With an installed copy and internet connectivity, run `powershell -File smoke/updater_check.ps1 -InstallRoot "PATH_TO_INSTALLED_APP"`. Exercises the read-only release-check path; it never installs an update.
+- **Updater check:** With an installed copy and a reachable GitHub release, run `powershell -File smoke/updater_check.ps1 -InstallRoot "PATH_TO_INSTALLED_APP"`. Requires a completed release check; it never installs an update.
 
 For a full release, manually verify the following in the browser and on a physical phone (not in CI):
 

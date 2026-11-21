@@ -41,11 +41,8 @@ def combine_style_prompts(prompts):
         raise ValueError("Choose one to five styles.")
     if any(not isinstance(text, str) or not text.strip() or len(text) > 2000 for text in prompts):
         raise ValueError("Invalid style prompt.")
-    if len(prompts) == 1:
-        prompt = prompts[0]
-    else:
-        parts = [text.strip().removesuffix(", keep scene intact").rstrip(" .") for text in prompts]
-        prompt = ".\n".join(parts) + ". keep scene intact"
+    # Preserve each complete prompt, including repeated scene guidance.
+    prompt = "\n\n".join(prompts)
     if len(prompt) > 2000:
         raise ValueError("These styles exceed the prompt length limit.")
     tokens = prompt_token_count(prompt)

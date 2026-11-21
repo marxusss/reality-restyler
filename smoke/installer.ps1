@@ -19,7 +19,13 @@ foreach ($relative in @('RealityRestyling.exe', 'app.py', 'web\index.html', 'pyt
     }
 }
 $python = Join-Path $installed '.venv\Scripts\python.exe'
-& $python -B -c 'import app; app.create_app(); print("Application server imported successfully")'
-if ($LASTEXITCODE -ne 0) { throw 'Installed application could not initialize the server.' }
+Push-Location -LiteralPath $installed
+try {
+    # Import from the installed application, never a nearby source checkout.
+    & $python -B -c 'from pathlib import Path; import app; assert Path(app.__file__).resolve() == Path("app.py").resolve(); app.create_app(); print("Installed application initialized successfully")'
+    if ($LASTEXITCODE -ne 0) { throw 'Installed application could not initialize the server.' }
+} finally {
+    Pop-Location
+}
 Write-Host 'Installer smoke passed: application installed, runtime prepared, and server initialized.'
 Write-Host "Installed app left in: $installed"

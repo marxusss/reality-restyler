@@ -7,12 +7,23 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from runtime import PROMPT_CACHE_SIZE, Runtime
+from runtime import PROMPT_CACHE_SIZE, Runtime, combine_style_prompts
 from runtime_settings import DEFAULT_SETTINGS, RESOLUTIONS, normalize_settings
 from timing import TimingWindow
 
 
 class RuntimeSettingsTests(unittest.TestCase):
+    def test_style_combination_preserves_every_instruction(self):
+        first = "Pencil drawing; keep scene intact"
+        second = "Bold watercolor, keep scene intact"
+        with patch("runtime.prompt_token_count", return_value=24):
+            prompt, tokens = combine_style_prompts([first, second])
+        self.assertIn(first, prompt)
+        self.assertIn(second, prompt)
+        self.assertLess(prompt.index(first), prompt.index(second))
+        self.assertEqual(prompt.count("keep scene intact"), 2)
+        self.assertEqual(tokens, 24)
+
     def test_defaults_keep_optional_upscaler_enabled(self):
         settings = normalize_settings({})
         self.assertEqual(settings, DEFAULT_SETTINGS)

@@ -670,11 +670,17 @@ def _run_from_launcher(directory, parent_pid, phone_access, wait_for_tailscale=F
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--dev", action="store_true", help="Serve checked-out code on localhost without the launcher.")
     parser.add_argument("--phone-access", action="store_true")
     parser.add_argument("--wait-for-tailscale", action="store_true")
     parser.add_argument("--launcher-session", type=Path)
     parser.add_argument("--launcher-process-id", type=int)
     args = parser.parse_args()
+    if args.dev:
+        if args.phone_access or args.wait_for_tailscale or args.launcher_session or args.launcher_process_id:
+            parser.error("--dev cannot be combined with launcher arguments.")
+        web.run_app(create_app(), host="127.0.0.1", port=PORT, access_log=None)
+        return
     if not args.launcher_session:
         parser.error("Start Reality Restyling from its launcher.")
     if not args.launcher_process_id:
