@@ -27,7 +27,7 @@ jobs:
       - name: Compile Python and run targeted tests
         run: |
           python -m compileall -q -x '/(\.git|\.venv|dist)/' .
-          python -m unittest discover -s tests -v
+          timeout --signal=INT --kill-after=5s 60s python -u -m unittest discover -s tests -v
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

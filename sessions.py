@@ -17,7 +17,7 @@ class SessionManager:
         self.last_seen = 0.0
         self.transport = None
 
-    async def claim(self):
+    async def transfer_control(self):
         """Explicit Start transfers ownership. Caller holds the lifecycle lock."""
         self.token = secrets.token_urlsafe(32)
         self.last_seen = time.monotonic()
@@ -30,13 +30,13 @@ class SessionManager:
         if touch:
             self.last_seen = time.monotonic()
 
-    def reserve(self, token, transport):
+    def attach_transport(self, token, transport):
         self.require(token)
         if self.transport is not None:
             raise web.HTTPConflict(text="A camera session is already active.")
         self.transport = transport
 
-    def discard(self, transport):
+    def detach_transport(self, transport):
         if self.transport is transport:
             self.transport = None
 

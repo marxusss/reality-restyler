@@ -8,13 +8,14 @@ from unittest.mock import patch
 from aiohttp.test_utils import TestClient, TestServer
 
 import app
+import user_styles
 
 
 class UserStylePersistenceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.styles_path = Path(self.temp_dir.name) / "user_styles.json"
-        self.path_patch = patch.object(app, "USER_STYLES_PATH", self.styles_path)
+        self.path_patch = patch.object(user_styles, "USER_STYLES_PATH", self.styles_path)
         self.path_patch.start()
         self.client = TestClient(TestServer(app.create_app()))
         await self.client.start_server()
@@ -111,7 +112,7 @@ class UserStylePersistenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({item["id"] for item in styles}, {style(index)["id"] for index in range(101)})
 
     async def test_user_config_is_outside_install_directory(self):
-        self.assertNotIn(app.ROOT.resolve(), app.USER_STYLES_PATH.resolve().parents)
+        self.assertNotIn(app.ROOT.resolve(), user_styles.USER_STYLES_PATH.resolve().parents)
 
     async def test_invalid_save_does_not_replace_saved_styles(self):
         valid = {"id": "one", "name": "First", "prompt": "current", "thumbnail": None, "updatedAt": 1}
