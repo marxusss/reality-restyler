@@ -136,6 +136,7 @@ def build(root: Path, sha: str, repository: str):
                 tree = None
 
             found = set()
+            arrow_spans = []
             if tree is not None:
                 stack = [tree.root_node]
                 while stack:
@@ -143,12 +144,14 @@ def build(root: Path, sha: str, repository: str):
                     stack.extend(reversed(node.named_children))
                     kind = node.type
                     accepted = kind in FUNCTION_TYPES.get(lang, set())
-                    if lang == "powershell" and "function" in kind:
-                        accepted = True
-                    if lang == "powershell" and kind in {"script_block_expression", "scriptblock_expression"}:
-                        accepted = True
+                    if lang == "powershell":
+                        # Explicit PowerShell function definitions are audited using
+                        # FUNCTION lines below; don't count grammar function_body nodes.
+                        accepted = kind in {"script_block_expression", "scriptblock_expression"}
                     if not accepted:
                         continue
+                    if lang == "javascript" and kind == "arrow_function":
+                        arrow_spans.append((node.start_byte, node.end_byte))
                     snippet = source_text(raw, node.start_byte, node.end_byte)
                     name_node = node.child_by_field_name("name")
                     name = source_text(raw, name_node.start_byte, name_node.end_byte) if name_node else ""
@@ -178,20 +181,20 @@ def build(root: Path, sha: str, repository: str):
                     line = source[:match.start()].count("\n") + 1
                     if not any(n["path"] == path and n["line"] == line and n["name"] == match.group(1) for n in nodes):
                         add(path, match.group(1), line, line, "function", lang, source[match.start():match.start()+200])
-                for match in re.finditer(r"\bAdd_(\w+)\s*\(\s*\{|\b(?:ForEach-Object|Where-Object|Register-ObjectEvent)\s*\{", source, re.I):
+                for match in re.finditer(r"\bAdd_(\w+)\s*\(\s*\{|\b(?:ForEach-Object|Where-Object|Register-ObjectEvent)\s*\{|\b(?:-Action|-ScriptBlock|-Process)\s*\{|^\s*\$[\w:]+\s*=\s*\{", source, re.I | re.M):
                     line = source[:match.start()].count("\n") + 1
                     if not any(n["path"] == path and n["line"] == line and n["kind"] == "callback" for n in nodes):
                         add(path, "event:" + (match.group(1) or "scriptblock"), line, line, "callback", lang, source[match.start():match.start()+250])
             if lang == "javascript":
-                # Audit arrow tokens; if the parser missed one, keep a visible inventory entry.
-                line_arrows = collections.Counter()
-                for match in re.finditer(r"=>", source):
-                    line_arrows[source[:match.start()].count("\n")+1] += 1
-                parsed = collections.Counter(n["line"] for n in nodes if n["path"] == path and n["kind"] == "callback")
-                for line, total in line_arrows.items():
-                    for index in range(max(0, total - parsed[line])):
-                        add(path, f"arrow@{line}:{index+1}", line, line, "callback", lang, source.splitlines()[line-1])
-                        findings.append(f"{path}:{line}: arrow recovered by lexical audit")
+                # Audit actual => byte offsets against parsed arrow_function spans,
+                # including multiline arrows whose definition starts on an earlier line.
+                for match in re.finditer(rb"=>", raw):
+                    if any(a <= match.start() < b for a, b in arrow_spans):
+                        continue
+                    line = raw[:match.start()].count(b"\n") + 1
+                    add(path, f"arrow@{line}", line, line, "callback", lang,
+                        source.splitlines()[line-1])
+                    findings.append(f"{path}:{line}: arrow recovered by lexical audit")
             if lang == "csharp":
                 for match in re.finditer(r"^\s*(?:public|private|internal|protected|static)\s+(?:static\s+)?[\w<>,?\[\]\s]+\s+(\w+)\s*\(", source, re.M):
                     line = source[:match.start()].count("\n") + 1
