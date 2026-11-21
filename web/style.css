@@ -700,3 +700,4 @@ textarea:focus, select:focus {
 
 /* Delete is only shown while editing an existing custom style. */
 .style-delete { color: #f5a5a5; }
+#deleteStyleButton[hidden] { display: none; }
