@@ -19,6 +19,7 @@ from aiohttp import WSMsgType, web
 from aiortc import RTCConfiguration, RTCPeerConnection, RTCSessionDescription
 
 from local_frames import process_frame
+from preferences import read_preferences, save_preferences
 from log_retention import enable_logging, prune_logs
 from runtime import Runtime, combine_style_prompts
 from sessions import PROTOCOL_PREFIX, SESSION_KEY, TOKEN_HEADER, SessionManager
@@ -282,6 +283,14 @@ async def save_user_styles(request):
         return web.json_response({"error": "Could not save custom styles."}, status=500)
     return web.json_response({"styles": styles})
 
+async def get_preferences(_request):
+    try:
+        settings = await asyncio.to_thread(read_preferences)
+    except RuntimeError as exc:
+        return web.json_response({"error": str(exc)}, status=500)
+    return web.json_response({"settings": settings})
+
+
 async def health(_request):
     return web.json_response({"ok": True, "loaded": await asyncio.to_thread(runtime.loaded)})
 
@@ -408,6 +417,8 @@ async def start_runtime(request):
 
             try:
                 result = await asyncio.to_thread(runtime.start, settings, allow_low_vram, report_stage)
+                if result.get("ok"):
+                    await asyncio.to_thread(save_preferences, runtime.settings())
             finally:
                 progress.pop(startup_id, None)
                 require_owner(request)
@@ -439,9 +450,13 @@ async def update_settings(request):
         async with request.app[SESSION_KEY].lock:
             require_owner(request)
             result = runtime.set_settings(data["settings"])
+            if set(data["settings"]) & {"prompt", "steps", "resolution", "upscale"}:
+                await asyncio.to_thread(save_preferences, result)
         return web.json_response({"ok": True, "settings": result})
     except ValueError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=422)
+    except (OSError, RuntimeError) as exc:
+        return web.json_response({"ok": False, "error": "Could not save the camera settings."}, status=500)
 
 
 async def heartbeat(request):
@@ -744,6 +759,7 @@ def create_app():
     app.router.add_post("/styles/combine", combine_styles)
     app.router.add_get("/styles/user", get_user_styles)
     app.router.add_post("/styles/user", save_user_styles)
+    app.router.add_get("/preferences", get_preferences)
     app.router.add_get("/health", health)
     app.router.add_get("/metrics", metrics)
     app.router.add_get("/transport", transport_mode)
