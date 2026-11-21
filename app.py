@@ -17,7 +17,7 @@ from local_frames import process_frame
 from preferences import read_preferences, save_preferences
 from log_retention import enable_logging, prune_logs
 from phone_access import (
-    tailscale_json, tailscale_status, tailscale_dns_name, tailscale_addresses,
+    tailscale_status, tailscale_dns_name, tailscale_addresses,
     reserve_listener_sockets, tls_context, tls_renewal_loop,
 )
 from runtime import Runtime, combine_style_prompts
@@ -35,7 +35,6 @@ STARTUP_PROGRESS_KEY = web.AppKey("startup_progress", dict)
 TLS_CONTEXT_KEY = web.AppKey("tls_context", ssl.SSLContext)
 TLS_RENEW_TASK_KEY = web.AppKey("tls_renew_task", asyncio.Task)
 PHONE_DNS_NAME_KEY = web.AppKey("phone_dns_name", str)
-PHONE_OWNER_KEY = web.AppKey("phone_owner", int)
 PORT_OVERRIDE = os.environ.get("REALITY_RESTYLE_PORT")
 PORT_IS_EXPLICIT = bool(PORT_OVERRIDE)
 PORT = int(PORT_OVERRIDE or "8781")
@@ -141,27 +140,7 @@ async def combine_styles(request):
         return web.json_response({"error": "Could not check the style prompt. Check the model files."}, status=503)
     return web.json_response({"prompt": prompt, "tokens": tokens})
 
-async def _require_user_data_access(request):
-    try:
-        address = ipaddress.ip_address(str(request.remote or "").split("%")[0])
-    except ValueError:
-        raise web.HTTPForbidden() from None
-    if getattr(address, "ipv4_mapped", None):
-        address = address.ipv4_mapped
-    if address.is_loopback:
-        return
-    owner = request.app.get(PHONE_OWNER_KEY)
-    if request.secure and owner:
-        identity = await asyncio.to_thread(tailscale_json, "whois", "--json", address.compressed)
-        node = identity.get("Node") or {}
-        user = identity.get("UserProfile") or {}
-        if not node.get("Tags") and node.get("User") == owner and user.get("ID") == owner:
-            return
-    raise web.HTTPForbidden(text="This device cannot access the host's saved styles.")
-
-
 async def get_user_styles(request):
-    await _require_user_data_access(request)
     try:
         styles = await asyncio.to_thread(read_user_styles)
     except Exception as exc:
@@ -170,7 +149,6 @@ async def get_user_styles(request):
     return web.json_response({"styles": styles})
 
 async def save_user_styles(request):
-    await _require_user_data_access(request)
     data = await _json(request)
     try:
         styles = await asyncio.to_thread(write_user_styles, data.get("styles"))
@@ -182,7 +160,6 @@ async def save_user_styles(request):
     return web.json_response({"styles": styles})
 
 async def get_preferences(request):
-    await _require_user_data_access(request)
     try:
         settings = await asyncio.to_thread(read_preferences)
     except (OSError, RuntimeError):
@@ -200,17 +177,12 @@ async def _persist_preferences(settings):
 
 
 async def update_preferences(request):
-    await _require_user_data_access(request)
     data = await _json(request)
     if set(data) != {"settings"} or not isinstance(data["settings"], dict):
         raise web.HTTPBadRequest(text="Invalid settings.")
     if set(data["settings"]) - {"prompt", "steps", "resolution", "upscale"}:
         raise web.HTTPBadRequest(text="Unsupported preference.")
-    manager = request.app[SESSION_KEY]
     async with request.app[PREFERENCES_LOCK_KEY]:
-        async with manager.lock:
-            if manager.token:
-                require_owner(request)
         try:
             previous = await asyncio.to_thread(read_preferences)
             updated = {**previous, **data["settings"]}
@@ -343,8 +315,9 @@ async def start_runtime(request):
     def report_stage(value):
         stage["value"] = value
 
+    token = request.headers.get(TOKEN_HEADER)
     async with manager.lock:
-        require_owner(request)
+        manager.begin_start(token)
         if startup_id:
             progress[startup_id] = stage
 
@@ -376,6 +349,8 @@ async def start_runtime(request):
         print(f"Runtime startup failed: {type(exc).__name__}: {exc}", flush=True)
         return web.json_response({"ok": False, "error": f"Start failed: {type(exc).__name__}: {exc}"}, status=503)
     finally:
+        async with manager.lock:
+            manager.finish_start(token)
         if startup_id and progress.get(startup_id) is stage:
             progress.pop(startup_id, None)
 
@@ -458,39 +433,42 @@ async def offer(request):
         pc = RTCPeerConnection(RTCConfiguration(iceServers=[]))
         manager.attach_transport(request.headers.get(TOKEN_HEADER), pc)
 
-        @pc.on("track")
-        def on_track(track):
-            if track.kind == "video":
-                pc.addTrack(RestyleTrack(track, runtime))
+    @pc.on("track")
+    def on_track(track):
+        if track.kind == "video":
+            pc.addTrack(RestyleTrack(track, runtime))
 
-        @pc.on("connectionstatechange")
-        async def on_connectionstatechange():
-            if pc.connectionState in {"failed", "closed"}:
-                manager.detach_transport(pc)
-                if pc.connectionState != "closed":
-                    await pc.close()
-
-        async def negotiate():
-            await pc.setRemoteDescription(RTCSessionDescription(sdp=data["sdp"], type="offer"))
-            answer = await pc.createAnswer()
-            await pc.setLocalDescription(answer)
-            local = pc.localDescription
-            if not local or not local.sdp:
-                raise RuntimeError("The host produced an empty WebRTC answer.")
-            return web.json_response({"sdp": local.sdp, "type": "answer"})
-
-        try:
-            return await asyncio.wait_for(negotiate(), timeout=20)
-        except (Exception, asyncio.CancelledError) as exc:
+    @pc.on("connectionstatechange")
+    async def on_connectionstatechange():
+        if pc.connectionState in {"failed", "closed"}:
             manager.detach_transport(pc)
-            try:
+            if pc.connectionState != "closed":
                 await pc.close()
-            except Exception:
-                pass
-            if isinstance(exc, asyncio.CancelledError):
-                raise
-            print(f"WebRTC negotiation failed: {type(exc).__name__}: {exc}", flush=True)
-            return web.json_response({"ok": False, "error": "Could not connect the camera."}, status=502)
+
+    # Signaling must not hold the controller lock: another device can
+    # take over while this device is negotiating a connection.
+    try:
+        await pc.setRemoteDescription(RTCSessionDescription(sdp=data["sdp"], type="offer"))
+        answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+        local = pc.localDescription
+        if not local or not local.sdp:
+            raise RuntimeError("The host produced an empty WebRTC answer.")
+        async with manager.lock:
+            require_owner(request, touch=False)
+            if manager.transport is not pc:
+                raise web.HTTPConflict(text="Camera control moved to another device.")
+        return web.json_response({"sdp": local.sdp, "type": "answer"})
+    except (Exception, asyncio.CancelledError) as exc:
+        manager.detach_transport(pc)
+        try:
+            await pc.close()
+        except Exception:
+            pass
+        if isinstance(exc, (asyncio.CancelledError, web.HTTPException)):
+            raise
+        print(f"WebRTC negotiation failed: {type(exc).__name__}: {exc}", flush=True)
+        return web.json_response({"ok": False, "error": "Could not connect the camera."}, status=502)
 
 
 async def idle_reaper(app):
@@ -620,9 +598,6 @@ async def _run_launcher_server(directory, stopped, phone_access, wait_for_tailsc
         tls = await asyncio.to_thread(tls_context, dns_name)
         application[TLS_CONTEXT_KEY] = tls
         application[PHONE_DNS_NAME_KEY] = dns_name
-        owner = (status.get("Self") or {}).get("UserID")
-        if type(owner) is int and owner > 0:
-            application[PHONE_OWNER_KEY] = owner
 
     if stopped():
         return
