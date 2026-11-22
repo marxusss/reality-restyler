@@ -87,6 +87,7 @@ class Runtime:
         self._prompt_cache = OrderedDict()
         self._metrics = {
             "model_ms": 0.0,
+            "rendered_frames": 0,
             "upscale_ms": 0.0,
             "total_ms": 0.0,
             "error": "",
@@ -487,6 +488,7 @@ class Runtime:
             total_ms = (time.perf_counter() - generation_started) * 1000.0
             upscale_ms = upscale_load_ms + upscale_compute_ms
             with self._status_lock:
+                self._metrics["rendered_frames"] += 1
                 self._metrics.update({
                     "model_ms": round(model_ms, 1),
                     "upscale_ms": round(upscale_ms, 1),

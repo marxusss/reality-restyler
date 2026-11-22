@@ -101,12 +101,39 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
                            ("/start", {"settings": {}}), ("/offer", {"sdp": "fake", "type": "offer"})):
             response = await self.client.post(path, json=body, headers=self.headers)
             self.assertEqual(response.status, 409, path)
+            self.assertEqual((await response.json())["code"], "session_taken", path)
         response = await self.client.post("/heartbeat", json={}, headers={"X-Restyle-Session": new_token})
         self.assertEqual(response.status, 200)
         app.runtime.unload.assert_not_called()
         self.token = new_token
         new_socket = await self.open_socket()
         await new_socket.close()
+
+    async def test_visibility_resume_closes_stale_transport_without_changing_owner(self):
+        socket = await self.open_socket()
+        response = await self.client.post("/session", json={"resume": True}, headers=self.headers)
+        self.assertEqual((await response.json())["token"], self.token)
+        self.assertIn((await socket.receive(timeout=2)).type, (WSMsgType.CLOSE, WSMsgType.CLOSED, WSMsgType.CLOSING))
+        replacement = await self.open_socket()
+        await replacement.close()
+        app.runtime.unload.assert_not_called()
+
+    async def test_visibility_resume_can_reclaim_an_unowned_session(self):
+        await self.client.post("/stop", json={}, headers=self.headers)
+        late_pause = await self.client.post("/pause", json={}, headers=self.headers)
+        self.assertEqual(late_pause.status, 409)
+        self.assertEqual((await late_pause.json())["code"], "session_expired")
+
+        resumed = await self.client.post("/session", json={"resume": True}, headers=self.headers)
+        self.assertEqual((await resumed.json())["token"], self.token)
+        refused = await self.client.post("/session", json={"resume": True})
+        self.assertEqual(refused.status, 409)
+        self.assertEqual((await refused.json())["code"], "session_taken")
+
+        await self.client.post("/stop", json={}, headers=self.headers)
+        fresh = await self.client.post("/session", json={"resume": True})
+        self.assertEqual(fresh.status, 200)
+        self.assertNotEqual((await fresh.json())["token"], self.token)
 
     async def test_taking_control_does_not_wait_for_model_initialization(self):
         started_loading = threading.Event()

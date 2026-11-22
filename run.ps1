@@ -41,7 +41,7 @@ function Set-LauncherStage {
 
 Set-LauncherStage 'Checking the app environment'
 $runtimeDir = Join-Path $PSScriptRoot '.runtime'
-$bundledPython = Join-Path $PSScriptRoot 'python\python.exe'
+$bundledPython = Join-Path $PSScriptRoot 'python\pythonw.exe'
 $runtimeCheck = Join-Path $PSScriptRoot 'runtime_cleanup.py'
 if (-not (Test-Path -LiteralPath $bundledPython -PathType Leaf) -or -not (Test-Path -LiteralPath $runtimeCheck -PathType Leaf)) {
     Stop-Launcher 'The local runtime is incomplete. Run RealityRestylingSetup.exe again, then reopen Reality Restyling.'
@@ -56,7 +56,7 @@ if ($runtimeExit -ne 0) {
 }
 $env:PIP_CACHE_DIR = Join-Path $runtimeDir 'cache\pip'
 $env:HF_HUB_CACHE = Join-Path $runtimeDir 'cache\huggingface'
-$python = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+$python = Join-Path $PSScriptRoot '.venv\Scripts\pythonw.exe'
 $modelsPathFile = Join-Path $runtimeDir 'models.path'
 $modelSetup = Join-Path $PSScriptRoot 'model_setup.py'
 $savedRoot = if (Test-Path -LiteralPath $modelsPathFile -PathType Leaf) {
@@ -218,7 +218,7 @@ if ($PhoneAccess) {
 
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
-& $python @serverArguments
+& $python -u @serverArguments | ForEach-Object { Write-Host $_ }
 $exitCode = $LASTEXITCODE
 $ErrorActionPreference = $previousPreference
 exit $exitCode

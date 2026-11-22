@@ -5,9 +5,11 @@ Add-Type -AssemblyName System.Drawing
 [Windows.Forms.Application]::EnableVisualStyles()
 
 Add-Type -TypeDefinition @"
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
-using System.Runtime.InteropServices;
+using System.IO;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 public class RestylePanel : Panel {
     public int Radius = 18;
@@ -50,26 +52,45 @@ public class RestyleButton : Button {
         }
     }
 }
-public static class RestyleWindow {
-    [DllImport("user32.dll")] public static extern bool ShowWindowAsync(System.IntPtr window, int command);
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr window);
-}
-"@ -ReferencedAssemblies System.Windows.Forms,System.Drawing
+public static class RestyleProcess {
+    public static Process StartLogged(ProcessStartInfo info, string output, string error) {
+        info.RedirectStandardOutput = true;
+        info.RedirectStandardError = true;
+        var process = Process.Start(info);
+        Task.WhenAll(
+            CopyLog(process.StandardOutput.BaseStream, output),
+            CopyLog(process.StandardError.BaseStream, error)
+        ).ContinueWith(task => System.Console.Error.WriteLine(task.Exception), TaskContinuationOptions.OnlyOnFaulted);
+        return process;
+    }
 
+    private static async Task CopyLog(Stream source, string path) {
+        using (source)
+        using (var file = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read, 1, true)) {
+            await source.CopyToAsync(file).ConfigureAwait(false);
+        }
+    }
+}
+"@ -ReferencedAssemblies System,System.Windows.Forms,System.Drawing
+
+$showLauncherEvent = [Threading.EventWaitHandle]::new($false, [Threading.EventResetMode]::AutoReset, 'Local\RealityRestylingShowLauncher')
 $launcherMutex = [Threading.Mutex]::new($false, 'Local\RealityRestylingLauncher')
 $ownsLauncherMutex = $false
 try { $ownsLauncherMutex = $launcherMutex.WaitOne(0) }
 catch [Threading.AbandonedMutexException] { $ownsLauncherMutex = $true }
 if (-not $ownsLauncherMutex) {
-    $existing = Get-Process -Name powershell,pwsh -ErrorAction SilentlyContinue |
-        Where-Object { $_.Id -ne $PID -and $_.MainWindowTitle -eq 'Reality Restyling' } |
-        Select-Object -First 1
-    if ($existing -and $existing.MainWindowHandle -ne [IntPtr]::Zero) {
-        [void][RestyleWindow]::ShowWindowAsync($existing.MainWindowHandle, 9)
-        [void][RestyleWindow]::SetForegroundWindow($existing.MainWindowHandle)
-    }
+    if (-not $PhoneStartup) { [void]$showLauncherEvent.Set() }
     $launcherMutex.Dispose()
+    $showLauncherEvent.Dispose()
     exit 0
+}
+
+function New-BackgroundProcessInfo([string]$FilePath, [string[]]$Arguments) {
+    $info = [Diagnostics.ProcessStartInfo]::new($FilePath, ($Arguments -join ' '))
+    $info.WorkingDirectory = $PSScriptRoot
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    return $info
 }
 
 $background = [Drawing.ColorTranslator]::FromHtml('#F2F1ED')
@@ -90,6 +111,14 @@ $window.Font = [Drawing.Font]::new('Segoe UI', 10)
 $window.AutoScaleDimensions = [Drawing.SizeF]::new(96, 96)
 $window.AutoScaleMode = 'Dpi'
 $window.ClientSize = [Drawing.Size]::new(500, 230)
+$application = [Windows.Forms.ApplicationContext]::new()
+$tray = [Windows.Forms.NotifyIcon]::new()
+$tray.Icon = [Drawing.SystemIcons]::Application
+$tray.Text = $window.Text
+$trayMenu = [Windows.Forms.ContextMenuStrip]::new()
+$openLauncher = $trayMenu.Items.Add('Open launcher')
+$quitLauncher = $trayMenu.Items.Add('Quit')
+$tray.ContextMenuStrip = $trayMenu
 
 function Add-Control($Parent, $Type, $Text, $X, $Y, $Width, $Height) {
     $control = switch ($Type) {
@@ -125,7 +154,7 @@ $phoneStatus.ForeColor = $muted
 $phoneSetup = Add-Control $mode Button 'Set up' 344 8 94 32
 $phoneSetup.Visible = $false
 $storedPhoneMode = (Get-ItemProperty -LiteralPath 'HKCU:\Software\RealityRestyling' -Name PhoneAccessEnabled -ErrorAction SilentlyContinue).PhoneAccessEnabled
-$phone.Checked = $PhoneStartup -or ($storedPhoneMode -eq 1)
+$phone.Checked = $storedPhoneMode -eq 1
 
 $statusCard = Add-Control $window Panel '' 24 88 452 118
 $statusTitle = Add-Control $statusCard Label '' 18 16 416 27
@@ -137,7 +166,7 @@ $start = Add-Control $statusCard Button '&Start server' 18 58 194 42
 $start.BackColor = $accent
 $start.ForeColor = [Drawing.Color]::White
 $stop = Add-Control $statusCard Button 'S&top server' 18 58 194 42
-$log = Add-Control $statusCard Button 'View &logs' 298 58 136 42
+$log = Add-Control $statusCard Button 'View &logs' 222 58 212 42
 $log.Enabled = $false
 
 $desktopCard = Add-Control $window Panel '' 24 222 452 134
@@ -161,13 +190,10 @@ $qr = Add-Control $phoneCard PictureBox '' 314 14 120 120
 $qr.SizeMode = 'Zoom'
 $qr.AccessibleName = 'Phone access QR code'
 
-$startupCheck = Add-Control $window CheckBox 'Start phone server with Windows' 24 0 260 24
+$startupCheck = Add-Control $window CheckBox 'Start with Windows' 24 0 260 24
 $startupCheck.BackColor = $background
 $startupCheck.ForeColor = $foreground
 $startupCheck.AutoSize = $true
-$startupWarning = Add-Control $window Label 'Starts at sign-in; model stays unloaded.' 298 0 178 22
-$startupWarning.ForeColor = $muted
-$startupWarning.Font = [Drawing.Font]::new('Segoe UI', 8.5)
 
 $autoUnloadLabel = Add-Control $window Label 'Auto-unload after' 24 0 177 24
 $autoUnloadInput = Add-Control $window NumericUpDown '' 208 0 86 26
@@ -236,7 +262,6 @@ $startupApprovalValueName = 'PhoneStartupApprovedHostname'
 $phoneApprovalValueName = 'PhoneAccessApprovedHostname'
 $startupValue = (Get-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -ErrorAction SilentlyContinue).$startupValueName
 $startupCheck.Checked = $startupValue -eq $startupCommand
-$startupWarning.Visible = $startupCheck.Checked
 
 function Get-PhoneAccessApproval {
     $value = (Get-ItemProperty -LiteralPath $startupApprovalKeyPath -Name $phoneApprovalValueName -ErrorAction SilentlyContinue).$phoneApprovalValueName
@@ -268,9 +293,15 @@ function Get-TailscaleDnsName {
     $tailscale = Find-TailscaleExecutable
     if (-not $tailscale) { return '' }
     try {
-        $output = & $tailscale status --json 2>$null
-        if ($LASTEXITCODE -ne 0) { return '' }
-        $status = ($output -join [Environment]::NewLine) | ConvertFrom-Json
+        $info = New-BackgroundProcessInfo $tailscale @('status', '--json')
+        $info.RedirectStandardOutput = $true
+        $process = [Diagnostics.Process]::Start($info)
+        try {
+            $output = $process.StandardOutput.ReadToEndAsync()
+            if (-not $process.WaitForExit(5000)) { $process.Kill(); return '' }
+            if ($process.ExitCode -ne 0) { return '' }
+            $status = $output.GetAwaiter().GetResult() | ConvertFrom-Json
+        } finally { $process.Dispose() }
         if ($status.BackendState -ne 'Running') { return '' }
         $hostname = ([string]$status.Self.DNSName).Trim().TrimEnd([char[]]@('.')).ToLowerInvariant()
         if ($hostname -notmatch '^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$') { return '' }
@@ -280,10 +311,11 @@ function Get-TailscaleDnsName {
 
 $logDirectory = Join-Path $PSScriptRoot '.runtime\logs'
 [void][IO.Directory]::CreateDirectory($logDirectory)
-$logPython = Join-Path $PSScriptRoot 'python\python.exe'
+$logPython = Join-Path $PSScriptRoot 'python\pythonw.exe'
 function Invoke-LogPrune {
     if (Test-Path -LiteralPath $logPython -PathType Leaf) {
-        Start-Process -FilePath $logPython -ArgumentList @('-B', ('"{0}"' -f (Join-Path $PSScriptRoot 'log_retention.py')), '--prune') -WindowStyle Hidden | Out-Null
+        $info = New-BackgroundProcessInfo $logPython @('-B', ('"{0}"' -f (Join-Path $PSScriptRoot 'log_retention.py')), '--prune')
+        [Diagnostics.Process]::Start($info).Dispose()
     }
 }
 Invoke-LogPrune
@@ -291,7 +323,7 @@ $logTimer = [Windows.Forms.Timer]::new()
 $logTimer.Interval = 3600000
 $logTimer.Add_Tick({ Invoke-LogPrune })
 $logTimer.Start()
-$state = @{ Worker = $null; Directory = $null; StopStarted = $null; Name = 'stopped'; Closing = $false; PhonePrompted = $false; UpdateWorker = $null; UpdateDirectory = $null; UpdateMode = ''; PendingUpdate = $null; UpdateTag = ''; StartupUpdating = $false; NextStartUnattended = $false; Unattended = $false; StartupFailure = '' }
+$state = @{ Worker = $null; Directory = $null; StopStarted = $null; Name = 'stopped'; Closing = $false; RestartRequested = $false; PhonePrompted = $false; UpdateWorker = $null; UpdateDirectory = $null; UpdateMode = ''; PendingUpdate = $null; UpdateTag = ''; CheckOnOpen = -not $FirstLaunch; OpenFirstRun = [bool]$FirstLaunch; StartupUpdating = $false; Unattended = $false; StartupFailure = '' }
 $timer = [Windows.Forms.Timer]::new()
 $timer.Interval = 250
 
@@ -304,9 +336,9 @@ function Show-State($Name, $Heading, $Detail) {
     $statusCard.Height = if ($Detail) { 164 } else { 118 }
     $actionY = if ($Detail) { 104 } else { 58 }
     foreach ($button in @($start, $stop, $log)) { $button.Top = $actionY }
-    $mode.Enabled = $null -eq $state.Worker
+    $mode.Enabled = $Name -in @('stopped', 'ready', 'error')
     $cpuOffloadCheck.Enabled = $null -eq $state.Worker
-    $start.Enabled = $mode.Enabled -and -not $state.Closing
+    $start.Enabled = $null -eq $state.Worker -and -not $state.Closing
     $start.Text = if ($Name -eq 'error') { '&Try again' } else { '&Start server' }
     $start.Visible = $Name -in @('stopped', 'error')
     $stop.Visible = $Name -in @('starting', 'ready', 'stopping')
@@ -330,15 +362,16 @@ function Show-State($Name, $Heading, $Detail) {
 }
 
 function Sync-PhoneCard {
-    $phoneStatus.Text = if (-not $phone.Checked) { 'Disabled' } elseif ($state.Name -eq 'ready') { if ($phoneUrl.Text) { 'Ready' } else { 'Setup required' } } else { 'Enabled' }
-    $phoneStatus.ForeColor = if (-not $phone.Checked) { $muted } elseif ($state.Name -eq 'ready' -and $phoneUrl.Text) { $accent } else { [Drawing.ColorTranslator]::FromHtml('#AB7F2A') }
-    $phoneSetup.Visible = $phone.Checked -and -not ($state.Name -eq 'ready' -and $phoneUrl.Text)
+    $desktopReady = $state.Name -eq 'ready'
+    $phoneReady = $desktopReady -and $phone.Checked -and [bool]$phoneUrl.Text
+    $phoneStatus.Text = if (-not $phone.Checked) { 'Disabled' } elseif ($phoneReady) { 'Ready' } elseif ($desktopReady) { 'Setup required' } else { 'Enabled' }
+    $phoneStatus.ForeColor = if (-not $phone.Checked) { $muted } elseif ($phoneReady) { $accent } else { [Drawing.ColorTranslator]::FromHtml('#AB7F2A') }
+    $phoneSetup.Visible = $phone.Checked -and -not $phoneReady
     $desktopCard.Top = $statusCard.Bottom + 16
-    $phoneCard.Visible = $state.Name -eq 'ready' -and $phone.Checked -and [bool]$phoneUrl.Text
-    $phoneCard.Top = if ($desktopCard.Visible) { $desktopCard.Bottom + 16 } else { $statusCard.Bottom + 16 }
-    $bottom = if ($phoneCard.Visible) { $phoneCard.Bottom } elseif ($desktopCard.Visible) { $desktopCard.Bottom } else { $statusCard.Bottom }
+    $phoneCard.Visible = $phoneReady
+    $phoneCard.Top = if ($desktopReady) { $desktopCard.Bottom + 16 } else { $statusCard.Bottom + 16 }
+    $bottom = if ($phoneReady) { $phoneCard.Bottom } elseif ($desktopReady) { $desktopCard.Bottom } else { $statusCard.Bottom }
     $startupCheck.Top = $bottom + 12
-    $startupWarning.Top = $bottom + 15
     $autoUnloadLabel.Top = $startupCheck.Bottom + 12
     $autoUnloadInput.Top = $autoUnloadLabel.Top
     $autoUnloadUnit.Top = $autoUnloadLabel.Top + 3
@@ -346,54 +379,52 @@ function Sync-PhoneCard {
     $window.ClientSize = [Drawing.Size]::new($window.ClientSize.Width, $cpuOffloadCheck.Bottom + 16)
 }
 
-function Set-PhoneStartup($Enabled) {
+function Set-WindowsStartup($Enabled) {
     if ($state.StartupUpdating) { return }
     $state.StartupUpdating = $true
-    $hadStartup = $false
     $createdStartup = $false
     try {
         $current = (Get-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -ErrorAction SilentlyContinue).$startupValueName
         if ($Enabled) {
             if ($current -and $current -ne $startupCommand) {
-                Clear-PhoneStartupApproval
                 $startupCheck.Checked = $false
-                $startupWarning.Visible = $false
                 [Windows.Forms.MessageBox]::Show($window, 'Another startup entry uses this name.', 'Reality Restyling', [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Error) | Out-Null
                 return
             }
-            $hostname = Get-TailscaleDnsName
-            if (-not $hostname) {
-                Clear-PhoneStartupApproval
-                $startupCheck.Checked = $false
-                [Windows.Forms.MessageBox]::Show($window, 'Connect Tailscale before enabling phone startup.', 'Reality Restyling', [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Error) | Out-Null
-                return
+            $hostname = ''
+            if ($phone.Checked) {
+                $hostname = Get-TailscaleDnsName
+                if (-not $hostname) {
+                    $startupCheck.Checked = $false
+                    [Windows.Forms.MessageBox]::Show($window, 'Connect Tailscale before enabling phone startup.', 'Reality Restyling', [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+                    return
+                }
+                $question = "Allow phone access at Windows sign-in for this exact Tailscale hostname?`n`n$hostname`n`nThis name may appear in public certificate logs."
+                $reply = [Windows.Forms.MessageBox]::Show($window, $question, 'Phone startup approval', [Windows.Forms.MessageBoxButtons]::YesNo, [Windows.Forms.MessageBoxIcon]::Warning, [Windows.Forms.MessageBoxDefaultButton]::Button2)
+                if ($reply -ne [Windows.Forms.DialogResult]::Yes) {
+                    $startupCheck.Checked = $false
+                    return
+                }
             }
-            $question = "Allow phone access at Windows sign-in for this exact Tailscale hostname?`n`n$hostname`n`nThis name may appear in public certificate logs."
-            $reply = [Windows.Forms.MessageBox]::Show($window, $question, 'Phone startup approval', [Windows.Forms.MessageBoxButtons]::YesNo, [Windows.Forms.MessageBoxIcon]::Warning, [Windows.Forms.MessageBoxDefaultButton]::Button2)
-            if ($reply -ne [Windows.Forms.DialogResult]::Yes) {
-                Clear-PhoneStartupApproval
-                $startupCheck.Checked = $false
-                return
-            }
-            $hadStartup = $current -eq $startupCommand
-            if (-not $hadStartup) {
+            if ($current -ne $startupCommand) {
                 if (-not (Test-Path -LiteralPath $startupKeyPath)) {
                     New-Item -Path $startupKeyPath -ErrorAction Stop | Out-Null
                 }
                 Set-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -Value $startupCommand -ErrorAction Stop
                 $createdStartup = $true
             }
-            if (-not (Test-Path -LiteralPath $startupApprovalKeyPath)) {
-                New-Item -Path $startupApprovalKeyPath -ErrorAction Stop | Out-Null
+            if ($hostname) {
+                if (-not (Test-Path -LiteralPath $startupApprovalKeyPath)) {
+                    New-Item -Path $startupApprovalKeyPath -ErrorAction Stop | Out-Null
+                }
+                Set-ItemProperty -LiteralPath $startupApprovalKeyPath -Name $startupApprovalValueName -Value $hostname -ErrorAction Stop
             }
-            Set-ItemProperty -LiteralPath $startupApprovalKeyPath -Name $startupApprovalValueName -Value $hostname -ErrorAction Stop
         } else {
             Clear-PhoneStartupApproval
             if ($current -eq $startupCommand) {
                 Remove-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -ErrorAction Stop
             }
         }
-        $startupWarning.Visible = $Enabled
     } catch {
         if ($Enabled) {
             if ($createdStartup) {
@@ -403,7 +434,6 @@ function Set-PhoneStartup($Enabled) {
             try { Clear-PhoneStartupApproval } catch { }
         }
         $startupCheck.Checked = -not [bool]$Enabled
-        $startupWarning.Visible = $startupCheck.Checked
         [Windows.Forms.MessageBox]::Show($window, 'Could not update Windows startup.', 'Reality Restyling', [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Error) | Out-Null
     } finally {
         $state.StartupUpdating = $false
@@ -463,7 +493,7 @@ function Start-UpdateProcess($Action, $Tag = '') {
         '-Action', $Action, '-SessionPath', ('"{0}"' -f $state.UpdateDirectory),
         '-LauncherProcessId', $PID, '-InstallRoot', ('"{0}"' -f $PSScriptRoot))
     if ($Tag) { $arguments += @('-VersionTag', $Tag) }
-    return Start-Process -FilePath $powershell -ArgumentList $arguments -WindowStyle Hidden -PassThru
+    return [Diagnostics.Process]::Start((New-BackgroundProcessInfo $powershell $arguments))
 }
 
 function Start-UpdateCheck {
@@ -517,7 +547,8 @@ function Handle-UpdateCheck {
     }
 }
 
-$start.Add_Click({
+function Start-Server([switch]$Unattended) {
+    if ($state.Worker -or $state.Closing) { return }
     try {
         $state.PhonePrompted = $false
         $state.StartupFailure = ''
@@ -528,27 +559,34 @@ $start.Add_Click({
         $arguments = @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f (Join-Path $PSScriptRoot 'run.ps1')),
             '-LauncherSession', ('"{0}"' -f $state.Directory), '-LauncherProcessId', $PID,
             '-AutoUnloadSeconds', [int]$autoUnloadInput.Value)
-        if ($phone.Checked) { $arguments += '-PhoneAccess' }
-        $state.Unattended = $state.NextStartUnattended -and $phone.Checked
-        $state.NextStartUnattended = $false
+        $state.Unattended = [bool]$Unattended
+        if ($phone.Checked -and (-not $Unattended -or (Get-PhoneStartupApproval))) { $arguments += '-PhoneAccess' }
         if ($state.Unattended) { $arguments += '-Unattended' }
-        $workerOptions = @{
-            FilePath = (Join-Path ([Environment]::SystemDirectory) 'WindowsPowerShell\v1.0\powershell.exe')
-            ArgumentList = $arguments
-            WorkingDirectory = $PSScriptRoot
-            WindowStyle = 'Hidden'
-            PassThru = $true
-            RedirectStandardOutput = (Join-Path $logDirectory "launcher-$stamp-output.log")
-            RedirectStandardError = (Join-Path $logDirectory "launcher-$stamp-error.log")
-        }
-        $state.Worker = Start-Process @workerOptions
+        $powershell = Join-Path ([Environment]::SystemDirectory) 'WindowsPowerShell\v1.0\powershell.exe'
+        $info = New-BackgroundProcessInfo $powershell $arguments
+        $outputLog = Join-Path $logDirectory "launcher-$stamp-output.log"
+        $errorLog = Join-Path $logDirectory "launcher-$stamp-error.log"
+        $state.Worker = [RestyleProcess]::StartLogged($info, $outputLog, $errorLog)
         $log.Enabled = $true
         Show-State 'starting' 'Starting server' 'Checking the app environment'
         $timer.Start()
     } catch {
         Show-State 'error' 'Could not start the server' $_.Exception.Message
     }
-})
+}
+
+function Show-Launcher {
+    if ($state.Closing) { return }
+    $window.WindowState = 'Normal'
+    $window.Show()
+    $window.Activate()
+    if ($state.CheckOnOpen) {
+        $state.CheckOnOpen = $false
+        Start-UpdateCheck
+    }
+}
+
+$start.Add_Click({ Start-Server })
 $stop.Add_Click({ Request-Stop })
 $open.Add_Click({
     try { Start-Process $desktopUrl.Text }
@@ -570,36 +608,46 @@ $phoneSetup.Add_Click({
     } catch { Show-Detail 'Could not open Tailscale setup.' }
 })
 $phone.Add_CheckedChanged({
+    if (-not $phone.Enabled) { return }
     try {
         if (-not (Test-Path -LiteralPath 'HKCU:\Software\RealityRestyling')) {
-            New-Item -Path 'HKCU:\Software\RealityRestyling' -Force | Out-Null
+            New-Item -Path 'HKCU:\Software\RealityRestyling' -Force -ErrorAction Stop | Out-Null
         }
-        Set-ItemProperty -LiteralPath 'HKCU:\Software\RealityRestyling' -Name PhoneAccessEnabled -Value ([int]$phone.Checked)
-    } catch { Show-Detail 'Could not save phone access preference.' }
-    Sync-PhoneCard
-})
-$startupCheck.Add_CheckedChanged({ Set-PhoneStartup $startupCheck.Checked })
-$window.Add_Shown({
-    Sync-PhoneCard
-    $timer.Start()
-    if ($PhoneStartup -and $startupCheck.Checked) {
-        $state.NextStartUnattended = $true
-        $start.PerformClick()
-    } elseif ($FirstLaunch) {
-        $start.PerformClick()
-    } else {
-        Start-UpdateCheck
+        Set-ItemProperty -LiteralPath 'HKCU:\Software\RealityRestyling' -Name PhoneAccessEnabled -Value ([int]$phone.Checked) -ErrorAction Stop
+    } catch {
+        $phone.Enabled = $false
+        $phone.Checked = -not $phone.Checked
+        $phone.Enabled = $true
+        Show-Detail 'Could not save phone access preference.'
+        return
     }
+    if ($state.Name -eq 'ready') {
+        $state.RestartRequested = $true
+        Request-Stop
+    } else {
+        Sync-PhoneCard
+    }
+})
+$startupCheck.Add_CheckedChanged({ Set-WindowsStartup $startupCheck.Checked })
+$openLauncher.Add_Click({ Show-Launcher })
+$quitLauncher.Add_Click({ $window.Close() })
+$tray.Add_MouseClick({
+    param($sender, $eventArgs)
+    if ($eventArgs.Button -eq [Windows.Forms.MouseButtons]::Left) { Show-Launcher }
+})
+$window.Add_Resize({
+    if ($window.WindowState -eq 'Minimized') { $window.Hide() }
 })
 
 $timer.Add_Tick({
+    if ($showLauncherEvent.WaitOne(0)) { Show-Launcher }
     if ($state.UpdateWorker) {
         try {
             $state.UpdateWorker.Refresh()
             $updateExited = $state.UpdateWorker.HasExited
         } catch { $updateExited = $true }
         $updateState = Read-JsonFile $state.UpdateDirectory 'update-state.json'
-        if ($state.UpdateMode -eq 'check' -and $updateExited) {
+        if ($state.UpdateMode -eq 'check' -and $updateExited -and $window.Visible) {
             Handle-UpdateCheck
         } elseif ($state.UpdateMode -eq 'install') {
             if ($updateState -and $updateState.phase -eq 'downloading') {
@@ -638,11 +686,11 @@ $timer.Add_Tick({
     if ($state.Worker -and $state.StopStarted -and -not $state.Worker.HasExited -and
         ([DateTime]::UtcNow - $state.StopStarted).TotalSeconds -gt 30) {
         $killArgs = '/PID ' + $state.Worker.Id + ' /T /F'
-        Start-Process -FilePath (Join-Path $env:WINDIR 'System32\taskkill.exe') -ArgumentList $killArgs -WindowStyle Hidden -Wait
+        $info = New-BackgroundProcessInfo (Join-Path $env:WINDIR 'System32\taskkill.exe') $killArgs
+        [Diagnostics.Process]::Start($info).Dispose()
         $state.StopStarted = [DateTime]::UtcNow
     }
     if ($state.Worker -and $state.Worker.HasExited) {
-        $timer.Stop()
         $exitCode = $null
         try {
             $state.Worker.Refresh()
@@ -669,6 +717,11 @@ $timer.Add_Tick({
         if ($state.PendingUpdate) {
             $state.PendingUpdate = $null
             Start-UpdateInstall
+            return
+        }
+        if ($state.RestartRequested) {
+            $state.RestartRequested = $false
+            Start-Server
             return
         }
         if ($state.StartupFailure) {
@@ -755,28 +808,44 @@ $timer.Add_Tick({
             else { 'Phone: enable HTTPS in Tailscale' }
         } else { '' }
         Show-State 'ready' 'Server ready' $detail
-        $open.Focus()
-        if ($FirstLaunch) {
-            $FirstLaunch = $false
+        if ($window.Visible) { [void]$open.Focus() }
+        if ($state.OpenFirstRun) {
+            $state.OpenFirstRun = $false
             try { Start-Process $desktopUrl.Text } catch { }
         }
     }
 })
 $window.Add_FormClosing({
     param($sender, $eventArgs)
-    if ($null -eq $state.Worker) { return }
+    if ($null -eq $state.Worker -or $eventArgs.CloseReason -eq 'WindowsShutDown') { return }
     $eventArgs.Cancel = $true
     $state.Closing = $true
     if ($state.Name -ne 'stopping') { Request-Stop }
 })
+$window.Add_FormClosed({ $application.ExitThread() })
 
 Show-State 'stopped' 'Server stopped' ''
-try { [void]$window.ShowDialog() }
+try {
+    [void]$window.Handle
+    $tray.Visible = $true
+    $timer.Start()
+    if ($PhoneStartup) {
+        if ($startupCheck.Checked) { Start-Server -Unattended }
+    } else {
+        Show-Launcher
+        if ($FirstLaunch) { Start-Server }
+    }
+    [Windows.Forms.Application]::Run($application)
+}
 finally {
+    $tray.Dispose()
+    $trayMenu.Dispose()
     $timer.Dispose()
     $logTimer.Dispose()
     if ($qr.Image) { $qr.Image.Dispose() }
     $window.Dispose()
+    $application.Dispose()
+    $showLauncherEvent.Dispose()
     if ($ownsLauncherMutex) { $launcherMutex.ReleaseMutex() }
     $launcherMutex.Dispose()
 }

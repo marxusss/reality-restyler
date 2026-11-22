@@ -1,6 +1,7 @@
 """Single-controller lease and transport ownership (event-loop confined)."""
 import asyncio
 import hmac
+import json
 import secrets
 import time
 
@@ -8,6 +9,20 @@ from aiohttp import web
 
 TOKEN_HEADER = "X-Restyle-Session"
 PROTOCOL_PREFIX = "restyle."
+
+
+def session_expired():
+    return web.HTTPConflict(
+        text=json.dumps({"code": "session_expired", "error": "Camera session expired. Press Start to reconnect."}),
+        content_type="application/json",
+    )
+
+
+def session_taken():
+    return web.HTTPConflict(
+        text=json.dumps({"code": "session_taken", "error": "Another session has camera control. Press Start to take over."}),
+        content_type="application/json",
+    )
 
 
 class SessionManager:
@@ -27,19 +42,24 @@ class SessionManager:
         return self.token
 
     def require(self, supplied, *, touch=True):
-        if not self.token or not supplied or not supplied.isascii() or not hmac.compare_digest(self.token, supplied):
-            raise web.HTTPConflict(text="Camera control moved to another device. Press Start to take over.")
+        if self.token is None or not supplied or not supplied.isascii() or len(supplied) > 128:
+            raise session_expired()
+        if not hmac.compare_digest(self.token, supplied):
+            raise session_taken()
         if touch:
             self.last_seen = time.monotonic()
 
-    def resume(self, supplied):
-        if not supplied or not supplied.isascii() or len(supplied) > 128:
-            raise web.HTTPConflict(text="Camera session expired. Press Start to reconnect.")
+    async def resume(self, supplied):
+        if supplied is not None and (not supplied or not supplied.isascii() or len(supplied) > 128):
+            raise session_expired()
         if self.token is None:
-            self.token = supplied
+            self.token = supplied or secrets.token_urlsafe(32)
+        elif supplied is None:
+            raise session_taken()
         else:
-            self.require(supplied)
+            self.require(supplied, touch=False)
         self.last_seen = time.monotonic()
+        await self.close_transport()
         return self.token
 
     def begin_start(self, token):

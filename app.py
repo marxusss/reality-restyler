@@ -230,7 +230,7 @@ async def claim_session(request):
     async with manager.lock:
         supplied = request.headers.get(TOKEN_HEADER)
         if data.get("resume"):
-            token = manager.resume(supplied)
+            token = await manager.resume(supplied)
         else:
             token = await manager.transfer_control()
     return web.json_response({"token": token})
@@ -490,7 +490,7 @@ async def offer(request):
         async with manager.lock:
             require_owner(request, touch=False)
             if manager.transport is not pc:
-                raise web.HTTPConflict(text="Camera control moved to another device.")
+                raise web.HTTPConflict(text="Camera connection was interrupted. Try again.")
         return web.json_response({"sdp": local.sdp, "type": "answer"})
     except (Exception, asyncio.CancelledError) as exc:
         manager.detach_transport(pc)

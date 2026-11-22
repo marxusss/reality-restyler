@@ -440,7 +440,7 @@
   {
     "id": "tenebrism",
     "name": "Tenebrism",
-    "prompt": "Use tenebrist lighting: a broad diagonal beam from the upper-left illuminates the eyes, nose, cheeks, hand and upper chest at similar brightness, while the opposite side and outer scene fall into near-black shadow. Keep the forehead evenly lit without a hotspot, keep scene intact",
+    "prompt": "Baroque tenebrism in oil. Set one sharp pool of light from the upper left against deep, engulfing darkness. Let the existing subject and nearby forms break abruptly into illumination, with almost no soft transition or fill light. Reserve careful, controlled brushwork for the lit passages and leave the shadows deliberately unresolved. Give the scene the theatrical immediacy and focused gravity of Caravaggio's chiaroscuro. Preserve expression, pose, and composition; keep scene intact",
     "thumbnail": "/styles/tenebrism.webp"
   },
   {

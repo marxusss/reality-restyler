@@ -13,13 +13,16 @@ from pathlib import Path
 
 RUNTIME_DIR = Path(__file__).resolve().parent / ".runtime"
 TLS_RENEW_SECONDS = 6 * 60 * 60
+NO_CONSOLE = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
 def tailscale_json(*arguments):
     executable = shutil.which("tailscale")
     if not executable:
         return {}
     try:
-        result = subprocess.run([executable, *arguments], capture_output=True, text=True, timeout=5, check=True)
+        result = subprocess.run(
+            [executable, *arguments], capture_output=True, text=True, timeout=5, check=True, creationflags=NO_CONSOLE
+        )
         data = json.loads(result.stdout)
         return data if isinstance(data, dict) else {}
     except Exception:
@@ -131,6 +134,7 @@ def _create_tailscale_certificate(dns_name, cert_path, key_path):
         text=True,
         timeout=30,
         check=True,
+        creationflags=NO_CONSOLE,
     )
     if not next_cert.is_file() or not next_key.is_file() or not _certificate_covers(next_cert, dns_name) or _certificate_is_self_signed(next_cert):
         raise RuntimeError("Tailscale did not return a valid certificate for this device.")

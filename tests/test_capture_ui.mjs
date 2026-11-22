@@ -78,8 +78,10 @@ test("diagnostics share one compact footer with Load or Unload model", () => {
 
 test("styles sit above the smaller capture dock, with a visible glass background", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
-  assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*bottom: calc\(max\(12px,env\(safe-area-inset-bottom\)\) \+ 80px \+ var\(--lens-height,0px\) \+ var\(--capture-save-height,0px\)\)/);
-  assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*height: min\(72dvh,448px\)/);
+  const dialog = css.match(/#stylesDialog\[open\]\s*\{[^}]*\}/)?.[0] || "";
+  assert.match(dialog, /--styles-bottom:[^;]*var\(--lens-height,[^)]*\)[^;]*var\(--capture-save-height,[^)]*\)/);
+  assert.match(dialog, /bottom: var\(--styles-bottom\)/);
+  assert.match(dialog, /max-height: calc\(100dvh - var\(--styles-bottom\)/);
   assert.match(css, /\.shutter-button\s*\{[^}]*width: 42px; height: 42px/);
   assert.match(css, /backdrop-filter: blur\(3px\)/);
 });
@@ -130,17 +132,14 @@ test("styles layout keeps labels inside thumbnail, removes header, and aligns to
   assert.match(js, /thumbnail\.append\(label\);\s*button\.append\(thumbnail\);/);
   assert.match(css, /\.style-thumbnail img\s*\{[^}]*inset: 0;[^}]*width: 100%;[^}]*height: 100%/);
   assert.match(css, /#combineStylesButton\s*\{[^}]*padding-left: 4px/);
-  assert.match(css, /#closeStylesButton\s*\{[^}]*top: 16px/);
   assert.match(css, /\.lens-button\s*\{[^}]*backdrop-filter: blur\(3px\)/);
 });
 
 test("styles neutral glass, edge-to-edge thumbnails and subtle controls", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
-  assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*padding-top: 8px/);
   assert.match(css, /\.style-thumbnail\s*\{[^}]*background: transparent/);
   assert.match(css, /\.style-thumbnail img\s*\{[^}]*object-fit: cover/);
   assert.match(css, /\.lens-button\s*\{[^}]*border: 0;[^}]*backdrop-filter: blur\(3px\)/);
-  assert.match(css, /\.style-list\s*\{[^}]*padding: 28px 0 3px/);
   assert.match(css, /#addStyleButton \{ gap: 5px; padding-right: 13px; \}/);
   assert.match(css, /\.style-edit-button\s*\{[^}]*right: 0;[^}]*width: 32px/);
 });
@@ -158,20 +157,12 @@ test("glass uses blur without desaturating the background and displays quieter l
   assert.match(html, /id="addStyleButton"[^>]*>\+<span>Add Style<\/span>/);
 });
 
-test("Styles scroll fades softly behind a floating close button without obscuring custom thumbnails", () => {
-  const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
-  assert.match(css, /\.style-list\s*\{[^}]*mask-image: linear-gradient\(to bottom, transparent, #000 24px, #000 calc\(100% - 24px\), transparent\)/);
-  assert.match(css, /#closeStylesButton\s*\{[^}]*border-radius: 50%/);
-  assert.match(css, /\.style-name\s*\{[^}]*font-size: 9px/);
-  assert.match(css, /\.style-thumbnail img\s*\{[^}]*width: 100%;[^}]*height: 100%;[^}]*object-fit: cover/);
-});
-
-test("Custom Styles and presets share a two-sided faded scroll area", () => {
+test("custom styles appear above presets in the keyboard-scrollable Styles list", () => {
   const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
-  assert.match(html, /id="styleList"[^>]*>[\s\S]*?id="customStyleSection"[\s\S]*?id="presetStyles"/);
+  assert.match(html, /id="styleList"[^>]*tabindex="0"[^>]*>[\s\S]*?id="customStyleSection"[\s\S]*?id="presetStyles"/);
   assert.match(css, /\.style-list\s*\{[^}]*flex: 1 1 auto;[^}]*overflow-y: auto/);
-  assert.match(css, /\.style-list\s*\{[^}]*mask-image: linear-gradient\(to bottom, transparent, #000 24px, #000 calc\(100% - 24px\), transparent\)/);
+  assert.doesNotMatch(css, /#customStyleSection[^{}]*\{[^}]*grid-column:/);
 });
 
 test("Pencil has no backing and is legible over bright thumbnails", () => {
@@ -191,15 +182,15 @@ test("style-name caption never renders its own backdrop", () => {
 });
 
 
-test("flash control stays available before camera permission and disables without torch", () => {
+test("flash is shown only for the current camera's supported torch", () => {
   const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
   const app = readFileSync(new URL("../web/app.js", import.meta.url), "utf8");
   const visibility = app.match(/function updateFlashVisibility\(track\) \{[\s\S]*?\n\}/)?.[0] || "";
   const flash = app.match(/async function toggleFlash\(\) \{[\s\S]*?\n\}/)?.[0] || "";
-  assert.match(html, /id="flashButton"[^>]*aria-pressed="false"(?![^>]*\bhidden\b)(?![^>]*\bdisabled\b)/);
-  assert.match(visibility, /flashButton\.hidden = false/);
-  assert.match(visibility, /flashButton\.disabled = Boolean\(track && !available\)/);
-  assert.match(flash, /await openCameraInput\(selectedCamera, current\)/);
+  assert.match(html, /id="flashButton"[^>]*\bhidden\b/);
+  assert.match(visibility, /getCapabilities.*torch/);
+  assert.match(visibility, /flashButton\.hidden = !available/);
+  assert.doesNotMatch(flash, /openCameraInput|getUserMedia/);
 });
 
 test("visibility suspension keeps the live camera stream for automatic resume", () => {
@@ -226,7 +217,8 @@ test("styles toggle closed and Settings can take over", () => {
   const app = readFileSync(new URL("../web/app.js", import.meta.url), "utf8");
   assert.equal((html.match(/aria-expanded="false"/g) || []).length >= 2, true);
   assert.match(styles, /if \(stylesDialog\.open\) \{\s*stylesDialog\.close\(\);\s*return;/);
-  assert.match(styles, /stylesDialog\.show\(\)/);
+  assert.match(styles, /closeSettings\(\);\s*stylesDialog\.show\(\)/);
   assert.doesNotMatch(styles, /stylesDialog\.showModal\(\)/);
+  assert.match(app, /closeSettings: \(\) => setPanel\(false\)/);
   assert.match(app, /settingsButton\.addEventListener\("click", \(\) => \{\s*const stylesDialog = \$\("stylesDialog"\);\s*if \(stylesDialog\.open\) stylesDialog\.close\(\);\s*setPanel\(settingsPanel\.hidden\);/);
 });

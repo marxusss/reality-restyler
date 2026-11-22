@@ -33,7 +33,7 @@
           </button>
         </div>
         <div id="cameraActions" class="actions">
-          <button id="flashButton" class="icon-button" type="button" aria-label="Flash" aria-pressed="false">
+          <button id="flashButton" class="icon-button" type="button" aria-label="Flash" aria-pressed="false" hidden>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M13.3 2.5 5.8 13h5l-.5 8.5 7.9-11.1h-5.1l.2-7.9Z"/>
             </svg>
@@ -77,16 +77,11 @@
               <output id="stepsValue">4</output>
             </div>
           </label>
-          <label class="field resolution-field">
+          <button id="resolutionButton" class="resolution-field" type="button" aria-expanded="false" aria-controls="resolutionOptions">
             <span>Res</span>
-            <select id="resolutionInput">
-              <option value="512" selected>512</option>
-              <option value="640">640</option>
-              <option value="768">768</option>
-              <option value="896">896</option>
-              <option value="1024">1024</option>
-            </select>
-          </label>
+            <span id="resolutionValue">512</span>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+          </button>
           <button id="upscaleButton" class="toggle-button" type="button" aria-pressed="true">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 15v5h5M20 9V4h-5"/>
@@ -95,8 +90,15 @@
             <span>Upscale</span>
           </button>
         </div>
+        <div id="resolutionOptions" class="resolution-options" role="group" aria-label="Resolution" hidden>
+          <button type="button" value="512" aria-pressed="true">512</button>
+          <button type="button" value="640" aria-pressed="false">640</button>
+          <button type="button" value="768" aria-pressed="false">768</button>
+          <button type="button" value="896" aria-pressed="false">896</button>
+          <button type="button" value="1024" aria-pressed="false">1024</button>
+        </div>
         <div class="setting-footer" aria-label="Diagnostics and model">
-          <div id="latency" class="latency" title="Model inference and estimated end-to-end latency">Model — ms · Latency — ms</div>
+          <div id="latency" class="latency" title="Model inference, measured round trip, and AI frames per second">Model&nbsp;—&nbsp;ms · RTT&nbsp;—&nbsp;ms · —&nbsp;AI&nbsp;FPS</div>
           <button id="quitModelButton" class="toggle-button" type="button">Load model</button>
         </div>
       </section>
@@ -106,7 +108,7 @@
             <path d="m6 6 12 12M18 6 6 18"/>
           </svg>
         </button>
-        <div id="styleList" class="style-list">
+        <div id="styleList" class="style-list" role="region" aria-label="Style library" tabindex="0">
           <section id="customStyleSection" aria-labelledby="customStylesTitle" hidden>
             <h3 id="customStylesTitle">Custom Styles</h3>
             <div id="customStyles" class="style-grid"></div>
