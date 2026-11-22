@@ -527,7 +527,7 @@ textarea:focus, select:focus {
 }
 #closeStylesButton {
   position: absolute;
-  top: 14px;
+  top: 18px;
   right: 14px;
   z-index: 3;
   width: 28px;
@@ -542,7 +542,10 @@ textarea:focus, select:focus {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 34px 3px 3px;
+  padding: 18px 3px 3px;
+}
+#stylesDialog .style-list:has(#customStyleSection[hidden]) {
+  padding-top: 38px;
 }
 .style-dialog h2, .style-dialog h3 {
   margin: 0;
