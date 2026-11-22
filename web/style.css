@@ -172,7 +172,7 @@ button {
   grid-column: 2; grid-row: 1; justify-self: center; z-index: 1;
   transition: transform .43s cubic-bezier(.25,.76,.18,1);
 }
-.actions:not(.activated) > #startButton { transform: translateX(61px); }
+.actions:not(.activated) > #startButton { transform: translateX(65px); }
 .actions > .capture-controls {
   grid-column: 3; grid-row: 1;
   display: flex; align-items: flex-end; justify-content: center;
@@ -716,12 +716,12 @@ textarea:focus, select:focus {
   .settings-panel { bottom: calc(max(6px,env(safe-area-inset-bottom)) + 88px); max-height: min(50dvh,220px); }
   .style-dialog { max-height: min(60dvh,245px); }
   .style-grid { grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; }
-  .style-editor { max-height: min(72dvh,300px); }
+  .style-editor { max-height: min(60dvh,245px); }
   #styleCapturePreview { width: 145px; height: 72px; }
 }
 @media (max-width: 360px) {
   .actions { width: 292px; grid-template-columns: 40px 40px 62px 40px 40px; column-gap: 8px; }
-  .actions:not(.activated) > #startButton { transform: translateX(55px); }
+  .actions:not(.activated) > #startButton { transform: translateX(59px); }
   .setting-row { gap: 4px; }
   .setting-row .resolution-field { flex-basis: 60px; padding-left: 4px; }
   .setting-row #upscaleButton { padding-left: 4px; }
