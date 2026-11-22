@@ -646,8 +646,6 @@ textarea:focus, select:focus {
   z-index: 1;
   display: block;
   padding: 4px 5px;
-  border-radius: 0 0 7px 7px;
-  background: rgba(27,27,27,.08);
   color: #fff;
   font-size: 9px;
   font-weight: 550;
