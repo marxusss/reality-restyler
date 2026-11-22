@@ -130,6 +130,7 @@ def render(page, state):
         page.locator("#styleName").fill("New cinematic style")
         page.locator("#stylePrompt").fill("Warm tungsten light with soft shadows")
         page.locator("#stylePrompt").blur()
+        page.wait_for_timeout(180)
         assert page.locator("#styleEditor").evaluate("e=>e.open")
         dialog=page.locator("#styleEditor").bounding_box()
         save=page.locator('#styleEditor button[type="submit"]').bounding_box()
