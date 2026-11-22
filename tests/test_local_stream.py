@@ -168,7 +168,7 @@ class LocalStreamTests(unittest.IsolatedAsyncioTestCase):
             response = await self.client.get("/metrics")
             self.assertEqual(response.status, 200)
             await response.json()
-        with patch.object(app.runtime, "heartbeat", side_effect=lambda: (observed_threads.append(threading.get_ident()), True)[1]):
+        with patch.object(app.runtime, "loaded", side_effect=lambda: (observed_threads.append(threading.get_ident()), True)[1]):
             response = await self.client.post("/heartbeat", json={}, headers=self.headers)
             self.assertEqual(response.status, 200)
             self.assertTrue((await response.json())["loaded"])
