@@ -71,7 +71,7 @@ test("styles sit above the smaller capture dock, with a visible glass background
   assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*bottom: calc\(max\(12px,env\(safe-area-inset-bottom\)\) \+ 86px \+ var\(--lens-height,0px\) \+ var\(--capture-save-height,0px\)\)/);
   assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*height: min\(72dvh,480px\)/);
   assert.match(css, /\.shutter-button\s*\{[^}]*width: 42px; height: 42px/);
-  assert.match(css, /backdrop-filter: blur\(4px\) saturate\(108%\) contrast\(102%\)/);
+  assert.match(css, /backdrop-filter: blur\(3px\) saturate\(105%\)/);
 });
 
 test("video is opaque, modes readable, and pause stays aligned", () => {
@@ -84,7 +84,7 @@ test("palette icon, outline Done, right-aligned Add style and less-wide thumbnai
   const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   assert.equal((html.match(/a9 9 0 0 0 0 18/g) || []).length, 2);
-  assert.match(css, /\.prompt-line \.settings-done\s*\{[^}]*background: rgba\(255,255,255,\.06\)/);
+  assert.match(css, /\.prompt-line \.settings-done\s*\{[^}]*background: rgba\(255,255,255,\.025\)/);
   assert.match(css, /#addStyleButton, #useStylesButton\s*\{ margin-left: auto; \}/);
   assert.match(css, /\.style-thumbnail\s*\{[^}]*aspect-ratio: 7 \/ 5/);
 });
@@ -92,8 +92,8 @@ test("style names stay original and labels are overlaid within thumbnails", () =
   const styles = JSON.parse(readFileSync(new URL("../web/styles/catalog.json", import.meta.url), "utf8"));
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   assert.equal(styles.find(s => s.id === "hand-painted-animation").name, "Hand-painted fantasy animation");
-  assert.match(css, /\.style-card > span:last-child\s*\{[^}]*white-space: normal/);
-  assert.match(css, /\.style-card > span:last-child\s*\{[^}]*background: rgba\(43, 46, 50, \.77\)/);
+  assert.match(css, /\.style-name\s*\{[^}]*white-space: normal/);
+  assert.match(css, /\.style-name\s*\{[^}]*background: rgba\(57,59,62,\.74\)/);
 });
 
 test("settings and lens gap matches lens and mode gap in portrait and landscape", () => {
@@ -107,6 +107,19 @@ test("settings and lens gap matches lens and mode gap in portrait and landscape"
 test("thumbnail fits entire style image and custom edit icon clears overlay", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   assert.match(css, /\.style-thumbnail img\s*\{[^}]*object-fit: contain/);
-  assert.match(css, /\.style-card > span:last-child\s*\{[^}]*position: absolute;[^}]*bottom: 0/);
+  assert.match(css, /\.style-name\s*\{[^}]*position: absolute;[^}]*bottom: 0/);
   assert.match(css, /\.style-edit-button\s*\{[^}]*top: 5px/);
+});
+
+test("styles layout keeps labels inside thumbnail, removes header, and aligns toolbar", () => {
+  const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
+  const js = readFileSync(new URL("../web/styles.js", import.meta.url), "utf8");
+  assert.match(html, /id="stylesDialog"[^>]*aria-label="Styles"/);
+  assert.doesNotMatch(html, /id="stylesTitle"/);
+  assert.match(js, /thumbnail\.append\(label\);\s*button\.append\(thumbnail\);/);
+  assert.match(css, /\.style-thumbnail img\s*\{[^}]*inset: 5%;[^}]*width: 90%;[^}]*height: 90%/);
+  assert.match(css, /#combineStylesButton\s*\{[^}]*padding-left: 0/);
+  assert.match(css, /#closeStylesButton\s*\{[^}]*top: 14px/);
+  assert.match(css, /\.lens-button\s*\{[^}]*backdrop-filter: blur\(3px\)/);
 });
