@@ -149,7 +149,11 @@ def render(page, state):
         assert save["y"]+save["height"] <= dialog["y"]+dialog["height"]+1, ("Editor Save clipped",save,dialog)
         assert dialog["y"]+dialog["height"] <= page.viewport_size["height"]-1, ("Editor overlaps bottom screen",dialog)
         preview=page.locator("#styleCapturePreview").bounding_box()
-        assert preview and preview["y"]+preview["height"] <= save["y"]+3, ("Preview overlaps Save",preview,save)
+        assert preview, "Missing style preview"
+        overlap_x=max(0,min(preview["x"]+preview["width"],save["x"]+save["width"])-max(preview["x"],save["x"]))
+        overlap_y=max(0,min(preview["y"]+preview["height"],save["y"]+save["height"])-max(preview["y"],save["y"]))
+        assert overlap_x*overlap_y < 1, ("Preview covers Save",preview,save)
+        assert preview["y"]+preview["height"] <= dialog["y"]+dialog["height"]+1, ("Preview clipped",preview,dialog)
     page.wait_for_timeout(100)
 
 def image_from_screenshot(page):

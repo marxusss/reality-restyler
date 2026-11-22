@@ -765,3 +765,49 @@ textarea:focus, select:focus {
 }
 /* Opening the style editor should not leave a second glass dialog visible. */
 body:has(#styleEditor[open]) #stylesDialog { visibility: hidden; }
+
+/* Landscape editor: make the captured preview visible beside the text fields. */
+@media (orientation: landscape) {
+  .style-editor { max-height: min(64dvh,265px); }
+  .style-editor .panel-top { margin-bottom: 4px; }
+  .style-editor .field { gap: 3px; }
+  .style-editor .field + .field { margin-top: 5px; }
+  .style-editor input { height: 31px; }
+  .style-editor textarea { min-height: 54px; height: 54px; }
+  .style-editor .toggle-button { min-height: 32px; padding-inline: 9px; }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) 118px;
+    column-gap: 10px;
+    row-gap: 4px;
+    align-items: start;
+  }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) .panel-top {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) > label:first-of-type {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) > label:nth-of-type(2) {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) #styleCapturePreview {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    margin-top: 0;
+    width: 118px;
+    height: 84px;
+    align-self: center;
+  }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) #styleEditorError {
+    grid-column: 1 / -1;
+  }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) .style-toolbar-bottom {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    padding-top: 4px;
+  }
+}
