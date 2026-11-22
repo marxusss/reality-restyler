@@ -55,7 +55,6 @@ Name: "{group}\Reality Restyling"; Filename: "{app}\RealityRestyling.exe"; Worki
 Name: "{autodesktop}\Reality Restyling"; Filename: "{app}\RealityRestyling.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [InstallDelete]
-Type: files; Name: "{app}\web\transport.js"
 Type: files; Name: "{app}\run.bat"
 Type: files; Name: "{app}\launcher.py"
 Type: files; Name: "{app}\launcher_ipc.py"
