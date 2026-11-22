@@ -120,6 +120,6 @@ test("styles layout keeps labels inside thumbnail, removes header, and aligns to
   assert.match(js, /thumbnail\.append\(label\);\s*button\.append\(thumbnail\);/);
   assert.match(css, /\.style-thumbnail img\s*\{[^}]*inset: 5%;[^}]*width: 90%;[^}]*height: 90%/);
   assert.match(css, /#combineStylesButton\s*\{[^}]*padding-left: 0/);
-  assert.match(css, /#closeStylesButton\s*\{[^}]*top: 14px/);
+  assert.match(css, /#closeStylesButton\s*\{[^}]*top: 18px/);
   assert.match(css, /\.lens-button\s*\{[^}]*backdrop-filter: blur\(3px\)/);
 });
