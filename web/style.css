@@ -609,7 +609,7 @@ textarea:focus, select:focus {
 }
 .style-editor .panel-top { margin-bottom: 7px; }
 .style-editor textarea { min-height: 64px; }
-.style-editor #styleCapturePreview { height: 84px; width: min(100%, 185px); margin-top: 8px; }
+.style-editor #styleCapturePreview { height: 68px; width: min(100%, 185px); margin-top: 8px; }
 .style-editor .style-toolbar-bottom { margin-top: 7px; }
 .style-editor input {
   width: 100%;
