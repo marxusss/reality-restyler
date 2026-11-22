@@ -230,7 +230,6 @@ button {
   border: 0;
   border-radius: 50%;
   background: rgba(25,29,33,.38);
-  border: 1px solid rgba(255,255,255,.15);
   backdrop-filter: blur(3px) saturate(105%);
   -webkit-backdrop-filter: blur(3px) saturate(105%);
   color: #fff;
@@ -502,7 +501,7 @@ textarea:focus, select:focus {
   padding: 12px;
   border: 1px solid rgba(255,255,255,.28);
   border-radius: 19px;
-  background: rgba(24,29,33,.27);
+  background: rgba(27,27,27,.23);
   backdrop-filter: blur(3px) saturate(105%);
   -webkit-backdrop-filter: blur(3px) saturate(105%);
   color: inherit;
@@ -514,7 +513,7 @@ textarea:focus, select:focus {
   top: auto;
   left: 0;
   right: 0;
-  bottom: calc(max(12px,env(safe-area-inset-bottom)) + 86px + var(--lens-height,0px) + var(--capture-save-height,0px));
+  bottom: calc(max(12px,env(safe-area-inset-bottom)) + 80px + var(--lens-height,0px) + var(--capture-save-height,0px));
   margin: 0 auto;
   height: min(72dvh,480px);
   max-height: calc(100dvh - 126px);
@@ -524,16 +523,19 @@ textarea:focus, select:focus {
 }
 #stylesDialog {
   padding-top: 8px;
+  background: rgba(27,27,27,.23);
+  backdrop-filter: blur(3px) saturate(10%);
+  -webkit-backdrop-filter: blur(3px) saturate(10%);
 }
 #closeStylesButton {
   position: absolute;
-  top: 18px;
+  top: 21px;
   right: 14px;
   z-index: 3;
   width: 28px;
   height: 28px;
-  border: 1px solid rgba(255,255,255,.18);
-  background: rgba(25,29,33,.23);
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(27,27,27,.10);
   backdrop-filter: blur(3px) saturate(105%);
   -webkit-backdrop-filter: blur(3px) saturate(105%);
 }
@@ -542,7 +544,7 @@ textarea:focus, select:focus {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 18px 3px 3px;
+  padding: 18px 0 3px;
 }
 #stylesDialog .style-list:has(#customStyleSection[hidden]) {
   padding-top: 38px;
@@ -581,11 +583,11 @@ textarea:focus, select:focus {
 .custom-style-card > .style-card { height: auto; padding-bottom: 0; }
 .style-edit-button {
   position: absolute;
-  right: 5px;
+  right: 2px;
   top: 5px;
   z-index: 2;
-  display: grid; width: 22px; height: 22px; place-items: center;
-  padding: 4px;
+  display: grid; width: 24px; height: 24px; place-items: center;
+  padding: 3px;
   border: 1px solid rgba(255,255,255,.2);
   border-radius: 7px;
   background: rgba(26,30,34,.72);
@@ -595,8 +597,8 @@ textarea:focus, select:focus {
   background: #383c44;
 }
 .style-edit-button svg {
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -622,18 +624,18 @@ textarea:focus, select:focus {
   display: block;
   position: relative;
   width: 100%;
-  aspect-ratio: 7 / 5;
+  aspect-ratio: 8 / 5;
   overflow: hidden;
   border-radius: 7px;
-  background: #22262d;
+  background: transparent;
 }
 .style-thumbnail img {
   position: absolute;
-  inset: 5%;
-  width: 90%;
-  height: 90%;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   display: block;
-  object-fit: contain;
+  object-fit: cover;
 }
 .style-name {
   position: absolute;
@@ -677,11 +679,12 @@ textarea:focus, select:focus {
   line-height: 16px;
 }
 #combineStylesButton {
-  padding-left: 0;
+  padding-left: 2px;
   border: 0;
   background: transparent;
 }
 #addStyleButton, #useStylesButton { margin-left: auto; }
+#addStyleButton { gap: 5px; padding-right: 16px; }
 #addStyleButton svg { width: 16px; height: 16px; flex: 0 0 16px; }
 #addStyleButton span { line-height: 16px; }
 .style-toolbar-bottom { margin-top: 9px; }
