@@ -68,7 +68,7 @@ test("diagnostics share one compact footer with Load or Unload model", () => {
 
 test("styles sit above the smaller capture dock, with a visible glass background", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
-  assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*bottom: calc\(max\(12px,env\(safe-area-inset-bottom\)\) \+ 86px \+ var\(--lens-height,0px\) \+ var\(--capture-save-height,0px\)\)/);
+  assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*bottom: calc\(max\(12px,env\(safe-area-inset-bottom\)\) \+ 80px \+ var\(--lens-height,0px\) \+ var\(--capture-save-height,0px\)\)/);
   assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*height: min\(72dvh,480px\)/);
   assert.match(css, /\.shutter-button\s*\{[^}]*width: 42px; height: 42px/);
   assert.match(css, /backdrop-filter: blur\(3px\) saturate\(105%\)/);
@@ -86,7 +86,7 @@ test("palette icon, outline Done, right-aligned Add style and less-wide thumbnai
   assert.equal((html.match(/a9 9 0 0 0 0 18/g) || []).length, 2);
   assert.match(css, /\.prompt-line \.settings-done\s*\{[^}]*background: rgba\(255,255,255,\.025\)/);
   assert.match(css, /#addStyleButton, #useStylesButton\s*\{ margin-left: auto; \}/);
-  assert.match(css, /\.style-thumbnail\s*\{[^}]*aspect-ratio: 7 \/ 5/);
+  assert.match(css, /\.style-thumbnail\s*\{[^}]*aspect-ratio: 8 \/ 5/);
 });
 test("style names stay original and labels are overlaid within thumbnails", () => {
   const styles = JSON.parse(readFileSync(new URL("../web/styles/catalog.json", import.meta.url), "utf8"));
@@ -106,7 +106,7 @@ test("settings and lens gap matches lens and mode gap in portrait and landscape"
 
 test("thumbnail fits entire style image and custom edit icon clears overlay", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
-  assert.match(css, /\.style-thumbnail img\s*\{[^}]*object-fit: contain/);
+  assert.match(css, /\.style-thumbnail img\s*\{[^}]*object-fit: cover/);
   assert.match(css, /\.style-name\s*\{[^}]*position: absolute;[^}]*bottom: 0/);
   assert.match(css, /\.style-edit-button\s*\{[^}]*top: 5px/);
 });
@@ -118,8 +118,19 @@ test("styles layout keeps labels inside thumbnail, removes header, and aligns to
   assert.match(html, /id="stylesDialog"[^>]*aria-label="Styles"/);
   assert.doesNotMatch(html, /id="stylesTitle"/);
   assert.match(js, /thumbnail\.append\(label\);\s*button\.append\(thumbnail\);/);
-  assert.match(css, /\.style-thumbnail img\s*\{[^}]*inset: 5%;[^}]*width: 90%;[^}]*height: 90%/);
-  assert.match(css, /#combineStylesButton\s*\{[^}]*padding-left: 0/);
-  assert.match(css, /#closeStylesButton\s*\{[^}]*top: 18px/);
+  assert.match(css, /\.style-thumbnail img\s*\{[^}]*inset: 0;[^}]*width: 100%;[^}]*height: 100%/);
+  assert.match(css, /#combineStylesButton\s*\{[^}]*padding-left: 2px/);
+  assert.match(css, /#closeStylesButton\s*\{[^}]*top: 21px/);
   assert.match(css, /\.lens-button\s*\{[^}]*backdrop-filter: blur\(3px\)/);
+});
+
+test("styles neutral glass, edge-to-edge thumbnails and subtle controls", () => {
+  const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
+  assert.match(css, /#stylesDialog\s*\{[^}]*backdrop-filter: blur\(3px\) saturate\(10%\)/);
+  assert.match(css, /\.style-thumbnail\s*\{[^}]*background: transparent/);
+  assert.match(css, /\.style-thumbnail img\s*\{[^}]*object-fit: cover/);
+  assert.match(css, /\.lens-button\s*\{[^}]*border: 0;[^}]*backdrop-filter: blur\(3px\)/);
+  assert.match(css, /\.style-list\s*\{[^}]*padding: 18px 0 3px/);
+  assert.match(css, /#addStyleButton \{ gap: 5px; padding-right: 16px; \}/);
+  assert.match(css, /\.style-edit-button\s*\{[^}]*right: 2px;[^}]*width: 24px/);
 });
