@@ -118,6 +118,8 @@ def render(page, state):
     elif state == "edit":
         open_styles(page)
         page.locator("#customStyles .style-edit-button").first.click()
+        page.locator("#styleName").blur()
+        page.wait_for_timeout(150)
         assert page.locator("#deleteStyleButton").is_visible()
     page.wait_for_timeout(100)
 
