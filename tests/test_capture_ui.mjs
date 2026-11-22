@@ -10,6 +10,8 @@ function element() {
     classList: { toggle() {}, add() {}, remove() {} },
     setAttribute(name, value) { this[name] = value; },
     addEventListener(name, callback) { listeners.set(name, callback); },
+    emit(name, event) { listeners.get(name)?.(event); },
+    setPointerCapture() {},
     click() { listeners.get("click")?.({detail: 1}); }
   };
 }
@@ -43,6 +45,14 @@ test("camera defaults to video with a visible one-tap Photo alternative", () => 
     assert.equal(ids.captureModeButton.textContent, "Photo");
     assert.equal(ids.captureOtherModeButton.textContent, "Video");
     assert.equal(ids.shutterButton.dataset.mode, "photo");
+
+    shutterParent.emit("pointerdown", {isPrimary: true, pointerId: 1, clientX: 0, clientY: 0, target: shutterParent});
+    shutterParent.emit("pointerup", {pointerId: 1, clientX: 5, clientY: 35});
+    assert.equal(ids.captureModeButton.textContent, "Video");
+    assert.equal(ids.shutterButton.dataset.mode, "video");
+    shutterParent.emit("pointerdown", {isPrimary: true, pointerId: 2, clientX: 0, clientY: 0, target: shutterParent});
+    shutterParent.emit("pointerup", {pointerId: 2, clientX: 40, clientY: 0});
+    assert.equal(ids.shutterButton.dataset.mode, "video");
   } finally {
     globalThis.window = originalWindow;
     globalThis.document = originalDocument;
@@ -178,4 +188,11 @@ test("style-name caption never renders its own backdrop", () => {
   assert.doesNotMatch(block, /background(?:-color)?\s*:/);
   assert.doesNotMatch(block, /backdrop-filter\s*:/);
   assert.match(block, /text-shadow\s*:/);
+});
+
+
+test("flash control is hidden when the camera has no torch", () => {
+  const app = readFileSync(new URL("../web/app.js", import.meta.url), "utf8");
+  const visibility = app.match(/function updateFlashVisibility\(track\) \{[\s\S]*?\n\}/)?.[0] || "";
+  assert.match(visibility, /flashButton\.hidden = !available/);
 });
