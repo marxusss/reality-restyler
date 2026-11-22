@@ -274,8 +274,8 @@ function readSettings() {
 }
 
 function markSettingsDirty() {
-  // Before Start, preserve edits in memory. Only the active controller writes
-  // preferences to the host through /start and /settings.
+  // Keep edits made before the host preferences finish loading.
+  // /preferences saves idle edits; /start and /settings save active-session edits.
   settingsDirty = true;
 }
 

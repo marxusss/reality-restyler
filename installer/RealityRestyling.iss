@@ -56,7 +56,6 @@ Name: "{group}\Reality Restyling"; Filename: "{app}\RealityRestyling.exe"; Worki
 Name: "{autodesktop}\Reality Restyling"; Filename: "{app}\RealityRestyling.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [InstallDelete]
-Type: files; Name: "{app}\web\transport.js"
 Type: files; Name: "{app}\run.bat"
 Type: files; Name: "{app}\launcher.py"
 Type: files; Name: "{app}\launcher_ipc.py"
@@ -234,7 +233,7 @@ begin
   end;
 end;
 
-function GetInstallParameters(Param: String): String;
+function GetInstallParameters: String;
 var
   ModeName, ModelPath, UpscalerId: String;
 begin
@@ -272,7 +271,7 @@ begin
     if WizardSilent or IsUpdateInstall then
       Parameters := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\repair-runtime.ps1') + '"'
     else
-      Parameters := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\install-flow.ps1') + '" ' + GetInstallParameters('');
+      Parameters := '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + ExpandConstant('{app}\install-flow.ps1') + '" ' + GetInstallParameters;
     if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Parameters, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode) then begin
       if not WizardSilent then
         MsgBox('The setup wizard could not start the local runtime setup.', mbError, MB_OK);

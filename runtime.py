@@ -86,12 +86,10 @@ class Runtime:
         self._last_upscale_report = None
         self._prompt_cache = OrderedDict()
         self._metrics = {
-            "loaded": False,
             "model_ms": 0.0,
             "upscale_ms": 0.0,
             "total_ms": 0.0,
             "error": "",
-            "upscaler_available": _upscaler_available(self._settings["upscaler"]),
             "upscaler_applied": False,
             "generated_size": "",
             "output_size": "",
@@ -137,10 +135,6 @@ class Runtime:
         with self._status_lock:
             return self._pipe is not None
 
-    def heartbeat(self):
-        with self._status_lock:
-            return self._pipe is not None
-
     def report_error(self, message):
         with self._status_lock:
             self._metrics["error"] = str(message)[:500]
@@ -153,7 +147,6 @@ class Runtime:
         self.set_settings(raw)
         with self._lock:
             if self._pipe is not None:
-                self.heartbeat()
                 return {"ok": True, "low_vram": False, "upscaler_available": _upscaler_available(self.settings()["upscaler"])}
             report("checking")
             import torch
@@ -236,12 +229,10 @@ class Runtime:
                 self._last_upscale_report = None
                 self._prompt_cache.clear()
                 self._metrics.update({
-                    "loaded": True,
                     "model_ms": 0.0,
                     "upscale_ms": 0.0,
                     "total_ms": 0.0,
                     "error": "",
-                    "upscaler_available": _upscaler_available(self.settings()["upscaler"]),
                     "upscaler_applied": False,
                     "generated_size": "",
                     "output_size": "",
@@ -271,7 +262,6 @@ class Runtime:
             self._last_upscale_report = None
             self._prompt_cache.clear()
             self._metrics.update({
-                "loaded": False,
                 "model_ms": 0.0,
                 "upscale_ms": 0.0,
                 "total_ms": 0.0,
@@ -373,11 +363,7 @@ class Runtime:
             self.report_error(f"Upscaler could not be loaded: {type(exc).__name__}.")
             raise RuntimeError(f"Upscaler {upscaler_id} could not be loaded.") from exc
 
-    def _upscale(self, image, torch, upscaler_id, model=None):
-        if model is None:
-            model = self._load_upscaler(upscaler_id)
-        if model is None:
-            raise RuntimeError(f"Upscaler {upscaler_id} is unavailable.")
+    def _upscale(self, image, torch, upscaler_id, model):
         expected_scale = {"compact2x": 2, "spanv2x4": 4}[upscaler_id]
         array = np.asarray(image.convert("RGB"))
         with torch.inference_mode():
@@ -502,7 +488,6 @@ class Runtime:
             upscale_ms = upscale_load_ms + upscale_compute_ms
             with self._status_lock:
                 self._metrics.update({
-                    "loaded": True,
                     "model_ms": round(model_ms, 1),
                     "upscale_ms": round(upscale_ms, 1),
                     "total_ms": round(total_ms, 1),
