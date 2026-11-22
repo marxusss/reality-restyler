@@ -160,6 +160,82 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .actions > #startButton, .actions > .capture-controls { transition: none; }
 }
+.lens-bar, .capture-file-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.lens-bar {
+  gap: 7px;
+  flex-wrap: nowrap;
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.lens-bar::-webkit-scrollbar { display: none; }
+.capture-file-actions {
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 18px;
+  background: rgba(11,13,16,.86);
+}
+.lens-bar[hidden], .capture-file-actions[hidden], .capture-mode[hidden], .capture-mode-other[hidden] {
+  display: none;
+}
+.lens-button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  aspect-ratio: 1;
+  flex: 0 0 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(5,5,5,.62);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.lens-button[aria-pressed="true"] {
+  background: rgba(38,38,38,.88);
+  color: #f3e8a7;
+}
+.actions #flashButton[hidden] {
+  display: inline-flex;
+  visibility: hidden;
+}
+.actions .icon-button {
+  border-color: transparent;
+  box-shadow: none;
+  background: transparent;
+  backdrop-filter: none;
+}
+.icon-button[aria-pressed="true"] {
+  background: rgba(255,255,255,.16);
+  border-color: rgba(255,255,255,.24);
+}
+#startButton .pause-icon, #startButton.playing .play-icon {
+  display: none;
+}
+#startButton.playing .pause-icon {
+  display: block;
+}
+#startButton .play-icon {
+  fill: currentColor;
+}
+#startButton:disabled {
+  opacity: .5;
+  cursor: wait;
+}
 .mode-strip {
   position: absolute;
   left: 50%;
