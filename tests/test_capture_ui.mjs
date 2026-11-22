@@ -71,13 +71,13 @@ test("styles sit above the smaller capture dock, with a visible glass background
   assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*bottom: calc\(max\(12px,env\(safe-area-inset-bottom\)\) \+ 80px \+ var\(--lens-height,0px\) \+ var\(--capture-save-height,0px\)\)/);
   assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*height: min\(72dvh,462px\)/);
   assert.match(css, /\.shutter-button\s*\{[^}]*width: 42px; height: 42px/);
-  assert.match(css, /backdrop-filter: blur\(3px\) saturate\(105%\)/);
+  assert.match(css, /backdrop-filter: blur\(3px\)/);
 });
 
 test("video is opaque, modes readable, and pause stays aligned", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   assert.match(css, /\.shutter-button:disabled\s*\{\s*opacity:\s*1/);
-  assert.match(css, /\.capture-mode-other\s*\{[^}]*rgba\(255,255,255,\.88\)/);
+  assert.match(css, /\.capture-mode-other\s*\{[^}]*rgba\(244,245,246,\.44\)/);
   assert.match(css, /\.actions > #startButton\s*\{[^}]*align-self: end;[^}]*place-items: center/);
 });
 test("palette icon, outline Done, right-aligned Add style and less-wide thumbnails", () => {
