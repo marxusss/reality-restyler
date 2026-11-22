@@ -46,9 +46,10 @@ export async function cameraStream(deviceId = "", facingMode = "environment", cu
     if (["NotFoundError", "DevicesNotFoundError"].includes(error.name)) {
       throw failure("No camera is available.");
     }
-    if (["NotReadableError", "TrackStartError", "AbortError"].includes(error.name) || error.message === "Load failed") {
+    if (["NotReadableError", "TrackStartError", "AbortError"].includes(error.name) ||
+        error.message?.toLowerCase() === "load failed") {
       throw failure("The camera is busy or unavailable. Close other apps using it and try again.",
-        error.message === "Load failed" ? "AbortError" : error.name);
+        error.message?.toLowerCase() === "load failed" ? "AbortError" : error.name);
     }
     if (error.name === "OverconstrainedError") {
       throw failure("The selected camera is unavailable. Choose another camera.");

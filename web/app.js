@@ -50,6 +50,11 @@ let lastPresentation = 0;
 let visibleSince = 0;
 let started = false;
 let busy = false;
+let startInProgress = false;
+let sessionClaimInProgress = false;
+let sessionEpoch = 0;
+let visibilityResumePending = false;
+let visibilityPauseTask = Promise.resolve();
 let runtimeLoaded = false;
 let transportMode = "remote";
 let mirror = false;
@@ -136,9 +141,14 @@ window.visualViewport?.addEventListener("resize", scheduleErrorPosition);
 const viewport = window.visualViewport;
 const touchScreen = window.matchMedia("(any-pointer: coarse)");
 const textFields = "textarea, input[type='text']";
+let lastTextField = null;
 
 function updateKeyboardLayout() {
-  const editing = touchScreen.matches && document.activeElement?.matches(textFields);
+  const activeTextField = document.activeElement?.matches(textFields) ? document.activeElement : null;
+  if (activeTextField) lastTextField = activeTextField;
+  const doneFocused = document.activeElement?.matches(".keyboard-done");
+  if (!activeTextField && !doneFocused) lastTextField = null;
+  const editing = touchScreen.matches && Boolean(activeTextField || (doneFocused && lastTextField));
   document.body.classList.toggle("text-entry", editing);
   if (editing && viewport) {
     document.body.style.setProperty("--keyboard-top", `${viewport.offsetTop}px`);
@@ -146,15 +156,28 @@ function updateKeyboardLayout() {
   }
 }
 
-function dismissKeyboard() {
-  if (document.activeElement?.matches(textFields)) document.activeElement.blur();
+function dismissKeyboard(event) {
+  event?.preventDefault();
+  const active = document.activeElement?.matches(textFields) ? document.activeElement : null;
+  active?.blur();
+  if (lastTextField && lastTextField !== active) lastTextField.blur();
+  lastTextField = null;
+  try { navigator.virtualKeyboard?.hide?.(); } catch (_) {}
+  document.body.classList.remove("text-entry");
+  document.body.style.removeProperty("--keyboard-top");
+  document.body.style.removeProperty("--keyboard-height");
+  requestAnimationFrame(updateKeyboardLayout);
 }
 
-document.addEventListener("focusin", updateKeyboardLayout);
+document.addEventListener("focusin", event => {
+  if (event.target?.matches(textFields)) lastTextField = event.target;
+  updateKeyboardLayout();
+});
 document.addEventListener("focusout", () => requestAnimationFrame(updateKeyboardLayout));
 viewport?.addEventListener("resize", updateKeyboardLayout);
 viewport?.addEventListener("scroll", updateKeyboardLayout);
 for (const button of document.querySelectorAll(".keyboard-done")) {
+  button.addEventListener("pointerdown", event => event.preventDefault());
   button.addEventListener("click", dismissKeyboard);
 }
 for (const name of ["gesturestart", "gesturechange"]) {
@@ -268,7 +291,7 @@ async function loadHostPreferences() {
   }
 }
 
-async function request(path, body) {
+async function request(path, body, options = {}) {
   const headers = body === undefined ? {} : {"Content-Type": "application/json"};
   if (sessionToken) headers["X-Restyle-Session"] = sessionToken;
   const controller = new AbortController();
@@ -277,18 +300,29 @@ async function request(path, body) {
     const response = await fetch(path, {
       method: body === undefined ? "GET" : "POST", headers,
       body: body === undefined ? undefined : JSON.stringify(body),
-      cache: "no-store", signal: controller.signal
+      cache: "no-store", signal: controller.signal,
+      keepalive: options.keepalive ?? (path === "/pause" && document.visibilityState !== "visible")
     });
     const raw = await response.text();
     let result = {};
     try { result = JSON.parse(raw); } catch (_) {}
     if (!response.ok) {
-      const failure = new Error(result.error || raw || "Request failed (" + response.status + ").");
+      const message = result.error || raw || "Request failed (" + response.status + ").";
+      const failure = new Error(message.toLowerCase() === "load failed"
+        ? "Could not reach the host. Check its connection and try again."
+        : message);
       failure.status = response.status;
       failure.data = result;
       throw failure;
     }
     return result;
+  } catch (error) {
+    if (error.status) throw error;
+    if (controller.signal.aborted) throw new Error("The host did not respond in time. Check the connection and try again.");
+    if (error instanceof TypeError || error.message?.toLowerCase() === "load failed") {
+      throw new Error("Could not reach the host. Check its connection and try again.");
+    }
+    throw error;
   } finally { if (timer) clearTimeout(timer); }
 }
 
@@ -298,6 +332,8 @@ function stopHeartbeat() {
 }
 
 function loseOwnership(message) {
+  visibilityResumePending = false;
+  sessionEpoch += 1;
   sessionToken = "";
   runtimeLoaded = false;
   stopHeartbeat();
@@ -653,9 +689,15 @@ function applyPromptNow() {
   void applySettings();
 }
 
-async function start() {
+async function start(automaticResume = false) {
   if (busy || started) return;
   busy = true;
+  startInProgress = true;
+  const startGeneration = generation;
+  const isCurrentStart = () => generation === startGeneration && document.visibilityState === "visible";
+  const ensureCurrentStart = () => {
+    if (!isCurrentStart()) throw new Error("Start cancelled.");
+  };
   recoveryAttempts = 0;
   clearErrors();
   clearTimeout(promptApplyTimer);
@@ -670,9 +712,13 @@ async function start() {
   localDrawMs = 0;
   localFrameTimingSamples = [];
   try {
+    if (automaticResume) await visibilityPauseTask;
+    ensureCurrentStart();
     await preferencesReady;
+    ensureCurrentStart();
     const requestedCamera = selectedCamera;
-    stream = await openStartingCamera(requestedCamera);
+    stream = await openStartingCamera(requestedCamera, {current: isCurrentStart});
+    ensureCurrentStart();
     const cameraTrack = stream.getVideoTracks()[0];
     if (!cameraTrack) throw new Error("The selected camera returned no video.");
     output.srcObject = stream;
@@ -680,24 +726,41 @@ async function start() {
     output.classList.add("camera-source");
     localOutput.hidden = true;
     await output.play().catch(() => {});
+    ensureCurrentStart();
     if (requestedCamera?.zoom !== undefined && cameraTrack.getSettings().deviceId === requestedCamera.deviceId) {
       try { await setCameraZoom(cameraTrack, requestedCamera.zoom); }
       catch (error) { showCameraSwitchError(error.message); }
     }
     await populateCameras(cameraTrack);
+    ensureCurrentStart();
     updateFlashVisibility(cameraTrack);
     applyCameraMirror(cameraTrack, selectedCamera);
-    sessionToken = (await request("/session", {})).token;
+    sessionClaimInProgress = true;
+    sessionEpoch += 1;
+    stopHeartbeat();
+    try {
+      sessionToken = (await request("/session", automaticResume ? {resume: true} : {})).token;
+    } finally {
+      sessionClaimInProgress = false;
+    }
+    ensureCurrentStart();
     runtimeLoaded = Boolean((await request("/health")).loaded);
+    ensureCurrentStart();
+    if (automaticResume) await request("/pause", {});
+    ensureCurrentStart();
     if (runtimeLoaded && !heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
     const connection = await request("/transport");
+    ensureCurrentStart();
     transportMode = connection.mode;
     await startRuntime();
+    ensureCurrentStart();
     if (!heartbeatTimer) heartbeatTimer = setInterval(() => void heartbeat(), 10000);
     if (!(await heartbeat())) throw new Error("The model stopped during startup. Press Start to retry.");
+    ensureCurrentStart();
     showStartup("Connecting camera", 6);
     if (transportMode === "local") await connectLocalWebSocket();
     else await connectWebRTC();
+    ensureCurrentStart();
     if (cameraTrack.readyState === "ended") throw new Error("Camera disconnected during startup. Try again.");
     started = true;
     visibleSince = performance.now();
@@ -711,24 +774,53 @@ async function start() {
     else showStartup("Waiting for the first frame", 7);
     metricsTimer = setInterval(() => void updateMetrics(), 1000);
     if (transportMode === "local") scheduleLocalFrame();
-    await updateMetrics();
+    void updateMetrics();
   } catch (error) {
+    const obsolete = generation !== startGeneration || document.visibilityState !== "visible";
     clearCameraSession();
-    if (error.status === 409 && !error.data?.low_vram) loseOwnership(error.message);
+    if (!obsolete && error.status === 409 && !error.data?.low_vram) loseOwnership(error.message);
     else if (sessionToken && runtimeLoaded) {
       // Release only the camera, never unload a warm model on a connection failure.
-      try { await request("/pause", {}); } catch (failure) {
-        if (failure.status === 409) loseOwnership(failure.message);
+      const token = sessionToken;
+      try {
+        await transportRequest?.catch(() => {});
+        if (token === sessionToken) await request("/pause", {}, {keepalive: obsolete});
+      } catch (failure) {
+        if (!obsolete && failure.status === 409) loseOwnership(failure.message);
       }
     }
     if (!runtimeLoaded) stopHeartbeat();
     setPlayback();
-    if (error.message !== "Start cancelled.") showError(error.message);
+    if (!obsolete && error.message !== "Start cancelled.") showError(error.message);
   } finally {
+    startInProgress = false;
     busy = false;
     startButton.disabled = false;
     quitModelButton.disabled = false;
+    resumeAfterVisibility();
   }
+}
+
+function resumeAfterVisibility() {
+  if (!visibilityResumePending || document.visibilityState !== "visible" || busy || started) return;
+  visibilityResumePending = false;
+  void start(true);
+}
+
+function suspendForVisibility() {
+  if (!started && !startInProgress) return;
+  visibilityResumePending = true;
+  const wasStarted = started;
+  const token = sessionToken;
+  const pendingTransport = transportRequest;
+  clearCameraSession();
+  setPlayback();
+  if (!wasStarted || !token) return;
+  visibilityPauseTask = visibilityPauseTask.catch(() => {}).then(async () => {
+    await pendingTransport?.catch(() => {});
+    if (token !== sessionToken) return;
+    await request("/pause", {}, {keepalive: true});
+  }).catch(() => {});
 }
 
 function releaseCameraInput() {
@@ -829,6 +921,7 @@ async function stop() {
     if (token !== sessionToken) return;
     await request("/stop", {});
     sessionToken = "";
+    sessionEpoch += 1;
     runtimeLoaded = false;
     stopHeartbeat();
     clearErrors();
@@ -843,13 +936,15 @@ async function stop() {
 }
 
 async function heartbeat() {
-  if (!runtimeLoaded || !sessionToken || document.visibilityState !== "visible") return true;
+  if (!runtimeLoaded || !sessionToken || sessionClaimInProgress || document.visibilityState !== "visible") return true;
   if (heartbeatPending) return true;
   heartbeatPending = true;
   const token = sessionToken;
+  const heartbeatEpoch = sessionEpoch;
+  const heartbeatGeneration = generation;
   try {
     const result = await request("/heartbeat", {});
-    if (token !== sessionToken) return false;
+    if (token !== sessionToken || heartbeatEpoch !== sessionEpoch || heartbeatGeneration !== generation || document.hidden) return true;
     showError("", "heartbeat");
     if (!result.loaded) {
       loseOwnership("The model unloaded after inactivity. Press Start.");
@@ -857,7 +952,7 @@ async function heartbeat() {
     }
     return true;
   } catch (error) {
-    if (token !== sessionToken) return false;
+    if (token !== sessionToken || heartbeatGeneration !== generation || document.hidden) return true;
     if (error.status === 409) loseOwnership(error.message);
     else showError(error.message, "heartbeat");
     return false;
@@ -1154,9 +1249,14 @@ document.addEventListener("visibilitychange", async () => {
     localFrameTimer = 0;
     clearTimeout(muteTimer);
     muteTimer = 0;
+    suspendForVisibility();
     return;
   }
   visibleSince = performance.now();
+  if (visibilityResumePending) {
+    resumeAfterVisibility();
+    return;
+  }
   if (peer && ["failed", "closed"].includes(peer.connectionState)) {
     cameraLost("Camera connection lost.");
     return;
@@ -1165,6 +1265,10 @@ document.addEventListener("visibilitychange", async () => {
   if (!runtimeLoaded) return;
   await heartbeat();
   if (runtimeLoaded && transportMode === "local") scheduleLocalFrame();
+});
+window.addEventListener("pagehide", suspendForVisibility);
+window.addEventListener("pageshow", () => {
+  if (!document.hidden) resumeAfterVisibility();
 });
 
 // A passive page never acquires or extends ownership of another camera.

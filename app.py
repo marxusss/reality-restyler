@@ -222,9 +222,16 @@ async def transport_mode(request):
     return web.json_response({"mode": "local" if local else "remote"})
 
 async def claim_session(request):
+    data = await _json(request)
+    if set(data) - {"resume"} or ("resume" in data and not isinstance(data["resume"], bool)):
+        raise web.HTTPBadRequest(text="Invalid camera session request.")
     manager = request.app[SESSION_KEY]
     async with manager.lock:
-        token = await manager.transfer_control()
+        supplied = request.headers.get(TOKEN_HEADER)
+        if data.get("resume"):
+            token = manager.resume(supplied)
+        else:
+            token = await manager.transfer_control()
         await asyncio.to_thread(runtime.heartbeat)
     return web.json_response({"token": token})
 

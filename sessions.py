@@ -32,6 +32,16 @@ class SessionManager:
         if touch:
             self.last_seen = time.monotonic()
 
+    def resume(self, supplied):
+        if not supplied or not supplied.isascii() or len(supplied) > 128:
+            raise web.HTTPConflict(text="Camera session expired. Press Start to reconnect.")
+        if self.token is None:
+            self.token = supplied
+        else:
+            self.require(supplied)
+        self.last_seen = time.monotonic()
+        return self.token
+
     def begin_start(self, token):
         """Pause idle expiration for this controller until startup finishes."""
         self.require(token)
