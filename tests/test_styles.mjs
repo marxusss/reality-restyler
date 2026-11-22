@@ -15,8 +15,9 @@ function fakeElement() {
     removeAttribute() {},
     append(...children) { this.children.push(...children); },
     replaceChildren(...children) { this.children = children; },
-    querySelector() { return fakeElement(); },
-    querySelectorAll() { return []; },
+    querySelector(selector) { return this.children.find(child => child.className === selector.slice(1)) || fakeElement(); },
+    querySelectorAll(selector) { return selector === ".custom-style-card" ? this.children.filter(child => child.className === "custom-style-card") : []; },
+    focus() { this.focused = true; },
     showModal() { this.open = true; },
     close() { this.open = false; },
     reset() {},
@@ -38,7 +39,8 @@ test("custom styles load and save through the PC without browser storage", async
     set() { throw new Error("Browser storage must not be used for custom styles."); }
   });
   const requests = [];
-  let stored = [];
+  // A prior deletion remains in the host store but is not rendered as a card.
+  let stored = [{id: "deleted-first", deleted: true, updatedAt: Date.now() + 100000}];
   try {
     mountStyles({
       promptInput: get("promptInput"),
@@ -63,8 +65,9 @@ test("custom styles load and save through the PC without browser storage", async
     assert.equal(requests[1].method, "POST");
     assert.equal(requests[1].body.styles.length, 1);
     assert.equal(requests[1].body.styles[0].name, "Example");
-    assert.equal(stored.length, 1);
+    assert.equal(stored.length, 2);
     assert.equal(get("customStyles").children.length, 1);
+    assert.equal(get("customStyles").children[0].children[1].focused, true);
   } finally {
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
