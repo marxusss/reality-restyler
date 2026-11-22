@@ -56,19 +56,3 @@ jobs:
       - name: Compile Windows installer
         shell: pwsh
         run: .\installer\build-installer.ps1
-
-  ui-gallery-transfer:
-    if: github.event_name == 'pull_request' && github.event.pull_request.number == 7
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Set up Chromium for UI gallery
-        run: |
-          python -m pip install playwright pillow
-          python -m playwright install chromium
-      - name: Render gallery exports
-        run: python smoke/temporary_pr7_small_gallery.py
