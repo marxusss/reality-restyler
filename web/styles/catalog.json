@@ -7,7 +7,7 @@
   },
   {
     "id": "hand-painted-animation",
-    "name": "Painted Fantasy",
+    "name": "Hand-painted fantasy animation",
     "prompt": "Use soft, hand-painted animation textures with watercolor-like light and carefully observed natural details. Favor rounded expressive shapes, layered foliage, warm atmospheric color and a quiet sense of wonder, balancing a cozy everyday mood with a hint of gentle fantasy., keep scene intact",
     "thumbnail": "/styles/hand-painted-animation.webp"
   },
@@ -19,7 +19,7 @@
   },
   {
     "id": "technical-drawing",
-    "name": "Blueprint",
+    "name": "Technical drawing",
     "prompt": "Use disciplined drafting lines, consistent stroke weights and measured geometric construction. Define edges with clean contours, restrained labels or guide marks and minimal shading, so the result feels engineered and legible while the existing forms and relationships remain clear., keep scene intact",
     "thumbnail": "/styles/technical-drawing.webp"
   },
@@ -37,19 +37,19 @@
   },
   {
     "id": "corporate-memphis",
-    "name": "Corporate Art",
+    "name": "Corporate Memphis",
     "prompt": "Build figures from rounded geometric shapes, tube-like limbs and simplified anatomy. Apply flat cheerful color, minimal shadows and spacious clean forms, with playful asymmetry and an approachable presentation-illustration mood rather than naturalistic surface detail., keep scene intact",
     "thumbnail": "/styles/corporate-memphis.webp"
   },
   {
     "id": "travel-poster",
-    "name": "Travel Poster",
+    "name": "Flat travel poster",
     "prompt": "Compose the scene from bold flat planes, angular cut-paper shapes and a compact vintage palette. Use simplified distant landmarks, confident silhouettes and subtle printed texture, like a destination poster designed for quick recognition from across a room., keep scene intact",
     "thumbnail": "/styles/travel-poster.webp"
   },
   {
     "id": "post-impressionist",
-    "name": "Impressionist",
+    "name": "Post-impressionist brushwork",
     "prompt": "Apply thick directional brush marks that curl and ripple across both subjects and surroundings. Layer vivid blues, yellows and greens in energetic bands, allowing visible paint texture and rhythmic movement to shape the light, sky and solid forms., keep scene intact",
     "thumbnail": "/styles/post-impressionist.webp"
   },
@@ -61,37 +61,37 @@
   },
   {
     "id": "watercolor-ink",
-    "name": "Watercolor Ink",
+    "name": "Wet-on-wet watercolor ink",
     "prompt": "Let translucent pigments bloom and bleed through damp paper, with soft-edged color pools beside selective dark ink lines. Preserve airy whites, delicate granulation and unexpected overlaps, giving the image a fluid handmade finish instead of crisp digital edges., keep scene intact",
     "thumbnail": "/styles/watercolor-ink.webp"
   },
   {
     "id": "academic-realism",
-    "name": "Classic Realism",
+    "name": "Academic precision realism",
     "prompt": "Render forms with smooth layered tones, measured anatomy, precise edges and controlled reflected light. Build depth through subtle glazes rather than obvious brush marks, maintaining balanced classical composition and careful realism without making the scene feel photographic., keep scene intact",
     "thumbnail": "/styles/academic-realism.webp"
   },
   {
     "id": "gothic-storybook",
-    "name": "Gothic Storybook",
+    "name": "Gothic storybook illustration",
     "prompt": "Give the scene a whimsical gothic storybook mood with crooked silhouettes, spindly contours and slightly exaggerated proportions. Add scratchy pen texture, crosshatched shadows and muted aged colors, balancing playful charm with a gently macabre atmosphere., keep scene intact",
     "thumbnail": "/styles/gothic-storybook.webp"
   },
   {
     "id": "crayon-book",
-    "name": "Colored Pencil",
+    "name": "Colored-pencil book illustration",
     "prompt": "Fill simple outlined shapes with visible wax-crayon strokes, layered pigments and uneven hand pressure. Keep the colors cheerful and tactile, letting small gaps and overlapping marks show through so the result feels colored by hand on paper., keep scene intact",
     "thumbnail": "/styles/crayon-book.webp"
   },
   {
     "id": "animated-3d",
-    "name": "3D Animation",
+    "name": "Expressive 3D animation",
     "prompt": "Re-render the existing scene as polished 3D animation with smooth sculpted forms, soft material shading and warm cinematic light. Preserve identity, pose, facial expression and every existing scene element; add no props or characters, keep scene intact",
     "thumbnail": "/styles/animated-3d.webp"
   },
   {
     "id": "low-poly",
-    "name": "Low Poly",
+    "name": "Low-poly",
     "prompt": "Rebuild forms from broad flat-shaded polygons with crisp edges and visible faceted transitions. Simplify small details into angular planes, use a compact coordinated palette and preserve enough structure to make the portrait and surroundings easy to read., keep scene intact",
     "thumbnail": "/styles/low-poly.webp"
   },
@@ -121,7 +121,7 @@
   },
   {
     "id": "stained-glass",
-    "name": "Stained Glass",
+    "name": "Flat stained glass art",
     "prompt": "Use jewel-toned glass color, clean dark leading and soft transmitted light in a flat, luminous finish. Preserve identity, pose, expression and scene; keep scene intact",
     "thumbnail": "/styles/stained-glass.webp"
   },
@@ -133,7 +133,7 @@
   },
   {
     "id": "voxel-world",
-    "name": "Voxel Art",
+    "name": "Voxel game art",
     "prompt": "Construct the image from chunky cubic voxel forms, block-built surfaces and deliberately low-resolution textures. Use clear square silhouettes, stepped terrain and bright game-like colors, translating the person and surroundings into a cohesive miniature world., keep scene intact",
     "thumbnail": "/styles/voxel-world.webp"
   },
@@ -157,7 +157,7 @@
   },
   {
     "id": "stylized-painting",
-    "name": "Digital Painting",
+    "name": "Hyper-stylized digital painting",
     "prompt": "Push proportions and shapes into a bold painterly interpretation while keeping the subject recognizable. Combine layered brush texture, simplified color masses and dramatic accents, balancing expressive distortion with a clear composition and deliberate visual hierarchy., keep scene intact",
     "thumbnail": "/styles/stylized-painting.webp"
   },
@@ -175,13 +175,13 @@
   },
   {
     "id": "dark-fantasy-painting",
-    "name": "Dark Fantasy",
+    "name": "Moody dark fantasy painting",
     "prompt": "Render existing forms as a dark fantasy painting with textured brushwork, muted jewel tones, deep but readable shadows and controlled highlights. Keep subjects, background and composition unchanged, keep scene intact",
     "thumbnail": "/styles/dark-fantasy-painting.webp"
   },
   {
     "id": "concept-art",
-    "name": "Concept Art",
+    "name": "Highly polished concept art",
     "prompt": "Use a polished concept-art finish with precise shape design, controlled painterly texture and clear focal contrast. Refine only the forms already present; preserve all subjects, objects and composition, keep scene intact",
     "thumbnail": "/styles/concept-art.webp"
   },
