@@ -16,39 +16,6 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   let customStylesSync = Promise.resolve();
   let syncedStyles = [];
   const maxStyles = 5;
-  const legacyStorageKey = "reality-restyle-custom-styles";
-
-  function readLegacyStyles() {
-    try {
-      const raw = localStorage.getItem(legacyStorageKey);
-      if (raw === null) return {styles: [], clear: true};
-      const stored = JSON.parse(raw);
-      if (!Array.isArray(stored)) return {styles: [], clear: false};
-      const styles = stored.filter(style => style && (style.deleted === true
-        ? typeof style.id === "string" && style.id
-        : typeof style.name === "string" && style.name.trim() &&
-          typeof style.prompt === "string" && style.prompt.trim())).map(style => {
-        const updatedAt = Number.isFinite(style.updatedAt) ? Math.max(0, Math.trunc(style.updatedAt)) : 0;
-        if (style.deleted === true) return {id: style.id, updatedAt, deleted: true};
-        const thumbnail = typeof style.thumbnail === "string" &&
-          style.thumbnail.startsWith("data:image/webp;base64,") && style.thumbnail.length <= 600000
-          ? style.thumbnail : null;
-        return {
-          id: typeof style.id === "string" && style.id ? style.id : undefined,
-          name: style.name.trim(),
-          prompt: style.prompt,
-          thumbnail,
-          updatedAt
-        };
-      });
-      const fullyMigrated = styles.length === stored.length && stored.every(style =>
-        style.deleted === true || style.thumbnail == null ||
-        (typeof style.thumbnail === "string" && style.thumbnail.startsWith("data:image/webp;base64,") && style.thumbnail.length <= 600000));
-      return {styles, clear: fullyMigrated};
-    } catch (_) {
-      return {styles: [], clear: false};
-    }
-  }
 
   function setStyleError(element, message = "") {
     element.textContent = message;
@@ -59,12 +26,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     // The PC is the only persistent store and already resolves edit conflicts.
     // Serialize requests so saves cannot race with the initial load or each other.
     const operation = customStylesSync.then(async () => {
-      const legacy = readLegacyStyles();
-      const pending = [...legacy.styles, ...(newStyle === null ? [] : [newStyle])];
-      const {styles} = await request("/styles/user", pending.length ? {styles: pending} : undefined);
-      if (legacy.clear) {
-        try { localStorage.removeItem(legacyStorageKey); } catch (_) {}
-      }
+      const {styles} = await request("/styles/user", newStyle === null ? undefined : {styles: [newStyle]});
       syncedStyles = styles;
       setStyleError($("styleStorageError"));
       renderCustomStyles();

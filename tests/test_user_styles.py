@@ -133,6 +133,11 @@ class UserStylePersistenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200)
         before = self.styles_path.read_bytes()
 
+        missing_id = {"name": "Second", "prompt": "portrait", "thumbnail": None, "updatedAt": 2}
+        response = await self.client.post("/styles/user", json={"styles": [missing_id]})
+        self.assertEqual(response.status, 422)
+        self.assertEqual(self.styles_path.read_bytes(), before)
+
         invalid = {"id": "two", "name": "Second", "prompt": "bad", "thumbnail": "data:image/png;base64,AA=="}
         response = await self.client.post("/styles/user", json={"styles": [invalid]})
 

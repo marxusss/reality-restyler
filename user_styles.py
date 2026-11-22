@@ -8,12 +8,6 @@ from preferences import USER_DATA_ROOT
 USER_STYLES_PATH = USER_DATA_ROOT / "user_styles.json"
 USER_STYLES_LOCK = threading.Lock()
 
-def _legacy_style_id(name, prompt):
-    value = 2166136261
-    for byte in (name + "\0" + prompt).encode("utf-8"):
-        value = ((value ^ byte) * 16777619) & 0xFFFFFFFF
-    return f"legacy-{value:08x}"
-
 def _normalize_user_styles(styles):
     if not isinstance(styles, list):
         raise ValueError("The style list is invalid.")
@@ -41,7 +35,7 @@ def _normalize_user_styles(styles):
             raise ValueError("A style prompt is invalid.")
         style_id = item.get("id")
         if not isinstance(style_id, str) or not style_id or len(style_id) > 100:
-            style_id = _legacy_style_id(name, prompt)
+            raise ValueError("A style identifier is invalid.")
         if style_id in seen:
             continue
         seen.add(style_id)
