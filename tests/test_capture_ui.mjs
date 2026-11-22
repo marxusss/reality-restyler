@@ -191,8 +191,10 @@ test("style-name caption never renders its own backdrop", () => {
 });
 
 
-test("flash control is hidden when the camera has no torch", () => {
+test("flash control starts hidden and stays hidden when the camera has no torch", () => {
+  const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
   const app = readFileSync(new URL("../web/app.js", import.meta.url), "utf8");
   const visibility = app.match(/function updateFlashVisibility\(track\) \{[\s\S]*?\n\}/)?.[0] || "";
+  assert.match(html, /id="flashButton"[^>]*hidden[^>]*disabled/);
   assert.match(visibility, /flashButton\.hidden = !available/);
 });
