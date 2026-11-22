@@ -505,7 +505,7 @@ textarea:focus, select:focus {
   top: auto;
   left: 0;
   right: 0;
-  bottom: calc(max(12px,env(safe-area-inset-bottom)) + 86px);
+  bottom: calc(max(12px,env(safe-area-inset-bottom)) + 86px + var(--lens-height,0px) + var(--capture-save-height,0px));
   margin: 0 auto;
   height: min(72dvh,480px);
   max-height: calc(100dvh - 126px);
