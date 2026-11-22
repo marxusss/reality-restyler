@@ -180,9 +180,16 @@ $autoUnloadUnit = Add-Control $window Label 'seconds' 303 0 105 24
 $autoUnloadUnit.ForeColor = $muted
 $autoUnloadHint = [Windows.Forms.ToolTip]::new()
 $autoUnloadHint.SetToolTip($autoUnloadInput, 'The change applies the next time the server starts.')
+$cpuOffloadCheck = Add-Control $window CheckBox 'CPU offload when VRAM is low' 24 0 420 24
+$cpuOffloadCheck.BackColor = $background
+$cpuOffloadCheck.ForeColor = $foreground
+$cpuOffloadCheck.AutoSize = $true
+$cpuOffloadHint = [Windows.Forms.ToolTip]::new()
+$cpuOffloadHint.SetToolTip($cpuOffloadCheck, 'The change applies the next time the server starts.')
 
 $autoUnloadDir = Join-Path $env:LOCALAPPDATA 'Reality Restyling'
 $autoUnloadPath = Join-Path $autoUnloadDir 'launcher-settings.json'
+$savedCpuOffload = $false
 try {
     if (Test-Path -LiteralPath $autoUnloadPath -PathType Leaf) {
         $saved = Get-Content -LiteralPath $autoUnloadPath -Raw | ConvertFrom-Json
@@ -191,14 +198,22 @@ try {
             $savedSeconds -ge 5 -and $savedSeconds -le 3600) {
             $autoUnloadInput.Value = $savedSeconds
         }
+        if ($saved.PSObject.Properties.Name -contains 'cpuOffloadWhenLow' -and
+            $saved.cpuOffloadWhenLow -is [bool]) {
+            $savedCpuOffload = $saved.cpuOffloadWhenLow
+        }
     }
 } catch {
     # Invalid configuration falls back to the existing 30-second default.
 }
-$autoUnloadInput.Add_ValueChanged({
+$cpuOffloadCheck.Checked = $savedCpuOffload
+function Save-LauncherSettings {
     try {
         [void][IO.Directory]::CreateDirectory($autoUnloadDir)
-        $json = @{ autoUnloadSeconds = [int]$autoUnloadInput.Value } | ConvertTo-Json -Compress
+        $json = @{
+            autoUnloadSeconds = [int]$autoUnloadInput.Value
+            cpuOffloadWhenLow = [bool]$cpuOffloadCheck.Checked
+        } | ConvertTo-Json -Compress
         $temporary = $autoUnloadPath + '.tmp'
         [IO.File]::WriteAllText($temporary, $json, [Text.UTF8Encoding]::new($false))
         if (Test-Path -LiteralPath $autoUnloadPath) {
@@ -207,9 +222,11 @@ $autoUnloadInput.Add_ValueChanged({
             [IO.File]::Move($temporary, $autoUnloadPath)
         }
     } catch {
-        [Windows.Forms.MessageBox]::Show($window, 'Could not save the auto-unload setting.', 'Reality Restyling', 'OK', 'Warning') | Out-Null
+        [Windows.Forms.MessageBox]::Show($window, 'Could not save the launcher settings.', 'Reality Restyling', 'OK', 'Warning') | Out-Null
     }
-})
+}
+$autoUnloadInput.Add_ValueChanged({ Save-LauncherSettings })
+$cpuOffloadCheck.Add_CheckedChanged({ Save-LauncherSettings })
 
 $startupKeyPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $startupValueName = 'RealityRestylingPhoneAccess'
@@ -288,6 +305,7 @@ function Show-State($Name, $Heading, $Detail) {
     $actionY = if ($Detail) { 104 } else { 58 }
     foreach ($button in @($start, $stop, $log)) { $button.Top = $actionY }
     $mode.Enabled = $null -eq $state.Worker
+    $cpuOffloadCheck.Enabled = $null -eq $state.Worker
     $start.Enabled = $mode.Enabled -and -not $state.Closing
     $start.Text = if ($Name -eq 'error') { '&Try again' } else { '&Start server' }
     $start.Visible = $Name -in @('stopped', 'error')
@@ -324,7 +342,8 @@ function Sync-PhoneCard {
     $autoUnloadLabel.Top = $startupCheck.Bottom + 12
     $autoUnloadInput.Top = $autoUnloadLabel.Top
     $autoUnloadUnit.Top = $autoUnloadLabel.Top + 3
-    $window.ClientSize = [Drawing.Size]::new($window.ClientSize.Width, $autoUnloadInput.Bottom + 16)
+    $cpuOffloadCheck.Top = $autoUnloadInput.Bottom + 10
+    $window.ClientSize = [Drawing.Size]::new($window.ClientSize.Width, $cpuOffloadCheck.Bottom + 16)
 }
 
 function Set-PhoneStartup($Enabled) {

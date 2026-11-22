@@ -58,17 +58,13 @@ export async function cameraStream(deviceId = "", facingMode = "environment", cu
   }
 }
 
-export async function openStartingCamera(choice, { fallback = true, current = () => true } = {}) {
+export async function openStartingCamera(choice, { current = () => true } = {}) {
   const facing = choice?.facing || "environment";
-  let deviceId = choice?.deviceId || "";
+  const deviceId = choice?.deviceId || "";
   for (let attempt = 0; ; attempt++) {
     try {
       return await cameraStream(deviceId, facing, current);
     } catch (error) {
-      if (fallback && deviceId && ["NotFoundError", "DevicesNotFoundError", "OverconstrainedError"].includes(error.name)) {
-        deviceId = "";
-        continue;
-      }
       if (!current() || attempt >= 2 || !["NotReadableError", "TrackStartError", "AbortError"].includes(error.name)) throw error;
       await new Promise(resolve => setTimeout(resolve, 150 * (attempt + 1)));
     }

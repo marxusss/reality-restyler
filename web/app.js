@@ -397,7 +397,7 @@ async function startRuntime() {
     if (error.status === 409 && error.data && error.data.low_vram) {
       const free = Number(error.data.free_vram_gb) || 0;
       const total = Number(error.data.total_vram_gb) || 0;
-      const proceed = window.confirm(`Low VRAM: ${free.toFixed(1)} GiB free of ${total.toFixed(1)} GiB. Use CPU offloading? This may be slower.`);
+      const proceed = window.confirm(`Only ${free.toFixed(1)} GiB of ${total.toFixed(1)} GiB VRAM is free. Startup may fail with the current launcher configuration. Continue?`);
       if (!proceed) throw new Error("Start cancelled.");
       result = await requestRuntimeStart(true);
     } else {
@@ -460,9 +460,25 @@ async function populateCameras(track) {
 function updateFlashVisibility(track) {
   let available = false;
   try { available = Boolean(track && track.getCapabilities && track.getCapabilities().torch); } catch (_) {}
-  flashButton.hidden = !available;
-  flashButton.disabled = !available;
+  flashButton.hidden = false;
+  flashButton.disabled = Boolean(track && !available);
   if (!available) flashButton.setAttribute("aria-pressed", "false");
+}
+
+async function openCameraInput(choice, current = () => true) {
+  const activeTrack = stream?.getVideoTracks()[0];
+  const settings = activeTrack?.getSettings?.() || {};
+  const sameDevice = !choice?.deviceId || !settings.deviceId || choice.deviceId === settings.deviceId;
+  const sameFacing = !choice?.facing || !settings.facingMode || choice.facing === settings.facingMode;
+  if (activeTrack?.readyState === "live" && sameDevice && sameFacing) return stream;
+  releaseCameraInput();
+  const opened = await openStartingCamera(choice, {current});
+  if (!current()) {
+    for (const track of opened.getTracks()) track.stop();
+    throw new DOMException("Camera request cancelled.", "AbortError");
+  }
+  stream = opened;
+  return opened;
 }
 
 function setMirror(value) {
@@ -724,10 +740,13 @@ async function start(automaticResume = false) {
     await preferencesReady;
     ensureCurrentStart();
     const requestedCamera = selectedCamera;
-    stream = await openStartingCamera(requestedCamera, {current: isCurrentStart});
+    stream = await openCameraInput(requestedCamera, isCurrentStart);
     ensureCurrentStart();
     const cameraTrack = stream.getVideoTracks()[0];
     if (!cameraTrack) throw new Error("The selected camera returned no video.");
+    if (automaticResume) {
+      for (const track of stream.getTracks()) track.enabled = true;
+    }
     output.srcObject = stream;
     output.hidden = false;
     output.classList.add("camera-source");
@@ -784,7 +803,7 @@ async function start(automaticResume = false) {
     void updateMetrics();
   } catch (error) {
     const obsolete = generation !== startGeneration || document.visibilityState !== "visible";
-    clearCameraSession();
+    clearCameraSession({preserveCamera: document.visibilityState !== "visible" && visibilityResumePending});
     if (!obsolete && error.status === 409 && !error.data?.low_vram) loseOwnership(error.message);
     else if (sessionToken && runtimeLoaded) {
       // Release only the camera, never unload a warm model on a connection failure.
@@ -820,7 +839,7 @@ function suspendForVisibility() {
   const wasStarted = started;
   const token = sessionToken;
   const pendingTransport = transportRequest;
-  clearCameraSession();
+  clearCameraSession({preserveCamera: true});
   setPlayback();
   if (!wasStarted || !token) return;
   visibilityPauseTask = visibilityPauseTask.catch(() => {}).then(async () => {
@@ -879,7 +898,7 @@ function closeCameraTransport() {
   latency.title = "Model inference and estimated end-to-end latency";
 }
 
-function clearCameraSession() {
+function clearCameraSession({preserveCamera = false} = {}) {
   cameraSwitchSequence += 1;
   generation += 1;
   started = false;
@@ -887,7 +906,15 @@ function clearCameraSession() {
   clearInterval(metricsTimer);
   metricsTimer = 0;
   showCameraSwitchError();
-  releaseCameraInput();
+  if (preserveCamera) {
+    cameraWatch?.abort();
+    cameraWatch = null;
+    clearTimeout(muteTimer);
+    muteTimer = 0;
+    for (const track of stream?.getTracks() || []) track.enabled = false;
+  } else {
+    releaseCameraInput();
+  }
   closeCameraTransport();
   showStartup("");
 }
@@ -1039,9 +1066,9 @@ async function restartTransport(current) {
   }
 }
 
-async function replaceCamera(lens, current, {reconnect = false, fallback = false} = {}) {
+async function replaceCamera(lens, current, {reconnect = false} = {}) {
   releaseCameraInput();
-  const next = await openStartingCamera(lens, {fallback, current});
+  const next = await openStartingCamera(lens, {current});
   try {
     const track = next.getVideoTracks()[0];
     if (!track || track.readyState === "ended") throw new Error("The selected camera returned no video.");
@@ -1090,7 +1117,7 @@ async function recoverCamera(epoch, message) {
     while (current() && recoveryAttempts < 2) {
       recoveryAttempts += 1;
       try {
-        await replaceCamera(selectedCamera, current, {reconnect: true, fallback: true});
+        await replaceCamera(selectedCamera, current, {reconnect: true});
         if (current() && stream) {
           showError("", "camera");
           if (!firstFrameReceived) showStartup("Waiting for the first frame", 7);
@@ -1150,8 +1177,31 @@ function queueCameraSwitch(lens) {
 }
 
 async function toggleFlash() {
-  if (!stream) return;
-  const track = stream.getVideoTracks()[0];
+  if (busy) return;
+  if (!stream?.getVideoTracks()[0] || stream.getVideoTracks()[0].readyState !== "live") {
+    busy = true;
+    startButton.disabled = true;
+    flashButton.disabled = true;
+    const currentGeneration = generation;
+    const current = () => generation === currentGeneration && document.visibilityState === "visible";
+    try {
+      await preferencesReady;
+      await openCameraInput(selectedCamera, current);
+      const openedTrack = stream?.getVideoTracks()[0];
+      if (!openedTrack || openedTrack.readyState !== "live") throw new Error("The selected camera returned no video.");
+      await populateCameras(openedTrack);
+      updateFlashVisibility(openedTrack);
+      applyCameraMirror(openedTrack, selectedCamera);
+    } catch (error) {
+      showError(error.message || "Could not open the camera.", "flash");
+    } finally {
+      busy = false;
+      startButton.disabled = false;
+      if (!stream?.getVideoTracks()[0]) updateFlashVisibility(null);
+    }
+  }
+  const track = stream?.getVideoTracks()[0];
+  if (!track || track.readyState !== "live") return;
   const capabilities = track.getCapabilities ? track.getCapabilities() : {};
   if (!capabilities.torch) {
     showError("Flash is unavailable on this camera.", "flash");
@@ -1184,7 +1234,11 @@ function getRenderedFrame() {
   return null;
 }
 
-settingsButton.addEventListener("click", () => setPanel(settingsPanel.hidden));
+settingsButton.addEventListener("click", () => {
+  const stylesDialog = $("stylesDialog");
+  if (stylesDialog.open) stylesDialog.close();
+  setPanel(settingsPanel.hidden);
+});
 doneSettingsButton.addEventListener("click", () => {
   clearTimeout(promptApplyTimer);
   promptApplyTimer = 0;

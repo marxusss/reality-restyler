@@ -33,7 +33,7 @@
           </button>
         </div>
         <div id="cameraActions" class="actions">
-          <button id="flashButton" class="icon-button" type="button" aria-label="Flash" aria-pressed="false" hidden disabled>
+          <button id="flashButton" class="icon-button" type="button" aria-label="Flash" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M13.3 2.5 5.8 13h5l-.5 8.5 7.9-11.1h-5.1l.2-7.9Z"/>
             </svg>
@@ -58,7 +58,7 @@
               <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.63-.07-.94l2.03-1.58c.18-.14.23-.39.12-.6l-1.92-3.32c-.11-.2-.35-.27-.56-.2l-2.39.96c-.5-.38-1.04-.7-1.63-.94l-.36-2.54c-.03-.22-.21-.38-.44-.38h-3.8c-.22 0-.41.16-.44.38l-.36 2.54c-.59.24-1.13.56-1.63.94l-2.39-.96c-.21-.08-.45 0-.56.2L2.88 8.88c-.11.2-.06.46.12.6l2.03 1.58c-.05.31-.07.63-.07.94s.02.63.07.94l-2.03 1.58c-.18.14-.23.39-.12.6l1.92 3.32c.11.2.35.27.56.2l2.39-.96c.5.38 1.04.7 1.63.94l.36 2.54c.03.22.21.38.44.38h3.8c.22 0 .41-.16.44-.38l.36-2.54c.59-.24 1.13-.56 1.63-.94l2.39.96c.21.08.45 0 .56-.2l1.92-3.32c.11-.2.06-.46-.12-.6l-2.02-1.58zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
             </svg>
           </button>
-          <button id="quickStylesButton" class="icon-button" type="button" aria-label="Styles" aria-haspopup="dialog">
+          <button id="quickStylesButton" class="icon-button" type="button" aria-label="Styles" aria-haspopup="dialog" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18h1.7a3 3 0 0 0 2.2-5.1 1.7 1.7 0 0 1 1.2-2.9H19a3 3 0 0 0 3-3A9 9 0 0 0 12 3Z"/><circle cx="7.5" cy="10" r=".9"/><circle cx="10.5" cy="6.7" r=".9"/><circle cx="15.4" cy="7.5" r=".9"/><circle cx="7.2" cy="15" r=".9"/></svg>
           </button>
         </div>
@@ -66,7 +66,7 @@
       <section id="settingsPanel" class="settings-panel" aria-label="Settings" hidden>
         <div class="prompt-line">
           <textarea id="promptInput" rows="1" maxlength="2000" spellcheck="false" enterkeyhint="done" aria-label="Prompt" placeholder="Describe a look…"></textarea>
-          <button id="stylesButton" class="toggle-button" type="button" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18h1.7a3 3 0 0 0 2.2-5.1 1.7 1.7 0 0 1 1.2-2.9H19a3 3 0 0 0 3-3A9 9 0 0 0 12 3Z"/><circle cx="7.5" cy="10" r=".9"/><circle cx="10.5" cy="6.7" r=".9"/><circle cx="15.4" cy="7.5" r=".9"/><circle cx="7.2" cy="15" r=".9"/></svg><span>Styles</span></button>
+          <button id="stylesButton" class="toggle-button" type="button" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18h1.7a3 3 0 0 0 2.2-5.1 1.7 1.7 0 0 1 1.2-2.9H19a3 3 0 0 0 3-3A9 9 0 0 0 12 3Z"/><circle cx="7.5" cy="10" r=".9"/><circle cx="10.5" cy="6.7" r=".9"/><circle cx="15.4" cy="7.5" r=".9"/><circle cx="7.2" cy="15" r=".9"/></svg><span>Styles</span></button>
           <button id="doneSettingsButton" class="toggle-button settings-done" type="button" aria-label="Apply settings and close">Done</button>
         </div>
         <div class="setting-row">

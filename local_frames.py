@@ -5,7 +5,7 @@ from io import BytesIO
 from PIL import Image
 
 MAX_EDGE = 2048
-INPUT_FORMATS = {"JPEG", "WEBP", "PNG"}  # Accept legacy clients; never emit PNG.
+INPUT_FORMATS = {"JPEG"}
 OUTPUT_QUALITY = 92
 
 def process_frame(payload, runtime):

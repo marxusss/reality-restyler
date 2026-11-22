@@ -1,7 +1,10 @@
 import argparse
+import hashlib
 import os
 import subprocess
 import sys
+import tempfile
+import urllib.request
 import webbrowser
 from pathlib import Path
 
@@ -14,6 +17,8 @@ MODEL_URL = f"https://huggingface.co/{MODEL_REPO}"
 MODEL_REVISION = "d76d4d72c17b5a48f795c9ee1680c5ea97c77435"
 UPSCALE_REPO = "Phips/2xNomosUni_compact_multijpg"
 UPSCALE_REVISION = "4774921957bcbd222e7e4861728b02ebb3502c31"
+SPAN_REVISION = "4592ce6db68b395699f13e7e2a4e3baf317ef1c6"
+SPAN_CHECKPOINT_URL = f"https://raw.githubusercontent.com/Amazingren/NTIRE2026_ESR/{SPAN_REVISION}/model_zoo/team22_spanv2_c2.pth"
 BUNDLE_NAME = "FLUX.2-klein-9B-Nunchaku"
 TRANSFORMER_NAME = "svdq-fp4_r32-FLUX.2-klein-9B-Nunchaku.safetensors"
 INT4_TRANSFORMER_NAME = "svdq-int4_r32-FLUX.2-klein-9B-Nunchaku.safetensors"
@@ -21,17 +26,16 @@ INT4_TRANSFORMER_NAME = "svdq-int4_r32-FLUX.2-klein-9B-Nunchaku.safetensors"
 
 def selected_transformer():
     # FP4 weights require Blackwell; earlier NVIDIA generations use INT4.
-    try:
-        import torch
-        if torch.cuda.is_available():
-            device = best_cuda_device(torch)
-            if torch.cuda.get_device_capability(device)[0] < 12:
-                return INT4_TRANSFORMER_NAME
-    except Exception:
-        pass
+    import torch
+    if not torch.cuda.is_available():
+        raise RuntimeError("Could not detect a supported NVIDIA CUDA GPU.")
+    device = best_cuda_device(torch)
+    if torch.cuda.get_device_capability(device)[0] < 12:
+        return INT4_TRANSFORMER_NAME
     return TRANSFORMER_NAME
 
 UPSCALE_NAME = "2xNomosUni_compact_multijpg.safetensors"
+SPAN_UPSCALE_NAME = "team22_spanv2_c2.pth"
 PIPELINE_FILES = (
     "model_index.json",
     "scheduler/scheduler_config.json",
@@ -63,41 +67,51 @@ FILE_SIZES = {
     INT4_TRANSFORMER_NAME: 5525885656,
 }
 UPSCALE_SIZE = 1205456
+SPAN_UPSCALE_SIZE = 565288
+SPAN_UPSCALE_SHA256 = "fca2743272b8a7fb32931ed3287454173c7d209f204cb2f58084ee868414d371"
+UPSCALERS = ("spanv2x4", "compact2x")
 
 
 def normalize_root(value):
     path = Path(value).expanduser().resolve()
-    if path.name in {BUNDLE_NAME, "FLUX.2-klein-9B"}:
+    if path.name == BUNDLE_NAME:
         return path.parent
     return path
 
 
 def model_directory(root):
     root = Path(root).expanduser().resolve()
-    candidates = (root / BUNDLE_NAME, root, root / "FLUX.2-klein-9B")
-    for candidate in candidates:
-        if (candidate / "model_index.json").is_file():
-            return candidate
-    return root / BUNDLE_NAME
+    bundle = root / BUNDLE_NAME
+    if (bundle / "model_index.json").is_file():
+        return bundle
+    if (root / "model_index.json").is_file():
+        return root
+    return bundle
 
 
 def transformer_file(root, base_dir=None, name=None):
-    root = Path(root).expanduser().resolve()
     base_dir = model_directory(root) if base_dir is None else Path(base_dir)
     name = selected_transformer() if name is None else name
-    candidates = (
-        base_dir / name,
-        root / BUNDLE_NAME / name,
-        base_dir.parent / BUNDLE_NAME / name,
-    )
-    for candidate in dict.fromkeys(candidates):
-        if candidate.is_file():
-            return candidate
     return base_dir / name
 
 
-def upscaler_file(root):
-    return Path(root).expanduser().resolve() / "upscalers" / UPSCALE_NAME
+def upscaler_file(root, upscaler_id):
+    names = {"compact2x": UPSCALE_NAME, "spanv2x4": SPAN_UPSCALE_NAME}
+    if upscaler_id not in names:
+        raise ValueError("The upscaler is not supported.")
+    return Path(root).expanduser().resolve() / "upscalers" / names[upscaler_id]
+
+
+def upscaler_is_valid(path, upscaler_id):
+    if not path.is_file():
+        return False
+    if upscaler_id == "compact2x":
+        return path.stat().st_size == UPSCALE_SIZE
+    if upscaler_id == "spanv2x4":
+        if path.stat().st_size != SPAN_UPSCALE_SIZE:
+            return False
+        return hashlib.sha256(path.read_bytes()).hexdigest() == SPAN_UPSCALE_SHA256
+    return False
 
 
 def _valid_file(path, relative):
@@ -199,22 +213,42 @@ def download_model(root, missing, non_interactive=False):
         _download_model(root, missing)
 
 
-def download_upscaler(root):
-    from huggingface_hub import hf_hub_download
-
-    destination = upscaler_file(root)
+def download_upscaler(root, upscaler_id):
+    destination = upscaler_file(root, upscaler_id)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.is_file() and destination.stat().st_size == UPSCALE_SIZE:
+    if upscaler_is_valid(destination, upscaler_id):
         return destination
-    hf_hub_download(
-        repo_id=UPSCALE_REPO,
-        filename=UPSCALE_NAME,
-        revision=UPSCALE_REVISION,
-        local_dir=str(destination.parent),
-        **_setup_progress_options(),
-    )
-    if not destination.is_file() or destination.stat().st_size != UPSCALE_SIZE:
-        raise RuntimeError("The Compact 2x file is incomplete.")
+    if upscaler_id == "compact2x":
+        from huggingface_hub import hf_hub_download
+        hf_hub_download(
+            repo_id=UPSCALE_REPO,
+            filename=UPSCALE_NAME,
+            revision=UPSCALE_REVISION,
+            local_dir=str(destination.parent),
+            **_setup_progress_options(),
+        )
+        if not upscaler_is_valid(destination, upscaler_id):
+            raise RuntimeError("The Compact 2x file is incomplete.")
+        return destination
+    with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=f".{destination.name}.", suffix=".partial", delete=False) as temporary:
+        partial = Path(temporary.name)
+    digest = hashlib.sha256()
+    received = 0
+    try:
+        request = urllib.request.Request(SPAN_CHECKPOINT_URL, headers={"User-Agent": "RealityRestylingSetup"})
+        with urllib.request.urlopen(request, timeout=30) as response, partial.open("wb") as output:
+            total = int(response.headers.get("Content-Length") or SPAN_UPSCALE_SIZE)
+            while chunk := response.read(1024 * 1024):
+                output.write(chunk)
+                digest.update(chunk)
+                received += len(chunk)
+                if os.environ.get("REALITY_RESTYLE_INSTALL_PROGRESS") == "1":
+                    print(f"RR_MODEL {received} of {total}", flush=True)
+        if received != SPAN_UPSCALE_SIZE or digest.hexdigest() != SPAN_UPSCALE_SHA256:
+            raise RuntimeError("The SPANV2 checkpoint failed verification.")
+        os.replace(partial, destination)
+    finally:
+        partial.unlink(missing_ok=True)
     return destination
 
 
@@ -225,10 +259,14 @@ def main():
     parser.add_argument("--check-upscaler", action="store_true")
     parser.add_argument("--download-required", action="store_true")
     parser.add_argument("--download-upscaler", action="store_true")
+    parser.add_argument("--upscaler-id", choices=UPSCALERS, default=os.environ.get("REALITY_RESTYLE_UPSCALER_ID", "spanv2x4"))
     parser.add_argument("--non-interactive-auth", action="store_true")
     args = parser.parse_args()
     root = normalize_root(args.root)
-    base, _, missing = missing_files(root)
+    base = model_directory(root)
+    missing = []
+    if args.check or args.download_required:
+        base, _, missing = missing_files(root)
     if args.check:
         if missing:
             print("Missing or invalid model files:")
@@ -249,13 +287,13 @@ def main():
             raise RuntimeError("Model download is incomplete: " + ", ".join(missing))
         print(f"Model files ready: {base}")
     if args.check_upscaler:
-        path = upscaler_file(root)
-        if not path.is_file() or path.stat().st_size != UPSCALE_SIZE:
-            print("Compact 2x is missing or invalid.")
+        path = upscaler_file(root, args.upscaler_id)
+        if not upscaler_is_valid(path, args.upscaler_id):
+            print(f"{args.upscaler_id} is missing or invalid.")
             return 2
     if args.download_upscaler:
-        path = download_upscaler(root)
-        print(f"Compact 2x ready: {path}")
+        path = download_upscaler(root, args.upscaler_id)
+        print(f"{args.upscaler_id} ready: {path}")
     return 0
 
 

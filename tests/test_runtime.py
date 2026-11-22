@@ -13,6 +13,19 @@ from timing import TimingWindow
 
 
 class RuntimeSettingsTests(unittest.TestCase):
+    def test_cpu_offload_is_explicitly_configured(self):
+        import os
+        from runtime import _cpu_offload_enabled
+
+        for value, expected in ((None, False), ("0", False), ("1", True), ("true", True)):
+            with self.subTest(value=value):
+                if value is None:
+                    with patch.dict(os.environ, {}, clear=True):
+                        self.assertEqual(_cpu_offload_enabled(), expected)
+                else:
+                    with patch.dict(os.environ, {"REALITY_RESTYLE_CPU_OFFLOAD": value}, clear=True):
+                        self.assertEqual(_cpu_offload_enabled(), expected)
+
     def test_style_combination_preserves_every_instruction(self):
         first = "Pencil drawing; keep scene intact"
         second = "Bold watercolor, keep scene intact"
@@ -29,12 +42,14 @@ class RuntimeSettingsTests(unittest.TestCase):
         self.assertEqual(settings, DEFAULT_SETTINGS)
         self.assertTrue(settings["upscale"])
         self.assertEqual(settings["resolution"], 512)
+        self.assertEqual(settings["upscaler"], "spanv2x4")
 
     def test_partial_updates_preserve_other_values(self):
-        updated = normalize_settings({"steps": 3}, {"prompt": "portrait", "steps": 4, "resolution": 640, "upscale": True, "rotation": 90})
+        updated = normalize_settings({"steps": 3}, {"prompt": "portrait", "steps": 4, "resolution": 640, "upscale": True, "upscaler": "spanv2x4", "rotation": 90})
         self.assertEqual(updated["steps"], 3)
         self.assertEqual(updated["prompt"], "portrait")
         self.assertEqual(updated["rotation"], 90)
+        self.assertEqual(updated["upscaler"], "spanv2x4")
 
     def test_rejects_unknown_model_and_runtime_controls(self):
         for payload in ({"model": "other"}, {"seed": 4}):

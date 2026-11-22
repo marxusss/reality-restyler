@@ -28,18 +28,19 @@ class CameraPreferencesTests(unittest.TestCase):
 
     def test_persists_app_settings_and_ignores_device_rotation(self):
         settings = {"prompt": "watercolor", "steps": 2, "resolution": 768,
-                    "upscale": False, "rotation": 90}
+                    "upscale": False, "upscaler": "compact2x", "rotation": 90}
         preferences.save_preferences(settings)
         self.assertEqual(preferences.read_preferences(), {
             "prompt": "watercolor", "steps": 2, "resolution": 768, "upscale": False
         })
         self.assertNotIn("rotation", json.loads(preferences.PREFERENCES_PATH.read_text()))
+        self.assertNotIn("upscaler", json.loads(preferences.PREFERENCES_PATH.read_text()))
 
     def test_identical_values_do_not_rewrite(self):
-        preferences.save_preferences({"prompt": "", "steps": 4, "resolution": 512, "upscale": True})
+        preferences.save_preferences({"prompt": "", "steps": 4, "resolution": 512, "upscale": True, "upscaler": "compact2x"})
         original = preferences.PREFERENCES_PATH.read_bytes()
         with patch("preferences.os.replace") as replace:
-            preferences.save_preferences({"prompt": "", "steps": 4, "resolution": 512, "upscale": True})
+            preferences.save_preferences({"prompt": "", "steps": 4, "resolution": 512, "upscale": True, "upscaler": "compact2x"})
         replace.assert_not_called()
         self.assertEqual(preferences.PREFERENCES_PATH.read_bytes(), original)
 

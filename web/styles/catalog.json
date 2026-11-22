@@ -122,7 +122,7 @@
   {
     "id": "stained-glass",
     "name": "Flat stained glass art",
-    "prompt": "Use jewel-toned glass color, clean dark leading and soft transmitted light in a flat, luminous finish. Preserve identity, pose, expression and scene; keep scene intact",
+    "prompt": "Render the existing scene as a flat stained-glass illustration. Simplify each subject and background surface into distinct geometric panes of saturated color, separated by thick dark lead lines that follow the shapes. Keep the panes matte and non-reflective, with no shine, glare or added highlights. Preserve identity, pose, expression and scene; keep scene intact",
     "thumbnail": "/styles/stained-glass.webp"
   },
   {

@@ -3,7 +3,6 @@ import os
 import re
 import stat
 import sys
-import tempfile
 import threading
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -13,39 +12,9 @@ LOG_DIR = ROOT / "logs"
 RETENTION_DAYS = 4
 SERVER_LOG = re.compile(r"server-(\d{4}-\d{2}-\d{2})-\d+\.log$")
 INSTALL_LOG = re.compile(r"(?:install|launcher)-[0-9T-]+(?:-(?:error|setup|repair|output))?\.log$")
-LEGACY_SESSION = re.compile(r"RealityRestyling-[0-9a-f]{32}$")
-LEGACY_FILES = {"output.log", "error.log", "ready.json", "ready.json.tmp", "error.json", "error.json.tmp", "phone.json", "phone.json.tmp", "phone.png", "phone.approved", "phone.pending", "stage.txt", "stop"}
-
-
 def _is_redirected(path):
     info = path.lstat()
     return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_file_attributes", 0) & 0x400)
-
-
-def prune_legacy_sessions(now=None, temp_root=None):
-    """Prune only old diagnostics from previous launcher versions, not live IPC."""
-    now = now or datetime.now(timezone.utc)
-    cutoff = now.timestamp() - RETENTION_DAYS * 86400
-    root = Path(temp_root or tempfile.gettempdir())
-    for directory in root.glob("RealityRestyling-*"):
-        try:
-            if not LEGACY_SESSION.fullmatch(directory.name) or _is_redirected(directory) or not directory.is_dir():
-                continue
-            children = list(directory.iterdir())
-            if not children or any(p.name not in LEGACY_FILES or _is_redirected(p) or not p.is_file() for p in children):
-                continue
-            if max([directory.stat().st_mtime, *(p.stat().st_mtime for p in children)]) >= cutoff:
-                continue
-            # Limit migration cleanup to diagnostic files. Do not delete IPC files
-            # that might still be needed by an old live launcher.
-            for child in children:
-                if child.name in {"output.log", "error.log"}:
-                    try:
-                        child.unlink()
-                    except OSError:
-                        pass
-        except OSError:
-            continue
 
 
 def prune_logs(root=ROOT, now=None):
@@ -139,7 +108,6 @@ class Tee:
 
 def enable_logging(*, echo=True):
     prune_logs()
-    prune_legacy_sessions()
     log = DailyLog()
     sys.stdout = Tee(sys.stdout, log, echo)
     sys.stderr = Tee(sys.stderr, log, echo)
@@ -151,4 +119,3 @@ if __name__ == "__main__":
     parser.add_argument("--prune", action="store_true", required=True)
     parser.parse_args()
     prune_logs()
-    prune_legacy_sessions()

@@ -20,9 +20,9 @@ _LOCK = threading.RLock()
 
 
 def _normalize(data):
-    if not isinstance(data, dict) or set(data) - set(PERSISTED_KEYS):
+    if not isinstance(data, dict) or set(data) - {*PERSISTED_KEYS, "upscaler"}:
         raise ValueError("The saved camera settings are invalid.")
-    settings = normalize_settings(data, DEFAULT_SETTINGS)
+    settings = normalize_settings({key: data[key] for key in PERSISTED_KEYS if key in data}, DEFAULT_SETTINGS)
     return {key: settings[key] for key in PERSISTED_KEYS}
 
 

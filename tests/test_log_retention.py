@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from log_retention import prune_legacy_sessions, prune_logs
+from log_retention import prune_logs
 
 
 class LogRetentionTests(unittest.TestCase):
@@ -29,7 +29,6 @@ class LogRetentionTests(unittest.TestCase):
             self.assertFalse((directory / names[2]).exists())
             self.assertTrue(fresh.exists())
             self.assertTrue((directory / names[4]).exists())
-
     def test_launcher_and_repair_logs_are_pruned(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -42,19 +41,3 @@ class LogRetentionTests(unittest.TestCase):
                 os.utime(path, (now.timestamp() - 5 * 86400,) * 2)
             prune_logs(root, now)
             self.assertEqual(list(logs.iterdir()), [])
-
-    def test_legacy_cleanup_does_not_delete_ipc_or_unrelated_files(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            session = root / ("RealityRestyling-" + "a" * 32)
-            session.mkdir()
-            now = datetime(2026, 11, 18, 12, tzinfo=timezone.utc)
-            old = (now.timestamp() - 5 * 86400,) * 2
-            for name in ("output.log", "ready.json"):
-                path = session / name
-                path.write_text("old")
-                os.utime(path, old)
-            os.utime(session, old)
-            prune_legacy_sessions(now, root)
-            self.assertFalse((session / "output.log").exists())
-            self.assertTrue((session / "ready.json").exists())

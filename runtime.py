@@ -10,14 +10,35 @@ import numpy as np
 from PIL import Image
 
 from hardware_check import SIMULTANEOUS_VRAM_GIB, best_cuda_device
-from model_setup import missing_files, model_directory, normalize_root
+from model_setup import (
+    SPAN_UPSCALE_SIZE,
+    UPSCALE_SIZE,
+    missing_files,
+    model_directory,
+    normalize_root,
+    upscaler_file,
+    upscaler_is_valid,
+)
 from runtime_settings import DEFAULT_SETTINGS, PROMPT_TOKEN_LIMIT, normalize_settings
 from timing import TimingWindow
 
 ROOT = Path(__file__).resolve().parent
 MODELS = normalize_root(os.environ.get("REALITY_RESTYLE_MODELS_DIR", ROOT / "models"))
-UPSCALER_FILE = MODELS / "upscalers" / "2xNomosUni_compact_multijpg.safetensors"
+COMPACT_UPSCALER_FILE = upscaler_file(MODELS, "compact2x")
+SPAN_UPSCALER_FILE = upscaler_file(MODELS, "spanv2x4")
 PROMPT_CACHE_SIZE = 5
+
+
+def _upscaler_available(upscaler_id):
+    if upscaler_id != DEFAULT_SETTINGS["upscaler"]:
+        return False
+    path = upscaler_file(MODELS, upscaler_id)
+    expected_size = {"compact2x": UPSCALE_SIZE, "spanv2x4": SPAN_UPSCALE_SIZE}[upscaler_id]
+    return path.is_file() and path.stat().st_size == expected_size
+
+
+def _cpu_offload_enabled():
+    return os.environ.get("REALITY_RESTYLE_CPU_OFFLOAD", "0").strip().lower() in {"1", "true", "yes"}
 
 
 @lru_cache(maxsize=1)
@@ -61,6 +82,8 @@ class Runtime:
         self._device_index = 0
         self._upscaler = None
         self._upscaler_attempted = False
+        self._upscaler_key = None
+        self._last_upscale_report = None
         self._prompt_cache = OrderedDict()
         self._metrics = {
             "loaded": False,
@@ -68,7 +91,10 @@ class Runtime:
             "upscale_ms": 0.0,
             "total_ms": 0.0,
             "error": "",
-            "upscaler_available": UPSCALER_FILE.is_file(),
+            "upscaler_available": _upscaler_available(self._settings["upscaler"]),
+            "upscaler_applied": False,
+            "generated_size": "",
+            "output_size": "",
         }
         self._timing = TimingWindow("inference")
         self._cold_prompt_timing = TimingWindow("prompt_encode_cold", sample_label="prompts")
@@ -80,13 +106,24 @@ class Runtime:
 
     def set_settings(self, raw):
         with self._settings_lock:
+            previous = self._settings
             self._settings = normalize_settings(raw, self._settings)
-            return dict(self._settings)
+            updated = dict(self._settings)
+        if (previous["upscale"], previous["upscaler"]) != (updated["upscale"], updated["upscaler"]):
+            with self._status_lock:
+                self._metrics.update({
+                    "upscaler_applied": False,
+                    "generated_size": "",
+                    "output_size": "",
+                })
+        return updated
 
     def metrics(self):
+        selected_upscaler = self.settings()["upscaler"]
         with self._status_lock:
             result = dict(self._metrics)
-            result["upscaler_available"] = UPSCALER_FILE.is_file()
+            result["upscaler"] = selected_upscaler
+            result["upscaler_available"] = _upscaler_available(selected_upscaler)
             result["loaded"] = self._pipe is not None
             return result
 
@@ -117,7 +154,7 @@ class Runtime:
         with self._lock:
             if self._pipe is not None:
                 self.heartbeat()
-                return {"ok": True, "low_vram": False, "upscaler_available": UPSCALER_FILE.is_file()}
+                return {"ok": True, "low_vram": False, "upscaler_available": _upscaler_available(self.settings()["upscaler"])}
             report("checking")
             import torch
             if not torch.cuda.is_available():
@@ -137,6 +174,7 @@ class Runtime:
                     "free_vram_gb": round(free / 1024 ** 3, 1),
                     "total_vram_gb": round(total / 1024 ** 3, 1),
                 }
+            cpu_offload = low_vram and _cpu_offload_enabled()
             torch.set_float32_matmul_precision("high")
             torch.backends.cudnn.benchmark = False
             try:
@@ -148,7 +186,7 @@ class Runtime:
                 report("text_encoder")
                 encoder_quant = (BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
                                                      bnb_4bit_compute_dtype=torch.float16)
-                                 if low_vram else BitsAndBytesConfig(load_in_8bit=True))
+                                 if cpu_offload else BitsAndBytesConfig(load_in_8bit=True))
                 text_encoder = Qwen3ForCausalLM.from_pretrained(
                     str(base_dir),
                     subfolder="text_encoder",
@@ -171,7 +209,7 @@ class Runtime:
                     local_files_only=True,
                 )
                 report("gpu")
-                if low_vram:
+                if cpu_offload:
                     # Offload components between prompt encoding and frame inference.
                     pipe.enable_model_cpu_offload(device=device)
                 else:
@@ -194,6 +232,8 @@ class Runtime:
                 self._pipe = pipe
                 self._upscaler = None
                 self._upscaler_attempted = False
+                self._upscaler_key = None
+                self._last_upscale_report = None
                 self._prompt_cache.clear()
                 self._metrics.update({
                     "loaded": True,
@@ -201,9 +241,12 @@ class Runtime:
                     "upscale_ms": 0.0,
                     "total_ms": 0.0,
                     "error": "",
-                    "upscaler_available": UPSCALER_FILE.is_file(),
+                    "upscaler_available": _upscaler_available(self.settings()["upscaler"]),
+                    "upscaler_applied": False,
+                    "generated_size": "",
+                    "output_size": "",
                 })
-            return {"ok": True, "low_vram": low_vram, "upscaler_available": UPSCALER_FILE.is_file()}
+            return {"ok": True, "low_vram": low_vram, "upscaler_available": _upscaler_available(self.settings()["upscaler"])}
 
     def unload(self):
         with self._lock:
@@ -215,16 +258,26 @@ class Runtime:
         self._warm_timing.flush()
         pipe = self._pipe
         upscaler = self._upscaler
+        if callable(getattr(upscaler, "close", None)):
+            try:
+                upscaler.close()
+            except Exception as exc:
+                print(f"Upscaler release failed: {type(exc).__name__}: {exc}", flush=True)
         with self._status_lock:
             self._pipe = None
             self._upscaler = None
             self._upscaler_attempted = False
+            self._upscaler_key = None
+            self._last_upscale_report = None
             self._prompt_cache.clear()
             self._metrics.update({
                 "loaded": False,
                 "model_ms": 0.0,
                 "upscale_ms": 0.0,
                 "total_ms": 0.0,
+                "upscaler_applied": False,
+                "generated_size": "",
+                "output_size": "",
             })
         del pipe
         del upscaler
@@ -262,34 +315,70 @@ class Runtime:
             self._prompt_cache.popitem(last=False)
         return embeds, ids
 
-    def _load_upscaler(self):
+    def _load_upscaler(self, upscaler_id):
+        if self._upscaler_key != upscaler_id:
+            old_model = self._upscaler
+            if callable(getattr(old_model, "close", None)):
+                try:
+                    old_model.close()
+                except Exception as exc:
+                    print(f"Upscaler release failed: {type(exc).__name__}: {exc}", flush=True)
+            self._upscaler = None
+            self._upscaler_attempted = False
+            self._upscaler_key = upscaler_id
+            del old_model
+            gc.collect()
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
         if self._upscaler is not None:
             return self._upscaler
         if self._upscaler_attempted:
-            return None
+            raise RuntimeError(f"{upscaler_id} failed to load.")
         self._upscaler_attempted = True
-        if not UPSCALER_FILE.is_file():
+        if not _upscaler_available(upscaler_id):
             self.report_error("Upscaler checkpoint is missing.")
-            return None
+            raise RuntimeError("Upscaler checkpoint is missing.")
+        if not upscaler_is_valid(upscaler_file(MODELS, upscaler_id), upscaler_id):
+            self.report_error("Upscaler checkpoint is invalid.")
+            raise RuntimeError("Upscaler checkpoint is invalid.")
         try:
-            from spandrel import ModelLoader
-            model = ModelLoader().load_from_file(str(UPSCALER_FILE))
-            if int(getattr(model, "scale", 0) or 0) != 2:
-                raise RuntimeError("Unexpected model scale.")
-            self._upscaler = model.cuda().eval()
-            if getattr(self._upscaler, "supports_half", False):
-                self._upscaler.half()
+            import torch
+            if upscaler_id == "compact2x":
+                from spandrel import ModelLoader
+                model = ModelLoader().load_from_file(str(COMPACT_UPSCALER_FILE))
+                if int(getattr(model, "scale", 0) or 0) != 2:
+                    raise RuntimeError("Unexpected model scale.")
+                self._upscaler = model.cuda().eval()
+                if getattr(self._upscaler, "supports_half", False):
+                    self._upscaler.half()
+            elif upscaler_id == "spanv2x4":
+                from upscaler_models.spanv2 import SPANV2ESR
+                model = SPANV2ESR(3, 3, feature_channels=32, upscale=4, bias=False)
+                state = torch.load(SPAN_UPSCALER_FILE, map_location="cpu", weights_only=True)
+                for key in ("model", "state_dict", "params", "params_ema"):
+                    if isinstance(state, dict) and key in state:
+                        state = state[key]
+                        break
+                model.load_state_dict(state, strict=True)
+                self._upscaler = model.cuda().float().eval()
+            else:
+                raise RuntimeError("This video upscaler is not available in the Windows camera runtime.")
             return self._upscaler
         except Exception as exc:
-            print(f"Upscaler load failed: {type(exc).__name__}: {exc}", flush=True)
-            self.report_error("Upscaler could not be loaded.")
-            return None
+            print(f"Upscaler {upscaler_id} load failed: {type(exc).__name__}: {exc}", flush=True)
+            self.report_error(f"Upscaler could not be loaded: {type(exc).__name__}.")
+            raise RuntimeError(f"Upscaler {upscaler_id} could not be loaded.") from exc
 
-    def _upscale(self, image, torch, model=None):
+    def _upscale(self, image, torch, upscaler_id, model=None):
         if model is None:
-            model = self._load_upscaler()
+            model = self._load_upscaler(upscaler_id)
         if model is None:
-            return image
+            raise RuntimeError(f"Upscaler {upscaler_id} is unavailable.")
+        expected_scale = {"compact2x": 2, "spanv2x4": 4}[upscaler_id]
         array = np.asarray(image.convert("RGB"))
         with torch.inference_mode():
             tensor = torch.from_numpy(array.copy()).to("cuda").permute(2, 0, 1).unsqueeze(0).float() / 255.0
@@ -297,6 +386,12 @@ class Runtime:
                 tensor = tensor.half()
             output = (model(tensor).clamp(0, 1) * 255.0 + 0.5).to(torch.uint8)
             output = output.squeeze(0).permute(1, 2, 0).contiguous().cpu().numpy()
+        expected_size = (image.width * expected_scale, image.height * expected_scale)
+        if (output.shape[1], output.shape[0]) != expected_size:
+            raise RuntimeError(
+                f"{upscaler_id} returned {output.shape[1]}x{output.shape[0]}, "
+                f"expected {expected_size[0]}x{expected_size[1]}."
+            )
         return Image.fromarray(output)
 
     def render(self, image):
@@ -373,20 +468,36 @@ class Runtime:
             model_ms = (time.perf_counter() - generation_started) * 1000.0
             upscale_load_ms = 0.0
             upscale_compute_ms = 0.0
+            upscaler_applied = False
+            generated_size = output.size
             if settings["upscale"]:
                 load_started = time.perf_counter()
-                load_was_attempted = self._upscaler_attempted
-                upscaler = self._load_upscaler()
+                load_was_attempted = self._upscaler_attempted and self._upscaler_key == settings["upscaler"]
+                upscaler = self._load_upscaler(settings["upscaler"])
                 if not load_was_attempted:
                     upscale_load_ms = (time.perf_counter() - load_started) * 1000.0
-                if upscaler is not None:
-                    upscale_started = time.perf_counter()
-                    output = self._upscale(output, torch, upscaler)
-                    upscale_compute_ms = (time.perf_counter() - upscale_started) * 1000.0
+                upscale_started = time.perf_counter()
+                output = self._upscale(output, torch, settings["upscaler"], upscaler)
+                upscale_compute_ms = (time.perf_counter() - upscale_started) * 1000.0
+                upscaler_applied = True
             postprocess_started = time.perf_counter()
             if rotation:
                 output = output.rotate(rotation, expand=True)
             postprocess_ms = (time.perf_counter() - postprocess_started) * 1000.0
+            upscale_report = (
+                settings["upscaler"] if settings["upscale"] else "off",
+                upscaler_applied,
+                generated_size,
+                output.size,
+            )
+            if upscale_report != self._last_upscale_report:
+                print(
+                    f"UPSCALE model={upscale_report[0]} applied={int(upscaler_applied)} "
+                    f"generated={generated_size[0]}x{generated_size[1]} "
+                    f"output={output.width}x{output.height}",
+                    flush=True,
+                )
+                self._last_upscale_report = upscale_report
             total_ms = (time.perf_counter() - generation_started) * 1000.0
             upscale_ms = upscale_load_ms + upscale_compute_ms
             with self._status_lock:
@@ -395,12 +506,18 @@ class Runtime:
                     "model_ms": round(model_ms, 1),
                     "upscale_ms": round(upscale_ms, 1),
                     "total_ms": round(total_ms, 1),
+                    "upscaler_applied": upscaler_applied,
+                    "generated_size": f"{generated_size[0]}x{generated_size[1]}",
+                    "output_size": f"{output.width}x{output.height}",
                 })
             timing_context = {
                 "input": f"{width}x{height}",
-                "output": f"{target_width}x{target_height}",
+                "generated": f"{generated_size[0]}x{generated_size[1]}",
+                "output": f"{output.width}x{output.height}",
                 "steps": settings["steps"],
                 "upscale": int(settings["upscale"]),
+                "upscaler": settings["upscaler"] if settings["upscale"] else "off",
+                "upscaler_applied": int(upscaler_applied),
             }
             if prompt_cache_miss:
                 self._cold_prompt_timing.record(

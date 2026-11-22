@@ -34,6 +34,7 @@ Source: "..\local_frames.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\webrtc_track.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\model_setup.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\runtime_cleanup.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\upscaler_models\*"; DestDir: "{app}\upscaler_models"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\requirements.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\updates.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\updater.ps1"; DestDir: "{app}"; Flags: ignoreversion
@@ -81,6 +82,7 @@ Type: dirifempty; Name: "{app}"
 var
   ModelPage: TInputOptionWizardPage;
   ModelDirPage: TInputQueryWizardPage;
+  UpscalerPage: TInputOptionWizardPage;
   TailscalePage: TInputOptionWizardPage;
   RuntimeSetupAttempted: Boolean;
   RuntimeSetupSucceeded: Boolean;
@@ -185,7 +187,12 @@ begin
   BrowseButton.Height := WizardForm.NextButton.Height;
   BrowseButton.OnClick := @BrowseModelFolder;
 
-  TailscalePage := CreateInputOptionPage(ModelDirPage.ID, 'Phone access', 'Connect a phone (optional)', 'Enable phone access now or later from the launcher.', False, False);
+  UpscalerPage := CreateInputOptionPage(ModelDirPage.ID, 'Upscaler', 'Choose the upscaler', 'One upscaler will be installed.', True, False);
+  UpscalerPage.Add('SPANV2 4×');
+  UpscalerPage.Add('Compact 2×');
+  UpscalerPage.SelectedValueIndex := 0;
+
+  TailscalePage := CreateInputOptionPage(UpscalerPage.ID, 'Phone access', 'Connect a phone (optional)', 'Enable phone access now or later from the launcher.', False, False);
   TailscalePage.Add('Enable phone access (install Tailscale if needed)');
   TailscalePage.Values[0] := False;
 end;
@@ -206,7 +213,7 @@ end;
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := (IsUpdateInstall and ((PageID = wpSelectDir) or (PageID = ModelPage.ID) or
-    (PageID = ModelDirPage.ID) or (PageID = TailscalePage.ID))) or
+    (PageID = ModelDirPage.ID) or (PageID = UpscalerPage.ID) or (PageID = TailscalePage.ID))) or
     ((PageID = ModelDirPage.ID) and (ModelPage.SelectedValueIndex = 2));
 end;
 
@@ -229,7 +236,7 @@ end;
 
 function GetInstallParameters(Param: String): String;
 var
-  ModeName, ModelPath: String;
+  ModeName, ModelPath, UpscalerId: String;
 begin
   case ModelPage.SelectedValueIndex of
     0: ModeName := 'existing';
@@ -241,9 +248,13 @@ begin
     ModelPath := ExpandConstant('{localappdata}\Reality Restyling\Models')
   else
     ModelPath := ModelDirPage.Values[0];
+  if UpscalerPage.SelectedValueIndex = 0 then
+    UpscalerId := 'spanv2x4'
+  else
+    UpscalerId := 'compact2x';
   if (Length(ModelPath) > 0) and (ModelPath[Length(ModelPath)] = '\') then
     ModelPath := ModelPath + '.';
-  Result := '-ModelMode ' + ModeName + ' -ModelsPath "' + ModelPath + '"';
+  Result := '-ModelMode ' + ModeName + ' -ModelsPath "' + ModelPath + '" -UpscalerId ' + UpscalerId;
   if TailscalePage.Values[0] then
     Result := Result + ' -InstallTailscale';
 end;

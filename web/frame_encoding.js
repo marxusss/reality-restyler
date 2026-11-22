@@ -14,7 +14,7 @@ export async function encodeCameraFrame(video, canvas, context, resolution) {
   context.drawImage(video, 0, 0, w, h);
   const captureMs = performance.now() - captureStartedAt;
   const encodeStartedAt = performance.now();
-  const image = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.88));
+  const image = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.92));
   if (!image || image.type !== "image/jpeg") throw new Error("Could not encode camera frame.");
   const data = await image.arrayBuffer();
   const encodeMs = performance.now() - encodeStartedAt;

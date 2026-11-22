@@ -191,10 +191,42 @@ test("style-name caption never renders its own backdrop", () => {
 });
 
 
-test("flash control starts hidden and stays hidden when the camera has no torch", () => {
+test("flash control stays available before camera permission and disables without torch", () => {
   const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
   const app = readFileSync(new URL("../web/app.js", import.meta.url), "utf8");
   const visibility = app.match(/function updateFlashVisibility\(track\) \{[\s\S]*?\n\}/)?.[0] || "";
-  assert.match(html, /id="flashButton"[^>]*hidden[^>]*disabled/);
-  assert.match(visibility, /flashButton\.hidden = !available/);
+  const flash = app.match(/async function toggleFlash\(\) \{[\s\S]*?\n\}/)?.[0] || "";
+  assert.match(html, /id="flashButton"[^>]*aria-pressed="false"(?![^>]*\bhidden\b)(?![^>]*\bdisabled\b)/);
+  assert.match(visibility, /flashButton\.hidden = false/);
+  assert.match(visibility, /flashButton\.disabled = Boolean\(track && !available\)/);
+  assert.match(flash, /await openCameraInput\(selectedCamera, current\)/);
+});
+
+test("visibility suspension keeps the live camera stream for automatic resume", () => {
+  const app = readFileSync(new URL("../web/app.js", import.meta.url), "utf8");
+  const suspend = app.match(/function suspendForVisibility\(\) \{[\s\S]*?\n\}/)?.[0] || "";
+  const clear = app.match(/function clearCameraSession\([\s\S]*?\n\}/)?.[0] || "";
+  const start = app.match(/async function start\(automaticResume = false\) \{[\s\S]*?\n\}/)?.[0] || "";
+  assert.match(suspend, /clearCameraSession\(\{preserveCamera: true\}\)/);
+  assert.doesNotMatch(suspend, /releaseCameraInput\(\)/);
+  assert.match(clear, /if \(preserveCamera\)[\s\S]*?track\.enabled = false/);
+  assert.match(clear, /else \{\s*releaseCameraInput\(\)/);
+  assert.match(start, /if \(automaticResume\)[\s\S]*?track\.enabled = true/);
+});
+
+test("upscaling state is visually distinct", () => {
+  const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
+  assert.match(css, /#upscaleButton\[aria-pressed="true"\]\s*\{[^}]*background:\s*rgba\(62,164,102/);
+  assert.match(css, /#upscaleButton\[aria-pressed="false"\]\s*\{[^}]*background:\s*rgba\(255,255,255/);
+});
+
+test("styles toggle closed and Settings can take over", () => {
+  const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../web/styles.js", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../web/app.js", import.meta.url), "utf8");
+  assert.equal((html.match(/aria-expanded="false"/g) || []).length >= 2, true);
+  assert.match(styles, /if \(stylesDialog\.open\) \{\s*stylesDialog\.close\(\);\s*return;/);
+  assert.match(styles, /stylesDialog\.show\(\)/);
+  assert.doesNotMatch(styles, /stylesDialog\.showModal\(\)/);
+  assert.match(app, /settingsButton\.addEventListener\("click", \(\) => \{\s*const stylesDialog = \$\("stylesDialog"\);\s*if \(stylesDialog\.open\) stylesDialog\.close\(\);\s*setPanel\(settingsPanel\.hidden\);/);
 });

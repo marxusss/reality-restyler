@@ -232,11 +232,18 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   }
 
   async function openStyles() {
+    if (stylesDialog.open) {
+      stylesDialog.close();
+      return;
+    }
     const presetStyles = $("presetStyles");
     const catalogError = $("catalogError");
     setStyleSelection(null);
     renderCustomStyles();
-    stylesDialog.showModal();
+    stylesDialog.show();
+    for (const button of [$("stylesButton"), $("quickStylesButton")]) {
+      button.setAttribute("aria-expanded", "true");
+    }
     void syncCustomStyles().catch(() => {});
     if (presetStyles.hasChildNodes()) return;
     setStyleError(catalogError);
@@ -350,6 +357,13 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   }
 
 
+  const updateStylesExpanded = () => {
+    const expanded = String(stylesDialog.open);
+    for (const button of [$("stylesButton"), $("quickStylesButton")]) {
+      button.setAttribute("aria-expanded", expanded);
+    }
+  };
+  stylesDialog.addEventListener("close", updateStylesExpanded);
   $("stylesButton").addEventListener("click", () => void openStyles());
   $("quickStylesButton").addEventListener("click", () => void openStyles());
   $("combineStylesButton").addEventListener("click", () => setStyleSelection(styleSelection === null ? startStyleSelection() : null));

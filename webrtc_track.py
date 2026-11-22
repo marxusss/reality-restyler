@@ -4,9 +4,40 @@ import traceback
 
 import av
 from aiortc import VideoStreamTrack
-from aiortc.mediastreams import MediaStreamError
+from aiortc.codecs import h264, vpx
+from aiortc.mediastreams import MediaStreamError, VIDEO_PTIME
 
 from timing import TimingWindow
+
+REFERENCE_PIXELS = 640 * 480
+VIDEO_ENCODERS = (
+    ("vp8", vpx, vpx.DEFAULT_BITRATE, vpx.MAX_BITRATE, vpx.Vp8Encoder),
+    ("h264", h264, h264.DEFAULT_BITRATE, h264.MAX_BITRATE, h264.H264Encoder),
+)
+
+
+def video_bitrate_targets(width, height):
+    if width < 1 or height < 1:
+        raise ValueError("Video dimensions must be positive.")
+    pixels_per_frame = width * height
+    targets = {}
+    for name, module, default_bitrate, _maximum_bitrate, _encoder in VIDEO_ENCODERS:
+        frame_scale = pixels_per_frame / REFERENCE_PIXELS
+        frame_scale *= (1 / VIDEO_PTIME) / module.MAX_FRAME_RATE
+        targets[name] = max(default_bitrate, round(default_bitrate * frame_scale))
+    return targets
+
+
+def configure_video_bitrates(width, height, sender=None):
+    targets = video_bitrate_targets(width, height)
+    active_encoder = getattr(sender, "_RTCRtpSender__encoder", None) if sender is not None else None
+    for name, module, _default_bitrate, maximum_bitrate, encoder_type in VIDEO_ENCODERS:
+        target = targets[name]
+        module.DEFAULT_BITRATE = target
+        module.MAX_BITRATE = max(maximum_bitrate, target)
+        if active_encoder is not None and isinstance(active_encoder, encoder_type):
+            active_encoder.target_bitrate = target
+    return targets
 
 
 class RestyleTrack(VideoStreamTrack):
@@ -19,12 +50,17 @@ class RestyleTrack(VideoStreamTrack):
         self.last_image = None
         self.last_output_ready_at = 0.0
         self.last_fresh_at = time.perf_counter()
+        self.output_size = None
+        self.sender = None
         self.last_error = ""
         self.input_frames_dropped = 0
         self.render_timing = TimingWindow("webrtc_render")
         self.output_timing = TimingWindow("webrtc_output")
         self.reader_task = asyncio.create_task(self._read())
         self.render_task = asyncio.create_task(self._render())
+
+    def set_sender(self, sender):
+        self.sender = sender
 
     def _replace_latest(self, queue, item):
         replaced = False
@@ -91,6 +127,15 @@ class RestyleTrack(VideoStreamTrack):
                 )
                 self.input_frames_dropped = 0
                 if output is not None:
+                    if output.size != self.output_size:
+                        targets = configure_video_bitrates(*output.size, self.sender)
+                        self.output_size = output.size
+                        print(
+                            f"WebRTC output {output.width}x{output.height}; encoder targets "
+                            f"VP8 {targets['vp8'] / 1_000_000:.1f} Mbps, "
+                            f"H.264 {targets['h264'] / 1_000_000:.1f} Mbps",
+                            flush=True,
+                        )
                     self.last_fresh_at = time.perf_counter()
                     self._replace_latest(self.output_frames, (output, self.last_fresh_at))
         except asyncio.CancelledError:

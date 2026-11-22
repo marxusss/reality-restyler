@@ -106,6 +106,22 @@ function Test-ExternalModelsRoot {
 }
 
 $modelsRoot = Normalize-ModelsRoot -Path $modelsRoot
+$launcherSettingsPath = Join-Path $env:LOCALAPPDATA 'Reality Restyling\launcher-settings.json'
+$cpuOffloadWhenLow = $false
+try {
+    if (Test-Path -LiteralPath $launcherSettingsPath -PathType Leaf) {
+        $launcherSettings = Get-Content -LiteralPath $launcherSettingsPath -Raw | ConvertFrom-Json
+        $cpuOffloadWhenLow = $launcherSettings.cpuOffloadWhenLow -eq $true
+    }
+} catch { $cpuOffloadWhenLow = $false }
+$env:REALITY_RESTYLE_CPU_OFFLOAD = if ($cpuOffloadWhenLow) { '1' } else { '0' }
+$upscalerConfig = Join-Path $runtimeDir 'upscaler-id'
+$upscalerId = 'spanv2x4'
+if (Test-Path -LiteralPath $upscalerConfig -PathType Leaf) {
+    $upscalerId = [IO.File]::ReadAllText($upscalerConfig).Trim()
+}
+if ($upscalerId -notin @('spanv2x4', 'compact2x')) { throw 'The installed upscaler selection is invalid.' }
+$env:REALITY_RESTYLE_UPSCALER_ID = $upscalerId
 
 function Save-ModelsRoot {
     param([string]$Path)
@@ -169,12 +185,13 @@ if (-not $Unattended) {
     }
     if ($modelState -eq 0 -or (Test-Path -LiteralPath $modelsRoot -PathType Container)) { Save-ModelsRoot -Path $modelsRoot }
 
-    $upscalerState = Invoke-ModelSetup -Arguments @('--root', $modelsRoot, '--check-upscaler')
-    if ($upscalerState -ne 0) {
-        Set-LauncherStage 'Downloading the optional upscaler'
-        $upscalerState = Invoke-ModelSetup -Arguments @('--root', $modelsRoot, '--download-upscaler')
-        if ($upscalerState -ne 0) { Write-Host 'Compact 2x is unavailable. It will retry the next time you start the app.' }
-    }
+}
+
+$upscalerState = Invoke-ModelSetup -Arguments @('--root', $modelsRoot, '--upscaler-id', $upscalerId, '--check-upscaler')
+if ($upscalerState -ne 0) {
+    Set-LauncherStage 'Downloading the selected upscaler'
+    $upscalerState = Invoke-ModelSetup -Arguments @('--root', $modelsRoot, '--upscaler-id', $upscalerId, '--download-upscaler')
+    if ($upscalerState -ne 0) { throw 'The selected upscaler could not be downloaded.' }
 }
 
 function Find-Tailscale {

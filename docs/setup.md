@@ -5,10 +5,10 @@
 1. Run `RealityRestylingSetup.exe`.
 2. Setup prepares the local runtime using the Python included with the installer.
 3. Choose whether you already have the model, want it downloaded, or want to add it later. Existing files can be selected with the folder picker. Downloads resume if interrupted.
-4. Compact 2x downloads automatically when absent.
+4. Choose SPANV2 4× or Compact 2×. Setup downloads the selected upscaler when absent.
 5. In **Reality Restyling**, select **Start server**, then **Open app**. Or choose **Start app and open browser** at the end of installation.
 
-Model files come from [FLUX.2 Klein 9B Nunchaku](https://huggingface.co/tonera/FLUX.2-klein-9B-Nunchaku) and are stored outside the application folder. The selected path is saved in `.runtime/models.path`. Compact 2x comes from [Phips/2xNomosUni_compact_multijpg](https://huggingface.co/Phips/2xNomosUni_compact_multijpg). To add it later, run the installer again.
+Model files come from [FLUX.2 Klein 9B Nunchaku](https://huggingface.co/tonera/FLUX.2-klein-9B-Nunchaku) and are stored outside the application folder. The selected path is saved in `.runtime/models.path`. Compact 2× comes from [Phips/2xNomosUni_compact_multijpg](https://huggingface.co/Phips/2xNomosUni_compact_multijpg). SPANV2's checkpoint is from [Amazingren/NTIRE2026_ESR](https://github.com/Amazingren/NTIRE2026_ESR). To change the upscaler, rerun the installer.
 
 Uninstall removes the app's bundled Python, environment, and runtime files. Model files stay in their selected folder.
 

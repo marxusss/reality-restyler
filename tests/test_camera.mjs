@@ -51,7 +51,7 @@ test("camera can open on a device with only one camera", async t => {
   assert.equal(calls, 1);
 });
 
-test("missing selected camera falls back to the available camera", async t => {
+test("missing selected camera does not open a different camera", async t => {
   const originalWindow = globalThis.window;
   const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
   t.after(() => {
@@ -65,13 +65,11 @@ test("missing selected camera falls back to the available camera", async t => {
   Object.defineProperty(globalThis, "navigator", {configurable: true, value: {
     mediaDevices: {getUserMedia: async constraints => {
       requests.push(constraints.video);
-      if (constraints.video.deviceId) throw Object.assign(new Error("Missing camera"), {name: "NotFoundError"});
-      return {getTracks: () => [{stop() {}}]};
+      throw Object.assign(new Error("Missing camera"), {name: "NotFoundError"});
     }}
   }});
   const {openStartingCamera} = await import("../web/camera.js");
-  assert.ok(await openStartingCamera({deviceId: "missing"}));
-  assert.equal(requests.length, 2);
+  await assert.rejects(openStartingCamera({deviceId: "missing"}), /No camera is available\./);
+  assert.equal(requests.length, 1);
   assert.equal(requests[0].deviceId.exact, "missing");
-  assert.equal(requests[1].facingMode.ideal, "environment");
 });

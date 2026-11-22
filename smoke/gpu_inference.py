@@ -11,7 +11,7 @@ def main():
     parser = argparse.ArgumentParser(description="Load the real model and render a frame on this machine.")
     parser.add_argument("--models", type=Path, help="Existing model directory (no download performed).")
     parser.add_argument("--output", type=Path, default=Path("gpu-smoke-output.png"))
-    parser.add_argument("--allow-low-vram", action="store_true", help="Use model CPU offloading.")
+    parser.add_argument("--allow-low-vram", action="store_true", help="Continue after the low-VRAM warning.")
     args = parser.parse_args()
     if args.models:
         os.environ["REALITY_RESTYLE_MODELS_DIR"] = str(args.models.resolve())

@@ -1,6 +1,7 @@
 param(
     [ValidateSet('existing', 'download', 'later')][string]$ModelMode = 'later',
     [string]$ModelsPath,
+    [ValidateSet('spanv2x4', 'compact2x')][string]$UpscalerId = 'spanv2x4',
     [switch]$InstallTailscale
 )
 
@@ -227,7 +228,7 @@ function Invoke-ModelTool {
     param([string[]]$Arguments, [int]$Number, [string]$Step)
     $python = Join-Path $root '.venv\Scripts\python.exe'
     $script = Join-Path $root 'model_setup.py'
-    $argumentLine = (Quote-Argument $script) + ' --root ' + (Quote-Argument $ModelsPath) + ' ' + ($Arguments -join ' ') + ' --non-interactive-auth'
+    $argumentLine = (Quote-Argument $script) + ' --root ' + (Quote-Argument $ModelsPath) + ' --upscaler-id ' + $UpscalerId + ' ' + ($Arguments -join ' ') + ' --non-interactive-auth'
     return Invoke-Child -FilePath $python -Arguments $argumentLine -Number $Number -Step $Step
 }
 
@@ -297,8 +298,9 @@ try {
     $upscalerState = Invoke-ModelTool -Arguments @('--check-upscaler') -Number 8 -Step 'Checking upscaler'
     if ($upscalerState -ne 0) {
         $upscalerState = Invoke-ModelTool -Arguments @('--download-upscaler') -Number 8 -Step 'Downloading upscaler'
-        if ($upscalerState -ne 0) { Show-LogError 'Compact 2x could not be downloaded. The app can still run without it.' }
+        if ($upscalerState -ne 0) { throw 'The selected upscaler could not be downloaded.' }
     }
+    [IO.File]::WriteAllText((Join-Path $runtimeDir 'upscaler-id'), $UpscalerId, [Text.UTF8Encoding]::new($false))
 
     if ($InstallTailscale) {
         Set-Step -Number 9 -Text 'Checking phone setup'

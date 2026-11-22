@@ -43,7 +43,7 @@ function Get-VersionValue {
 
 function Get-AppVersion {
     $path = Join-Path $InstallRoot 'version.txt'
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return '0.0.0' }
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'The installed app version is missing.' }
     return (Get-Content -LiteralPath $path -Raw).Trim()
 }
 

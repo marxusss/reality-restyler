@@ -202,6 +202,7 @@ async def update_preferences(request):
 async def health(_request):
     return web.json_response({"ok": True, "loaded": await asyncio.to_thread(runtime.loaded)})
 
+
 async def metrics(request):
     result = await asyncio.to_thread(runtime.metrics)
     manager = request.app[SESSION_KEY]
@@ -468,7 +469,8 @@ async def offer(request):
     @pc.on("track")
     def on_track(track):
         if track.kind == "video":
-            pc.addTrack(RestyleTrack(track, runtime))
+            restyle_track = RestyleTrack(track, runtime)
+            restyle_track.set_sender(pc.addTrack(restyle_track))
 
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
