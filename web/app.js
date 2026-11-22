@@ -14,8 +14,8 @@ const localInputCanvas = document.createElement("canvas");
 const localInputContext = localInputCanvas.getContext("2d", { alpha: false });
 const startButton = $("startButton");
 const settingsButton = $("settingsButton");
+const doneSettingsButton = $("doneSettingsButton");
 const quitModelButton = $("quitModelButton");
-const clearPromptButton = $("clearPromptButton");
 const settingsPanel = $("settingsPanel");
 const errorBox = $("error");
 const startup = $("startup");
@@ -875,7 +875,8 @@ function closeCameraTransport() {
   output.classList.remove("camera-source");
   output.hidden = false;
   localOutput.hidden = true;
-  latency.hidden = true;
+  latency.textContent = "Model — ms · Latency — ms";
+  latency.title = "Model inference and estimated end-to-end latency";
 }
 
 function clearCameraSession() {
@@ -1003,7 +1004,8 @@ async function updateMetrics() {
     const modelMs = Number(metrics.model_ms) || 0;
     const clientMs = await latencyMetrics.measure(currentPeer, metrics, transportMode, localRoundTripMs);
     if (!sameTransport()) return;
-    latency.textContent = "Model " + Math.round(modelMs) + " ms · " + (transportMode === "local" ? "Frame round trip " : "Estimated latency ") + Math.round(clientMs) + " ms";
+    latency.textContent = "Model " + Math.round(modelMs) + " ms · " + (transportMode === "local" ? "RTT " : "Latency ") + Math.round(clientMs) + " ms";
+    latency.title = transportMode === "local" ? "Model inference and local frame round-trip time" : "Model inference and estimated end-to-end latency";
   } catch (error) { if (sameTransport()) showError(error.message, "metrics"); }
   finally { metricsPending = false; }
 }
@@ -1183,6 +1185,13 @@ function getRenderedFrame() {
 }
 
 settingsButton.addEventListener("click", () => setPanel(settingsPanel.hidden));
+doneSettingsButton.addEventListener("click", () => {
+  clearTimeout(promptApplyTimer);
+  promptApplyTimer = 0;
+  dismissKeyboard();
+  void applySettings();
+  setPanel(false);
+});
 const capture = mountCapture({
   getFrame: getRenderedFrame,
   isMirrored: () => mirror,
@@ -1207,11 +1216,6 @@ cancelStartupButton.addEventListener("click", async () => {
     showError(error.message, "startup");
     cancelStartupButton.disabled = false;
   }
-});
-clearPromptButton.addEventListener("click", () => {
-  promptInput.value = "";
-  fitPrompt();
-  applyPromptNow();
 });
 quitModelButton.addEventListener("click", async () => {
   if (busy) return;
