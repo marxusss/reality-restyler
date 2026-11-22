@@ -25,7 +25,7 @@ function fakeElement() {
   };
 }
 
-test("custom styles load and save through the PC without browser storage", async () => {
+test("custom styles load and save through the PC when browser storage is unavailable", async () => {
   const previousDocument = globalThis.document;
   const previousStorage = globalThis.localStorage;
   const elements = new Map();
@@ -68,6 +68,82 @@ test("custom styles load and save through the PC without browser storage", async
     assert.equal(stored.length, 2);
     assert.equal(get("customStyles").children.length, 1);
     assert.equal(get("customStyles").children[0].children[1].focused, true);
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+    if (previousStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = previousStorage;
+  }
+});
+
+test("legacy browser styles migrate before the local copy is cleared", async () => {
+  const previousDocument = globalThis.document;
+  const previousStorage = globalThis.localStorage;
+  const elements = new Map();
+  const get = id => {
+    if (!elements.has(id)) elements.set(id, fakeElement());
+    return elements.get(id);
+  };
+  const legacy = [{id: "old-style", name: "Watercolor", prompt: "watercolor", updatedAt: 10}];
+  let stored = [];
+  let legacyData = JSON.stringify(legacy);
+  const storage = {
+    getItem() { return legacyData; },
+    removeItem() { legacyData = null; }
+  };
+  globalThis.document = {getElementById: get, createElement: fakeElement};
+  globalThis.localStorage = storage;
+  const requests = [];
+  try {
+    mountStyles({
+      promptInput: get("promptInput"),
+      applyPromptNow() {},
+      getRenderedFrame() { return null; },
+      isMirrored() { return false; },
+      request: async (path, body) => {
+        requests.push(body);
+        if (body) stored = [...body.styles];
+        return {styles: stored};
+      }
+    });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].styles[0].id, "old-style");
+    assert.equal(requests[0].styles[0].name, "Watercolor");
+    assert.equal(requests[0].styles[0].prompt, "watercolor");
+    assert.equal(legacyData, null);
+    assert.equal(get("customStyles").children.length, 1);
+    assert.equal(get("customStyles").children[0].children[0].children[0].children[0].textContent, "Watercolor");
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+    if (previousStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = previousStorage;
+  }
+});
+
+test("legacy browser styles remain intact when the PC cannot save them", async () => {
+  const previousDocument = globalThis.document;
+  const previousStorage = globalThis.localStorage;
+  const elements = new Map();
+  const get = id => {
+    if (!elements.has(id)) elements.set(id, fakeElement());
+    return elements.get(id);
+  };
+  const legacyData = JSON.stringify([{id: "old-style", name: "Watercolor", prompt: "watercolor", updatedAt: 10}]);
+  let removed = false;
+  globalThis.document = {getElementById: get, createElement: fakeElement};
+  globalThis.localStorage = {getItem() { return legacyData; }, removeItem() { removed = true; }};
+  try {
+    mountStyles({
+      promptInput: get("promptInput"),
+      applyPromptNow() {},
+      getRenderedFrame() { return null; },
+      isMirrored() { return false; },
+      request: async () => { throw new Error("host unavailable"); }
+    });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(removed, false);
   } finally {
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
