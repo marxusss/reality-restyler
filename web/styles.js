@@ -10,7 +10,7 @@ export function stylesToSync(local, remote) {
       (style.updatedAt === previous.updatedAt && style.deleted === true && previous.deleted !== true);
   });
 }
-export function mountStyles({promptInput, applyPromptNow, request, getRenderedFrame, isMirrored}) {
+export function mountStyles({promptInput, applyPromptNow, request, getRenderedFrame, isMirrored, fitPrompt = () => {}}) {
   const $ = id => document.getElementById(id);
   const stylesDialog = $("stylesDialog");
   const styleEditor = $("styleEditor");
@@ -153,6 +153,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   function applyStyleSelection(prompt, styles) {
     appliedStyleSelection = { prompt, styles };
     promptInput.value = prompt;
+    fitPrompt();
     applyPromptNow();
     stylesDialog.close();
   }
@@ -347,6 +348,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
 
 
   $("stylesButton").addEventListener("click", () => void openStyles());
+  $("quickStylesButton").addEventListener("click", () => void openStyles());
   $("combineStylesButton").addEventListener("click", () => setStyleSelection(styleSelection === null ? startStyleSelection() : null));
   $("useStylesButton").addEventListener("click", () => void useStyleSelection());
   $("closeStylesButton").addEventListener("click", () => stylesDialog.close());

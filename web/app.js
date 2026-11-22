@@ -31,7 +31,7 @@ const resolutionInput = $("resolutionInput");
 const lensBar = $("lensBar");
 const upscaleButton = $("upscaleButton");
 const flashButton = $("flashButton");
-const mirrorButton = $("mirrorButton");
+const cameraActions = $("cameraActions");
 let peer = null;
 let stream = null;
 let localSocket = null;
@@ -203,7 +203,13 @@ function showFirstFrame() {
   }
 }
 
+function fitPrompt() {
+  promptInput.style.height = "auto";
+  promptInput.style.height = `${Math.min(83, Math.max(37, promptInput.scrollHeight))}px`;
+}
+
 function setPlayback(playing = false) {
+  quitModelButton.textContent = runtimeLoaded ? "Unload model" : "Load model";
   const label = playing ? "Pause" : runtimeLoaded ? "Resume" : "Start";
   startButton.classList.toggle("playing", playing);
   startButton.setAttribute("aria-label", label);
@@ -288,6 +294,7 @@ async function loadHostPreferences() {
     stepsValue.value = stepsInput.value;
     stepsValue.textContent = stepsInput.value;
     upscaleButton.setAttribute("aria-pressed", String(upscale));
+    fitPrompt();
   }
 }
 
@@ -428,7 +435,7 @@ function renderLenses(track) {
     const selfie = lens.facing === "user";
     const number = String(lens.magnification).replace(/^0\./, ".");
     button.className = "lens-button";
-    button.textContent = `${selfie ? "−" : ""}${number}`;
+    button.textContent = `${selfie ? "−" : ""}${number}×`;
     button.setAttribute("aria-label", `${selfie ? "Selfie" : "Rear"} ${lens.magnification}×`);
     button.setAttribute("aria-pressed", String(lens.active));
     button.addEventListener("click", () => {
@@ -461,8 +468,7 @@ function setMirror(value) {
   mirror = Boolean(value);
   output.classList.toggle("mirrored", mirror);
   localOutput.classList.toggle("mirrored", mirror);
-  mirrorButton.setAttribute("aria-pressed", String(mirror));
-}
+ }
 
 async function connectWebRTC() {
   return openWebRTC(stream, {
@@ -1181,10 +1187,14 @@ const capture = mountCapture({
   reportError: message => showError(message, "capture")
 });
 mountStyles({
-  promptInput, applyPromptNow, request,
+  promptInput, applyPromptNow, request, fitPrompt,
   isMirrored: () => mirror, getRenderedFrame
 });
-startButton.addEventListener("click", () => started ? void pause() : void start());
+startButton.addEventListener("click", () => {
+  cameraActions.classList.add("activated");
+  if (started) void pause();
+  else void start();
+});
 cancelStartupButton.addEventListener("click", async () => {
   if (!pendingStartupId) return;
   cancelStartupButton.disabled = true;
@@ -1201,13 +1211,17 @@ clearPromptButton.addEventListener("click", () => {
   applyPromptNow();
 });
 quitModelButton.addEventListener("click", async () => {
-  quitModelButton.disabled = true;
-  await stop();
+  if (busy) return;
   setPanel(false);
+  quitModelButton.disabled = true;
+  if (runtimeLoaded) await stop();
+  else {
+    cameraActions.classList.add("activated");
+    await start();
+  }
   quitModelButton.disabled = false;
 });
 flashButton.addEventListener("click", () => void toggleFlash());
-mirrorButton.addEventListener("click", () => setMirror(!mirror));
 upscaleButton.addEventListener("click", () => {
   upscale = !upscale;
   upscaleButton.setAttribute("aria-pressed", String(upscale));
@@ -1220,7 +1234,10 @@ stepsInput.addEventListener("input", () => {
 });
 stepsInput.addEventListener("change", () => void applySettings());
 resolutionInput.addEventListener("change", () => void applySettings());
-promptInput.addEventListener("input", schedulePromptApply);
+promptInput.addEventListener("input", () => {
+  fitPrompt();
+  schedulePromptApply();
+});
 promptInput.addEventListener("keydown", event => {
   if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey ||
       event.isComposing || event.keyCode === 229) return;

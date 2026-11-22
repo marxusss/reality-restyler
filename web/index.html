@@ -32,7 +32,7 @@
             </svg>
           </button>
         </div>
-        <div class="actions">
+        <div id="cameraActions" class="actions">
           <button id="flashButton" class="icon-button" type="button" aria-label="Flash" aria-pressed="false" hidden>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M13.3 2.5 5.8 13h5l-.5 8.5 7.9-11.1h-5.1l.2-7.9Z"/>
@@ -47,43 +47,40 @@
             </svg>
           </button>
           <div class="capture-controls">
-            <button id="captureModeButton" class="capture-mode" type="button" aria-label="Switch to video">Photo</button>
-            <button id="shutterButton" class="shutter-button" type="button" aria-label="Take photo" disabled></button>
+            <div class="mode-strip">
+              <button id="captureModeButton" class="capture-mode" type="button" aria-label="Switch to photo">Video</button>
+              <button id="captureOtherModeButton" class="capture-mode-other" type="button" aria-label="Switch to photo">Photo</button>
+            </div>
+            <button id="shutterButton" class="shutter-button" type="button" aria-label="Record video" disabled></button>
           </div>
           <button id="settingsButton" class="icon-button" type="button" aria-label="Settings" aria-controls="settingsPanel" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.63-.07-.94l2.03-1.58c.18-.14.23-.39.12-.6l-1.92-3.32c-.11-.2-.35-.27-.56-.2l-2.39.96c-.5-.38-1.04-.7-1.63-.94l-.36-2.54c-.03-.22-.21-.38-.44-.38h-3.8c-.22 0-.41.16-.44.38l-.36 2.54c-.59.24-1.13.56-1.63.94l-2.39-.96c-.21-.08-.45 0-.56.2L2.88 8.88c-.11.2-.06.46.12.6l2.03 1.58c-.05.31-.07.63-.07.94s.02.63.07.94l-2.03 1.58c-.18.14-.23.39-.12.6l1.92 3.32c.11.2.35.27.56.2l2.39-.96c.5.38 1.04.7 1.63.94l.36 2.54c.03.22.21.38.44.38h3.8c.22 0 .41-.16.44-.38l.36-2.54c.59-.24 1.13-.56 1.63-.94l2.39.96c.21.08.45 0 .56-.2l1.92-3.32c.11-.2.06-.46-.12-.6l-2.02-1.58zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
             </svg>
           </button>
-          <button id="mirrorButton" class="icon-button" type="button" aria-label="Mirror" aria-pressed="false">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 3v18"/>
-              <path d="m8 7-4 5 4 5M16 7l4 5-4 5"/>
-            </svg>
+          <button id="quickStylesButton" class="icon-button" type="button" aria-label="Styles" aria-haspopup="dialog">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h16v13H4zM8 16l-2 5m10-5 2 5M12 16v5M7 8h10"/></svg>
           </button>
         </div>
       </div>
       <section id="settingsPanel" class="settings-panel" aria-label="Settings" hidden>
-        <div class="field prompt-field">
-          <div class="prompt-heading">
-            <label for="promptInput">Prompt</label>
-            <div class="style-actions">
-              <button id="stylesButton" class="toggle-button" type="button" aria-haspopup="dialog">Styles</button>
-              <button id="clearPromptButton" class="toggle-button" type="button">Clear prompt</button>
-              <button class="toggle-button keyboard-done" type="button" aria-label="Dismiss keyboard">Done</button>
-            </div>
-          </div>
-          <textarea id="promptInput" rows="3" maxlength="2000" spellcheck="false" enterkeyhint="done"></textarea>
+        <div class="prompt-line">
+          <textarea id="promptInput" rows="1" maxlength="2000" spellcheck="false" enterkeyhint="done" aria-label="Prompt" placeholder="Describe a look…"></textarea>
+          <button id="clearPromptButton" class="icon-button small" type="button" aria-label="Clear prompt">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 5 14 14M19 5 5 19"/></svg>
+          </button>
+          <button id="stylesButton" class="toggle-button" type="button" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h16v13H4zM8 16l-2 5m10-5 2 5M12 16v5M7 8h10"/></svg><span>Styles</span></button>
+          <button class="toggle-button keyboard-done" type="button" aria-label="Dismiss keyboard">Done</button>
         </div>
         <div class="setting-row">
-          <label class="field">
+          <label class="field steps-field">
             <span>Steps</span>
             <div class="range-wrap">
               <input id="stepsInput" type="range" min="1" max="4" value="4">
               <output id="stepsValue">4</output>
             </div>
           </label>
-          <label class="field">
+          <label class="field resolution-field">
             <span>Resolution</span>
             <select id="resolutionInput">
               <option value="512" selected>512</option>
@@ -93,8 +90,6 @@
               <option value="1024">1024</option>
             </select>
           </label>
-        </div>
-        <div class="setting-footer">
           <button id="upscaleButton" class="toggle-button" type="button" aria-pressed="true">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 15v5h5M20 9V4h-5"/>
@@ -102,10 +97,11 @@
             </svg>
             <span>Upscale</span>
           </button>
-          <a class="toggle-button feedback-link" href="https://github.com/marxusss/reality-restyler/issues/new" target="_blank" rel="noopener noreferrer">Feedback</a>
-          <button id="quitModelButton" class="toggle-button" type="button">Unload model</button>
         </div>
-        <div id="latency" class="latency" hidden></div>
+        <div class="setting-footer">
+          <button id="quitModelButton" class="toggle-button" type="button">Load model</button>
+          <div id="latency" class="latency" hidden></div>
+        </div>
       </section>
       <dialog id="stylesDialog" class="style-dialog" aria-labelledby="stylesTitle">
         <div class="panel-top">
