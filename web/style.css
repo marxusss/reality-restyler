@@ -143,15 +143,19 @@ button {
 }
 .actions:not(.activated) > #startButton { transform: translateX(63px); }
 .actions > .capture-controls {
-  display: grid;
-  justify-items: center;
-  gap: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   position: relative;
   width: 68px;
+  height: 60px;
   touch-action: pan-y;
 }
 .mode-strip {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  bottom: 62px;
+  transform: translateX(-50%);
   display: grid;
   place-items: center;
   width: 154px;
