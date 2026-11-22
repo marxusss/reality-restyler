@@ -179,6 +179,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       button.type = "button";
       button.className = "style-card";
       button.dataset.prompt = style.prompt;
+      button.title = style.name;
       const thumbnail = document.createElement("span");
       thumbnail.className = "style-thumbnail";
       if (style.thumbnail) {
