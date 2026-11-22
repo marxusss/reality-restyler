@@ -143,6 +143,8 @@ button {
 }
 .actions:not(.activated) > #startButton { transform: translateX(63px); }
 .actions > .capture-controls {
+  grid-column: 3;
+  grid-row: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -150,6 +152,13 @@ button {
   width: 68px;
   height: 60px;
   touch-action: pan-y;
+  transition: opacity .2s ease .12s;
+}
+.actions:not(.activated) > .capture-controls { opacity: 0; pointer-events: none; }
+.actions > #settingsButton { grid-column: 4; grid-row: 1; }
+.actions > #quickStylesButton { grid-column: 5; grid-row: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .actions > #startButton, .actions > .capture-controls { transition: none; }
 }
 .mode-strip {
   position: absolute;
