@@ -170,8 +170,8 @@ button {
   border-radius: 22px;
   background: rgba(23,28,32,.28);
   box-shadow: 0 12px 32px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.16);
-  backdrop-filter: blur(6px) saturate(112%);
-  -webkit-backdrop-filter: blur(6px) saturate(112%);
+  backdrop-filter: blur(3px) saturate(105%);
+  -webkit-backdrop-filter: blur(3px) saturate(105%);
 }
 .actions > #flashButton { grid-column: 1; grid-row: 1; }
 .actions > #startButton {
@@ -229,7 +229,10 @@ button {
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: rgba(5,5,5,.62);
+  background: rgba(25,29,33,.38);
+  border: 1px solid rgba(255,255,255,.15);
+  backdrop-filter: blur(3px) saturate(105%);
+  -webkit-backdrop-filter: blur(3px) saturate(105%);
   color: #fff;
   font-size: 11px;
   font-weight: 650;
@@ -238,7 +241,7 @@ button {
   cursor: pointer;
 }
 .lens-button[aria-pressed="true"] {
-  background: rgba(38,38,38,.88);
+  background: rgba(38,38,38,.52);
   color: #f3e8a7;
 }
 .actions #flashButton:disabled { opacity: .48; cursor: default; }
@@ -317,8 +320,8 @@ button {
   border-radius: 20px;
   background: rgba(25,29,33,.29);
   box-shadow: 0 14px 42px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.12);
-  backdrop-filter: blur(4px) saturate(108%) contrast(102%);
-  -webkit-backdrop-filter: blur(4px) saturate(108%) contrast(102%);
+  backdrop-filter: blur(3px) saturate(105%);
+  -webkit-backdrop-filter: blur(3px) saturate(105%);
 }
 #app:has(.lens-bar:not([hidden])) {
   --lens-height: 42px;
@@ -386,9 +389,9 @@ button {
   flex: 0 0 auto;
   min-height: 30px;
   padding: 0 10px;
-  border-color: rgba(255,255,255,.48);
-  background: rgba(255,255,255,.06);
-  color: #f4f5f6;
+  border-color: rgba(255,255,255,.24);
+  background: rgba(255,255,255,.025);
+  color: rgba(244,245,246,.86);
   font-size: 11px;
   font-weight: 650;
 }
@@ -500,8 +503,8 @@ textarea:focus, select:focus {
   border: 1px solid rgba(255,255,255,.28);
   border-radius: 19px;
   background: rgba(24,29,33,.27);
-  backdrop-filter: blur(4px) saturate(108%) contrast(102%);
-  -webkit-backdrop-filter: blur(4px) saturate(108%) contrast(102%);
+  backdrop-filter: blur(3px) saturate(105%);
+  -webkit-backdrop-filter: blur(3px) saturate(105%);
   color: inherit;
   box-shadow: 0 14px 48px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.12);
 }
@@ -519,14 +522,27 @@ textarea:focus, select:focus {
   flex-direction: column;
   overflow: hidden;
 }
-#stylesDialog .panel-top, #stylesDialog .style-toolbar {
-  flex: 0 0 auto;
+#stylesDialog {
+  padding-top: 8px;
 }
+#closeStylesButton {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(25,29,33,.23);
+  backdrop-filter: blur(3px) saturate(105%);
+  -webkit-backdrop-filter: blur(3px) saturate(105%);
+}
+#stylesDialog .style-toolbar { flex: 0 0 auto; }
 .style-list {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 3px;
+  padding: 34px 3px 3px;
 }
 .style-dialog h2, .style-dialog h3 {
   margin: 0;
@@ -553,7 +569,6 @@ textarea:focus, select:focus {
   container-type: inline-size;
 }
 .style-card {
-  position: relative;
   display: block;
   width: 100%; min-width: 0; padding: 0;
   border: 1px solid transparent; border-radius: 9px;
@@ -600,7 +615,24 @@ textarea:focus, select:focus {
 #addStyleButton[hidden], #useStylesButton[hidden] {
   display: none;
 }
-.style-card > span:last-child {
+.style-thumbnail {
+  display: block;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 7 / 5;
+  overflow: hidden;
+  border-radius: 7px;
+  background: #22262d;
+}
+.style-thumbnail img {
+  position: absolute;
+  inset: 5%;
+  width: 90%;
+  height: 90%;
+  display: block;
+  object-fit: contain;
+}
+.style-name {
   position: absolute;
   bottom: 0;
   left: 0;
@@ -609,27 +641,15 @@ textarea:focus, select:focus {
   display: block;
   padding: 4px 5px;
   border-radius: 0 0 7px 7px;
-  background: rgba(43, 46, 50, .77);
+  background: rgba(57,59,62,.74);
+  backdrop-filter: blur(3px) saturate(105%);
+  -webkit-backdrop-filter: blur(3px) saturate(105%);
   color: #fff;
   font-size: 10px;
   font-weight: 550;
   line-height: 1.2;
   white-space: normal;
   overflow-wrap: break-word;
-}
-.style-thumbnail {
-  display: block;
-  width: 100%;
-  aspect-ratio: 7 / 5;
-  overflow: hidden;
-  border-radius: 7px;
-  background: #22262d;
-}
-.style-thumbnail img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
 }
 #styleCapturePreview {
   display: block;
@@ -643,11 +663,20 @@ textarea:focus, select:focus {
   justify-content: space-between;
   gap: 12px;
 }
-#stylesDialog .style-toolbar { justify-content: flex-start; }
+#stylesDialog .style-toolbar {
+  justify-content: flex-start;
+  border-top: 1px solid rgba(255,255,255,.17);
+  padding-top: 7px;
+}
 #stylesDialog .style-toolbar .toggle-button {
   min-height: 34px;
   font-size: 12px;
   line-height: 16px;
+}
+#combineStylesButton {
+  padding-left: 0;
+  border: 0;
+  background: transparent;
 }
 #addStyleButton, #useStylesButton { margin-left: auto; }
 #addStyleButton svg { width: 16px; height: 16px; flex: 0 0 16px; }
