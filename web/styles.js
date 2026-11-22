@@ -253,7 +253,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     editingStyleId = style?.id || null;
     deleteStyleButton.hidden = !editingStyleId;
     styleForm.reset();
-    $("styleEditorTitle").textContent = style ? "Edit style" : "Add style";
+    $("styleEditorTitle").textContent = style ? "Edit Style" : "Add Style";
     styleName.value = style?.name || "";
     stylePrompt.value = style?.prompt ?? promptInput.value;
     if (style?.thumbnail) {
