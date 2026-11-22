@@ -929,6 +929,7 @@ async function stop() {
     sessionToken = "";
     sessionEpoch += 1;
     runtimeLoaded = false;
+    cameraActions.classList.remove("activated");
     stopHeartbeat();
     clearErrors();
   } catch (error) {
