@@ -66,11 +66,8 @@
       <section id="settingsPanel" class="settings-panel" aria-label="Settings" hidden>
         <div class="prompt-line">
           <textarea id="promptInput" rows="1" maxlength="2000" spellcheck="false" enterkeyhint="done" aria-label="Prompt" placeholder="Describe a look…"></textarea>
-          <button id="clearPromptButton" class="icon-button small" type="button" aria-label="Clear prompt">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 5 14 14M19 5 5 19"/></svg>
-          </button>
           <button id="stylesButton" class="toggle-button" type="button" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h16v13H4zM8 16l-2 5m10-5 2 5M12 16v5M7 8h10"/></svg><span>Styles</span></button>
-          <button class="toggle-button keyboard-done" type="button" aria-label="Dismiss keyboard">Done</button>
+          <button id="doneSettingsButton" class="toggle-button settings-done" type="button" aria-label="Apply settings and close">Done</button>
         </div>
         <div class="setting-row">
           <label class="field steps-field">
@@ -98,9 +95,9 @@
             <span>Upscale</span>
           </button>
         </div>
-        <div class="setting-footer">
+        <div class="setting-footer" aria-label="Diagnostics and model">
+          <div id="latency" class="latency" title="Model inference and estimated end-to-end latency">Model — ms · Latency — ms</div>
           <button id="quitModelButton" class="toggle-button" type="button">Load model</button>
-          <div id="latency" class="latency" hidden></div>
         </div>
       </section>
       <dialog id="stylesDialog" class="style-dialog" aria-labelledby="stylesTitle">
