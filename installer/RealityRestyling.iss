@@ -21,6 +21,7 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 
 [Files]
 Source: "..\app.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\hardware_check.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\phone_access.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\user_styles.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\log_retention.py"; DestDir: "{app}"; Flags: ignoreversion
@@ -65,7 +66,7 @@ Type: files; Name: "{app}\web\styles\bleach-bypass.webp"
 Type: files; Name: "{app}\web\styles\cool-chrome.webp"
 
 [Run]
-Filename: "{app}\RealityRestyling.exe"; Description: "Launch Reality Restyling"; WorkingDir: "{app}"; Flags: postinstall skipifsilent nowait runhidden; Check: IsRuntimeSetupSucceeded
+Filename: "{app}\RealityRestyling.exe"; Parameters: "--first-launch"; Description: "Start app and open browser"; WorkingDir: "{app}"; Flags: postinstall skipifsilent nowait runhidden unchecked; Check: IsRuntimeSetupSucceeded
 
 [UninstallDelete]
 Type: files; Name: "{app}\version.txt"
@@ -166,10 +167,10 @@ var
   BrowseButton: TNewButton;
 begin
   ModelPage := CreateInputOptionPage(wpSelectDir, 'Model files', 'Choose your model setup', 'Select whether to reuse existing model files, download them now, or do this later.', True, False);
-  ModelPage.Add('I already have the model files');
-  ModelPage.Add('Download the model now (about 22.4 GB if no files are found)');
-  ModelPage.Add('Download later');
-  ModelPage.SelectedValueIndex := 2;
+  ModelPage.Add('Use existing model files');
+  ModelPage.Add('Download the model (about 22.4 GB)');
+  ModelPage.Add('Later (app cannot restyle until the model is downloaded)');
+  ModelPage.SelectedValueIndex := 1;
 
   ModelDirPage := CreateInputQueryPage(ModelPage.ID, 'Model location', 'Select model files', 'Browse to a folder or paste a folder or model file path.');
   ModelDirPage.Add('Model path:', False);
@@ -184,8 +185,8 @@ begin
   BrowseButton.Height := WizardForm.NextButton.Height;
   BrowseButton.OnClick := @BrowseModelFolder;
 
-  TailscalePage := CreateInputOptionPage(ModelDirPage.ID, 'Phone connection', 'Tailscale (optional)', 'Install Tailscale if you plan to connect a phone.', False, False);
-  TailscalePage.Add('Install Tailscale with winget if it is missing');
+  TailscalePage := CreateInputOptionPage(ModelDirPage.ID, 'Phone access', 'Connect a phone (optional)', 'Enable phone access now or later from the launcher.', False, False);
+  TailscalePage.Add('Enable phone access (install Tailscale if needed)');
   TailscalePage.Values[0] := False;
 end;
 
@@ -286,5 +287,7 @@ begin
        (CompareText(CurrentValue, StartupCommand) = 0) then
       RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'RealityRestylingPhoneAccess');
     RegDeleteValue(HKCU, 'Software\RealityRestyling', 'PhoneStartupApprovedHostname');
+    RegDeleteValue(HKCU, 'Software\RealityRestyling', 'PhoneAccessApprovedHostname');
+    RegDeleteValue(HKCU, 'Software\RealityRestyling', 'PhoneAccessEnabled');
   end;
 end;

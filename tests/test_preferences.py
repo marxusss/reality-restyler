@@ -4,11 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from types import SimpleNamespace
 
 import preferences
 import app
-from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
 
@@ -28,7 +26,7 @@ class CameraPreferencesTests(unittest.TestCase):
         })
         self.assertFalse(preferences.PREFERENCES_PATH.exists())
 
-    def test_persists_only_app_settings_across_restarts(self):
+    def test_persists_app_settings_and_ignores_device_rotation(self):
         settings = {"prompt": "watercolor", "steps": 2, "resolution": 768,
                     "upscale": False, "rotation": 90}
         preferences.save_preferences(settings)
@@ -65,7 +63,7 @@ class CameraPreferencesApiTests(unittest.IsolatedAsyncioTestCase):
         self.path_patch.stop()
         self.tmp.cleanup()
 
-    async def test_settings_can_be_saved_before_start_and_read_by_another_device(self):
+    async def test_preferences_can_be_saved_and_read_before_start(self):
         response = await self.client.post("/preferences", json={
             "settings": {"prompt": "soft watercolor", "resolution": 640}
         })
@@ -78,30 +76,15 @@ class CameraPreferencesApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(saved["steps"], 4)
         self.assertFalse("rotation" in saved)
 
-    async def test_other_device_cannot_overwrite_active_owner_preferences(self):
+    async def test_shared_preferences_do_not_require_a_controller_token(self):
         response = await self.client.post("/session", json={})
-        token = (await response.json())["token"]
-        stale = await self.client.post("/preferences", json={"settings": {"prompt": "stale"}})
-        self.assertEqual(stale.status, 409)
-        own = await self.client.post("/preferences", json={"settings": {"prompt": "owner"}},
-                                     headers={"X-Restyle-Session": token})
-        self.assertEqual(own.status, 200)
-        response = await self.client.get("/preferences")
-        self.assertEqual((await response.json())["settings"]["prompt"], "owner")
-
-    async def test_preference_routes_require_the_same_device_access_as_styles(self):
-        async def deny_access(_request):
-            raise web.HTTPForbidden()
-
-        with patch.object(app, "_require_user_data_access", side_effect=deny_access):
-            read = await asyncio.wait_for(self.client.get("/preferences"), timeout=3)
-            self.assertEqual(read.status, 403)
-            await read.read()
-            write = await asyncio.wait_for(
-                self.client.post("/preferences", json={"settings": {"prompt": "untrusted"}}),
-                timeout=3)
-            self.assertEqual(write.status, 403)
-            await write.read()
+        self.assertEqual(response.status, 200)
+        response = await self.client.post("/preferences", json={
+            "settings": {"prompt": "watercolor"}
+        })
+        self.assertEqual(response.status, 200)
+        settings = (await (await self.client.get("/preferences")).json())["settings"]
+        self.assertEqual(settings["prompt"], "watercolor")
 
     async def test_successful_model_start_survives_settings_disk_failure(self):
         token_response = await self.client.post("/session", json={})
@@ -134,15 +117,3 @@ class CameraPreferencesApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["preferences_saved"])
         self.assertIn("could not be saved", result["warning"])
 
-    async def test_tailnet_access_requires_matching_owner_identity(self):
-        remote = SimpleNamespace(remote="100.101.102.103", secure=True,
-                                 app={app.PHONE_OWNER_KEY: 123})
-        stranger = {"Node": {"User": 456, "Tags": []},
-                    "UserProfile": {"ID": 456}}
-        with patch.object(app, "tailscale_json", return_value=stranger):
-            with self.assertRaises(web.HTTPForbidden):
-                await app._require_user_data_access(remote)
-        owner = {"Node": {"User": 123, "Tags": []},
-                 "UserProfile": {"ID": 123}}
-        with patch.object(app, "tailscale_json", return_value=owner):
-            await app._require_user_data_access(remote)

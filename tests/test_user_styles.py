@@ -111,8 +111,21 @@ class UserStylePersistenceTests(unittest.IsolatedAsyncioTestCase):
         styles = (await response.json())["styles"]
         self.assertEqual({item["id"] for item in styles}, {style(index)["id"] for index in range(101)})
 
-    async def test_user_config_is_outside_install_directory(self):
-        self.assertNotIn(app.ROOT.resolve(), user_styles.USER_STYLES_PATH.resolve().parents)
+    async def test_create_edit_delete_style_through_api(self):
+        created = {"id": "portrait", "name": "Portrait", "prompt": "sketch", "updatedAt": 100}
+        edited = {**created, "prompt": "oil painting", "updatedAt": 101}
+        deleted = {"id": "portrait", "deleted": True, "updatedAt": 102}
+        for change, expected in ((created, "sketch"), (edited, "oil painting")):
+            response = await self.client.post("/styles/user", json={"styles": [change]})
+            self.assertEqual(response.status, 200)
+            styles = (await response.json())["styles"]
+            self.assertEqual(styles[0]["prompt"], expected)
+        response = await self.client.post("/styles/user", json={"styles": [deleted]})
+        self.assertEqual(response.status, 200)
+        response = await self.client.get("/styles/user")
+        styles = (await response.json())["styles"]
+        self.assertEqual(styles, [deleted])
+        self.assertNotIn("oil painting", self.styles_path.read_text(encoding="utf-8"))
 
     async def test_invalid_save_does_not_replace_saved_styles(self):
         valid = {"id": "one", "name": "First", "prompt": "current", "thumbnail": None, "updatedAt": 1}

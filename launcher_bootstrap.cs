@@ -20,6 +20,8 @@ internal static class LauncherBootstrap
         string arguments = "-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File \"" + script + "\"";
         if (args.Length == 1 && String.Equals(args[0], "--phone-startup", StringComparison.Ordinal))
             arguments += " -PhoneStartup";
+        if (args.Length == 1 && String.Equals(args[0], "--first-launch", StringComparison.Ordinal))
+            arguments += " -FirstLaunch";
 
         ProcessStartInfo start = new ProcessStartInfo
         {

@@ -33,7 +33,7 @@
 ## Setup
 
 1. On Windows 11, run `RealityRestylingSetup.exe` and select your model folder or download the files.
-2. In **Reality Restyling**, select **Start server**, then **Open app**.
+2. In **Reality Restyling**, select **Start server**, then **Open app** (or opt to start it when installation finishes).
 3. Press **Start** and choose a style.
 
 ### Phone
@@ -49,6 +49,10 @@ With Tailscale connected on both devices, open the phone link from the Windows l
 </p>
 
 [Phone setup and troubleshooting](docs/setup.md)
+
+## Development
+
+On Windows, run `.\dev.ps1` in a checkout to serve **that checkout** at [localhost:8782](http://127.0.0.1:8782/). It reuses local or installed dependencies; restart after editing. Installed versions continue updating from GitHub releases.
 
 ## Hello
 

@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from hardware_check import SIMULTANEOUS_VRAM_GIB, best_cuda_device
 from model_setup import missing_files, model_directory, normalize_root
 from runtime_settings import DEFAULT_SETTINGS, PROMPT_TOKEN_LIMIT, normalize_settings
 from timing import TimingWindow
@@ -41,11 +42,8 @@ def combine_style_prompts(prompts):
         raise ValueError("Choose one to five styles.")
     if any(not isinstance(text, str) or not text.strip() or len(text) > 2000 for text in prompts):
         raise ValueError("Invalid style prompt.")
-    if len(prompts) == 1:
-        prompt = prompts[0]
-    else:
-        parts = [text.strip().removesuffix(", keep scene intact").rstrip(" .") for text in prompts]
-        prompt = ".\n".join(parts) + ". keep scene intact"
+    # Preserve each complete prompt, including repeated scene guidance.
+    prompt = "\n\n".join(prompts)
     if len(prompt) > 2000:
         raise ValueError("These styles exceed the prompt length limit.")
     tokens = prompt_token_count(prompt)
@@ -60,6 +58,7 @@ class Runtime:
         self._status_lock = threading.RLock()
         self._settings = dict(DEFAULT_SETTINGS)
         self._pipe = None
+        self._device_index = 0
         self._upscaler = None
         self._upscaler_attempted = False
         self._prompt_cache = OrderedDict()
@@ -120,14 +119,17 @@ class Runtime:
                 self.heartbeat()
                 return {"ok": True, "low_vram": False, "upscaler_available": UPSCALER_FILE.is_file()}
             report("checking")
+            import torch
+            if not torch.cuda.is_available():
+                raise RuntimeError("An NVIDIA CUDA GPU is required to run this model.")
+            self._device_index = best_cuda_device(torch)
+            torch.cuda.set_device(self._device_index)
+            device = f"cuda:{self._device_index}"
             base_dir, transformer_path, missing = missing_files(MODELS)
             if missing:
                 raise RuntimeError("Required files are missing or invalid. Restart from the Reality Restyling launcher to set them up.")
-            import torch
-            if not torch.cuda.is_available():
-                raise RuntimeError("CUDA is unavailable on this computer.")
-            free, total = torch.cuda.mem_get_info()
-            low_vram = total < 24 * 1024 ** 3 or free < 20 * 1024 ** 3
+            free, total = torch.cuda.mem_get_info(self._device_index)
+            low_vram = total < SIMULTANEOUS_VRAM_GIB * 1024 ** 3 or free < 20 * 1024 ** 3
             if low_vram and not allow_low_vram:
                 return {
                     "ok": False,
@@ -144,13 +146,16 @@ class Runtime:
                 )
                 from transformers import BitsAndBytesConfig, Qwen3ForCausalLM
                 report("text_encoder")
+                encoder_quant = (BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                                                     bnb_4bit_compute_dtype=torch.float16)
+                                 if low_vram else BitsAndBytesConfig(load_in_8bit=True))
                 text_encoder = Qwen3ForCausalLM.from_pretrained(
                     str(base_dir),
                     subfolder="text_encoder",
-                    quantization_config=BitsAndBytesConfig(load_in_8bit=True),
+                    quantization_config=encoder_quant,
                     torch_dtype=torch.float16,
                     local_files_only=True,
-                    device_map={"": 0},
+                    device_map={"": device},
                 )
                 report("model")
                 transformer = NunchakuFlux2Transformer2DModel.from_pretrained(
@@ -166,8 +171,12 @@ class Runtime:
                     local_files_only=True,
                 )
                 report("gpu")
-                pipe.transformer.to("cuda")
-                pipe.vae.to("cuda")
+                if low_vram:
+                    # Offload components between prompt encoding and frame inference.
+                    pipe.enable_model_cpu_offload(device=device)
+                else:
+                    pipe.transformer.to(device)
+                    pipe.vae.to(device)
                 pipe.set_progress_bar_config(disable=True)
             except Exception as exc:
                 print(f"Runtime load failed: {type(exc).__name__}: {exc}", flush=True)
@@ -176,6 +185,8 @@ class Runtime:
                     torch.cuda.empty_cache()
                 except Exception:
                     pass
+                if isinstance(exc, RuntimeError) and str(exc) == "Startup cancelled.":
+                    raise
                 if isinstance(exc, ModuleNotFoundError):
                     raise RuntimeError(f"Runtime module unavailable: {exc.name}. Restart from the Reality Restyling launcher to repair dependencies.") from None
                 raise RuntimeError(f"Local runtime failed: {type(exc).__name__}: {exc}") from None
@@ -221,6 +232,7 @@ class Runtime:
         try:
             import torch
             if torch.cuda.is_available():
+                torch.cuda.set_device(self._device_index)
                 torch.cuda.empty_cache()
         except Exception as exc:
             print(f"CUDA cache release failed: {type(exc).__name__}: {exc}", flush=True)
@@ -231,10 +243,11 @@ class Runtime:
             self._prompt_cache.move_to_end(prompt)
             return cached
         import torch
+        torch.cuda.set_device(self._device_index)
         with torch.inference_mode():
             embeds, ids = self._pipe.encode_prompt(
                 prompt=prompt,
-                device="cuda",
+                device=f"cuda:{self._device_index}",
                 num_images_per_prompt=1,
                 max_sequence_length=PROMPT_TOKEN_LIMIT,
             )
@@ -304,12 +317,13 @@ class Runtime:
             source = source.resize((target_width, target_height), Image.Resampling.BICUBIC)
             preprocess_ms = (time.perf_counter() - preprocess_started) * 1000.0
             import torch
+            torch.cuda.set_device(self._device_index)
             generation_started = time.perf_counter()
             prompt_cache_miss = settings["prompt"] not in self._prompt_cache
             prompt_started = time.perf_counter()
             embeds, ids = self._encode_prompt(settings["prompt"])
             prompt_encode_ms = (time.perf_counter() - prompt_started) * 1000.0
-            generator = torch.Generator(device="cuda").manual_seed(0)
+            generator = torch.Generator(device=f"cuda:{self._device_index}").manual_seed(0)
             pipe = self._pipe
             original_encode = pipe.encode_prompt
             had_override = "encode_prompt" in pipe.__dict__

@@ -82,6 +82,26 @@ $form.Add_FormClosing({ param($sender, $event)
 $form.Show()
 [System.Windows.Forms.Application]::DoEvents()
 
+# Advisory only: no GPU model whitelist and no hard install restriction.
+$hardwareResult = $null
+try {
+    $hardwareOutput = & (Join-Path $root 'python\python.exe') -B (Join-Path $root 'hardware_check.py')
+    $hardwareResult = $hardwareOutput | ConvertFrom-Json
+} catch { }
+if (-not $hardwareResult) {
+    $hardwareResult = @{ status = 'unknown'; message = 'Could not determine NVIDIA GPU compatibility.' }
+}
+if ($hardwareResult.status -ne 'ready') {
+    $answer = [Windows.Forms.MessageBox]::Show(
+        $form, "$($hardwareResult.message)`n`nContinue setup?",
+        'GPU compatibility', [Windows.Forms.MessageBoxButtons]::YesNo,
+        [Windows.Forms.MessageBoxIcon]::Warning)
+    if ($answer -ne [Windows.Forms.DialogResult]::Yes) {
+        $script:cancelRequested = $true
+    }
+}
+
+
 function Format-Elapsed {
     param([double]$Seconds)
     $span = [TimeSpan]::FromSeconds([math]::Ceiling($Seconds))
@@ -127,7 +147,7 @@ function Update-ProgressView {
     if ($total -le 0) { return }
     $transfer.Value = [int][math]::Min(100, [math]::Floor(100 * $bytes / $total))
     $transfer.Visible = $true
-    $detail.Text += ' of {0:N1} MB' -f ($total / 1000000)
+    $detail.Text = '{0}  {1}%  ({2:N1} / {3:N1} MB)' -f $sample.Activity, ([int][math]::Min(100, [math]::Floor(100 * $bytes / $total))), ($bytes / 1000000), ($total / 1000000)
     $duration = $sample.Last - $sample.First
     if ($bytes -ge $total) {
         $detail.Text += '  -  Finishing'
@@ -305,6 +325,11 @@ try {
             [System.Windows.Forms.MessageBox]::Show('Install Tailscale to connect a phone. https://tailscale.com/download/windows', 'Reality Restyling Setup', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
         }
     }
+
+    if (-not (Test-Path 'HKCU:\Software\RealityRestyling')) {
+        New-Item -Path 'HKCU:\Software\RealityRestyling' -Force | Out-Null
+    }
+    Set-ItemProperty -Path 'HKCU:\Software\RealityRestyling' -Name 'PhoneAccessEnabled' -Value ([int]$InstallTailscale.IsPresent)
 
     if (Test-Path -LiteralPath $pending) { Remove-Item -LiteralPath $pending -Force -ErrorAction Stop }
     Reset-Transfer

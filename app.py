@@ -6,6 +6,7 @@ import os
 import socket
 import ssl
 import time
+import threading
 import traceback
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -17,7 +18,7 @@ from local_frames import process_frame
 from preferences import read_preferences, save_preferences
 from log_retention import enable_logging, prune_logs
 from phone_access import (
-    tailscale_json, tailscale_status, tailscale_dns_name, tailscale_addresses,
+    tailscale_status, tailscale_dns_name, tailscale_addresses,
     reserve_listener_sockets, tls_context, tls_renewal_loop,
 )
 from runtime import Runtime, combine_style_prompts
@@ -35,7 +36,6 @@ STARTUP_PROGRESS_KEY = web.AppKey("startup_progress", dict)
 TLS_CONTEXT_KEY = web.AppKey("tls_context", ssl.SSLContext)
 TLS_RENEW_TASK_KEY = web.AppKey("tls_renew_task", asyncio.Task)
 PHONE_DNS_NAME_KEY = web.AppKey("phone_dns_name", str)
-PHONE_OWNER_KEY = web.AppKey("phone_owner", int)
 PORT_OVERRIDE = os.environ.get("REALITY_RESTYLE_PORT")
 PORT_IS_EXPLICIT = bool(PORT_OVERRIDE)
 PORT = int(PORT_OVERRIDE or "8781")
@@ -125,6 +125,10 @@ async def style_sheet(_request):
 async def favicon(_request):
     return web.FileResponse(WEB_ROOT / "favicon.svg", headers={"Content-Type": "image/svg+xml"})
 
+
+async def touch_icon(_request):
+    return web.FileResponse(WEB_ROOT / "apple-touch-icon.png", headers={"Content-Type": "image/png"})
+
 async def style_asset(request):
     asset = request.match_info["asset"]
     content_type = "application/json" if asset == "catalog.json" else "image/webp"
@@ -141,27 +145,7 @@ async def combine_styles(request):
         return web.json_response({"error": "Could not check the style prompt. Check the model files."}, status=503)
     return web.json_response({"prompt": prompt, "tokens": tokens})
 
-async def _require_user_data_access(request):
-    try:
-        address = ipaddress.ip_address(str(request.remote or "").split("%")[0])
-    except ValueError:
-        raise web.HTTPForbidden() from None
-    if getattr(address, "ipv4_mapped", None):
-        address = address.ipv4_mapped
-    if address.is_loopback:
-        return
-    owner = request.app.get(PHONE_OWNER_KEY)
-    if request.secure and owner:
-        identity = await asyncio.to_thread(tailscale_json, "whois", "--json", address.compressed)
-        node = identity.get("Node") or {}
-        user = identity.get("UserProfile") or {}
-        if not node.get("Tags") and node.get("User") == owner and user.get("ID") == owner:
-            return
-    raise web.HTTPForbidden(text="This device cannot access the host's saved styles.")
-
-
 async def get_user_styles(request):
-    await _require_user_data_access(request)
     try:
         styles = await asyncio.to_thread(read_user_styles)
     except Exception as exc:
@@ -170,7 +154,6 @@ async def get_user_styles(request):
     return web.json_response({"styles": styles})
 
 async def save_user_styles(request):
-    await _require_user_data_access(request)
     data = await _json(request)
     try:
         styles = await asyncio.to_thread(write_user_styles, data.get("styles"))
@@ -182,7 +165,6 @@ async def save_user_styles(request):
     return web.json_response({"styles": styles})
 
 async def get_preferences(request):
-    await _require_user_data_access(request)
     try:
         settings = await asyncio.to_thread(read_preferences)
     except (OSError, RuntimeError):
@@ -200,17 +182,12 @@ async def _persist_preferences(settings):
 
 
 async def update_preferences(request):
-    await _require_user_data_access(request)
     data = await _json(request)
     if set(data) != {"settings"} or not isinstance(data["settings"], dict):
         raise web.HTTPBadRequest(text="Invalid settings.")
     if set(data["settings"]) - {"prompt", "steps", "resolution", "upscale"}:
         raise web.HTTPBadRequest(text="Unsupported preference.")
-    manager = request.app[SESSION_KEY]
     async with request.app[PREFERENCES_LOCK_KEY]:
-        async with manager.lock:
-            if manager.token:
-                require_owner(request)
         try:
             previous = await asyncio.to_thread(read_preferences)
             updated = {**previous, **data["settings"]}
@@ -338,13 +315,16 @@ async def start_runtime(request):
 
     manager = request.app[SESSION_KEY]
     progress = request.app[STARTUP_PROGRESS_KEY]
-    stage = {"value": "checking"}
+    stage = {"value": "checking", "cancel": threading.Event()}
 
     def report_stage(value):
+        if stage["cancel"].is_set():
+            raise RuntimeError("Startup cancelled.")
         stage["value"] = value
 
+    token = request.headers.get(TOKEN_HEADER)
     async with manager.lock:
-        require_owner(request)
+        manager.begin_start(token)
         if startup_id:
             progress[startup_id] = stage
 
@@ -355,6 +335,10 @@ async def start_runtime(request):
             async with manager.lock:
                 require_owner(request, touch=False)
             result = await asyncio.to_thread(runtime.start, settings, allow_low_vram, report_stage)
+            if stage["cancel"].is_set():
+                if result.get("ok"):
+                    await asyncio.to_thread(runtime.unload)
+                return web.json_response({"ok": False, "error": "Start cancelled."}, status=422)
             async with manager.lock:
                 require_owner(request, touch=False)
             if result.get("ok"):
@@ -371,13 +355,29 @@ async def start_runtime(request):
     except ValueError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=422)
     except RuntimeError as exc:
+        if stage["cancel"].is_set():
+            return web.json_response({"ok": False, "error": "Start cancelled."}, status=422)
         return web.json_response({"ok": False, "error": str(exc)}, status=503)
     except Exception as exc:
         print(f"Runtime startup failed: {type(exc).__name__}: {exc}", flush=True)
         return web.json_response({"ok": False, "error": f"Start failed: {type(exc).__name__}: {exc}"}, status=503)
     finally:
+        async with manager.lock:
+            manager.finish_start(token)
         if startup_id and progress.get(startup_id) is stage:
             progress.pop(startup_id, None)
+
+
+async def cancel_startup(request):
+    data = await _json(request)
+    if set(data) != {"startup_id"} or not isinstance(data["startup_id"], str):
+        raise web.HTTPBadRequest(text="Invalid startup identifier.")
+    async with request.app[SESSION_KEY].lock:
+        require_owner(request, touch=False)
+        stage = request.app[STARTUP_PROGRESS_KEY].get(data["startup_id"])
+        if stage:
+            stage["cancel"].set()
+    return web.json_response({"ok": True, "cancelling": stage is not None})
 
 
 async def startup_progress(request):
@@ -458,39 +458,42 @@ async def offer(request):
         pc = RTCPeerConnection(RTCConfiguration(iceServers=[]))
         manager.attach_transport(request.headers.get(TOKEN_HEADER), pc)
 
-        @pc.on("track")
-        def on_track(track):
-            if track.kind == "video":
-                pc.addTrack(RestyleTrack(track, runtime))
+    @pc.on("track")
+    def on_track(track):
+        if track.kind == "video":
+            pc.addTrack(RestyleTrack(track, runtime))
 
-        @pc.on("connectionstatechange")
-        async def on_connectionstatechange():
-            if pc.connectionState in {"failed", "closed"}:
-                manager.detach_transport(pc)
-                if pc.connectionState != "closed":
-                    await pc.close()
-
-        async def negotiate():
-            await pc.setRemoteDescription(RTCSessionDescription(sdp=data["sdp"], type="offer"))
-            answer = await pc.createAnswer()
-            await pc.setLocalDescription(answer)
-            local = pc.localDescription
-            if not local or not local.sdp:
-                raise RuntimeError("The host produced an empty WebRTC answer.")
-            return web.json_response({"sdp": local.sdp, "type": "answer"})
-
-        try:
-            return await asyncio.wait_for(negotiate(), timeout=20)
-        except (Exception, asyncio.CancelledError) as exc:
+    @pc.on("connectionstatechange")
+    async def on_connectionstatechange():
+        if pc.connectionState in {"failed", "closed"}:
             manager.detach_transport(pc)
-            try:
+            if pc.connectionState != "closed":
                 await pc.close()
-            except Exception:
-                pass
-            if isinstance(exc, asyncio.CancelledError):
-                raise
-            print(f"WebRTC negotiation failed: {type(exc).__name__}: {exc}", flush=True)
-            return web.json_response({"ok": False, "error": "Could not connect the camera."}, status=502)
+
+    # Signaling must not hold the controller lock: another device can
+    # take over while this device is negotiating a connection.
+    try:
+        await pc.setRemoteDescription(RTCSessionDescription(sdp=data["sdp"], type="offer"))
+        answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+        local = pc.localDescription
+        if not local or not local.sdp:
+            raise RuntimeError("The host produced an empty WebRTC answer.")
+        async with manager.lock:
+            require_owner(request, touch=False)
+            if manager.transport is not pc:
+                raise web.HTTPConflict(text="Camera control moved to another device.")
+        return web.json_response({"sdp": local.sdp, "type": "answer"})
+    except (Exception, asyncio.CancelledError) as exc:
+        manager.detach_transport(pc)
+        try:
+            await pc.close()
+        except Exception:
+            pass
+        if isinstance(exc, (asyncio.CancelledError, web.HTTPException)):
+            raise
+        print(f"WebRTC negotiation failed: {type(exc).__name__}: {exc}", flush=True)
+        return web.json_response({"ok": False, "error": "Could not connect the camera."}, status=502)
 
 
 async def idle_reaper(app):
@@ -542,10 +545,11 @@ def create_app():
     app[PREFERENCES_LOCK_KEY] = asyncio.Lock()
     app[STARTUP_PROGRESS_KEY] = {}
     app.router.add_get("/", index)
-    for script in ("app.js", "camera.js", "capture.js", "frame_encoding.js", "styles.js", "errors.js"):
+    for script in ("app.js", "camera.js", "capture.js", "frame_encoding.js", "styles.js", "errors.js", "metrics.js", "transport.js"):
         app.router.add_get("/" + script, app_script)
     app.router.add_get("/style.css", style_sheet)
     app.router.add_get("/favicon.svg", favicon)
+    app.router.add_get("/apple-touch-icon.png", touch_icon)
     app.router.add_get("/styles/{asset:catalog\\.json|[a-zA-Z0-9_-]+\\.webp}", style_asset)
     app.router.add_post("/styles/combine", combine_styles)
     app.router.add_get("/styles/user", get_user_styles)
@@ -559,6 +563,7 @@ def create_app():
     app.router.add_post("/session", claim_session)
     app.router.add_post("/start", start_runtime)
     app.router.add_get("/startup/{startup_id}", startup_progress)
+    app.router.add_post("/cancel-start", cancel_startup)
     app.router.add_post("/settings", update_settings)
     app.router.add_post("/heartbeat", heartbeat)
     app.router.add_post("/pause", pause_runtime)
@@ -584,45 +589,51 @@ async def _run_launcher_server(directory, stopped, phone_access, wait_for_tailsc
     addresses = []
     tls = None
     if phone_access:
-        (directory / "stage.txt").write_text("Checking Tailscale", encoding="utf-8")
-        deadline = time.monotonic() + (45 if wait_for_tailscale else 0)
-        while not stopped():
-            status = await asyncio.to_thread(tailscale_status)
-            dns_name = tailscale_dns_name(status)
-            addresses = tailscale_addresses(status)
-            if dns_name and addresses:
-                break
-            if time.monotonic() >= deadline:
-                if not dns_name:
-                    raise RuntimeError("Sign in to Tailscale before starting phone mode.")
-                raise RuntimeError("Tailscale did not report a usable local IP address.")
-            (directory / "stage.txt").write_text("Waiting for Tailscale", encoding="utf-8")
-            await asyncio.sleep(1)
-        else:
-            return
-        _write_launcher_json(directory, "phone.json", {"hostname": dns_name})
-        approval = directory / "phone.approved"
-        while not approval.exists():
+        try:
+            (directory / "stage.txt").write_text("Checking Tailscale", encoding="utf-8")
+            deadline = time.monotonic() + (45 if wait_for_tailscale else 0)
+            while not stopped():
+                status = await asyncio.to_thread(tailscale_status)
+                dns_name = tailscale_dns_name(status)
+                addresses = tailscale_addresses(status)
+                if dns_name and addresses:
+                    break
+                if time.monotonic() >= deadline:
+                    if not dns_name:
+                        raise RuntimeError("Sign in to Tailscale before starting phone mode.")
+                    raise RuntimeError("Tailscale did not report a usable local IP address.")
+                (directory / "stage.txt").write_text("Waiting for Tailscale", encoding="utf-8")
+                await asyncio.sleep(1)
+            else:
+                return
+            _write_launcher_json(directory, "phone.json", {"hostname": dns_name})
+            approval = directory / "phone.approved"
+            while not approval.exists():
+                if stopped():
+                    return
+                await asyncio.sleep(0.2)
             if stopped():
                 return
-            await asyncio.sleep(0.2)
-        if stopped():
-            return
-        approved = approval.read_text(encoding="utf-8")
-        if approved != dns_name:
-            raise RuntimeError("The selected Tailscale hostname changed. Start phone mode again.")
-        status = await asyncio.to_thread(tailscale_status)
-        if tailscale_dns_name(status) != dns_name:
-            raise RuntimeError("The selected Tailscale hostname changed. Start phone mode again.")
-        if stopped():
-            return
-        (directory / "stage.txt").write_text("Preparing phone HTTPS", encoding="utf-8")
-        tls = await asyncio.to_thread(tls_context, dns_name)
-        application[TLS_CONTEXT_KEY] = tls
-        application[PHONE_DNS_NAME_KEY] = dns_name
-        owner = (status.get("Self") or {}).get("UserID")
-        if type(owner) is int and owner > 0:
-            application[PHONE_OWNER_KEY] = owner
+            approved = approval.read_text(encoding="utf-8")
+            if approved != dns_name:
+                raise RuntimeError("The selected Tailscale hostname changed. Start phone mode again.")
+            status = await asyncio.to_thread(tailscale_status)
+            if tailscale_dns_name(status) != dns_name:
+                raise RuntimeError("The selected Tailscale hostname changed. Start phone mode again.")
+            if stopped():
+                return
+            (directory / "stage.txt").write_text("Preparing phone HTTPS", encoding="utf-8")
+            tls = await asyncio.to_thread(tls_context, dns_name)
+            application[TLS_CONTEXT_KEY] = tls
+            application[PHONE_DNS_NAME_KEY] = dns_name
+    
+        except RuntimeError as exc:
+            # Phone prerequisites must not prevent desktop access.
+            _write_launcher_json(directory, "phone-setup.json", {"message": str(exc)})
+            phone_access = False
+            addresses = []
+            tls = None
+            dns_name = ""
 
     if stopped():
         return
@@ -695,11 +706,17 @@ def _run_from_launcher(directory, parent_pid, phone_access, wait_for_tailscale=F
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--dev", action="store_true", help="Serve checked-out code on localhost without the launcher.")
     parser.add_argument("--phone-access", action="store_true")
     parser.add_argument("--wait-for-tailscale", action="store_true")
     parser.add_argument("--launcher-session", type=Path)
     parser.add_argument("--launcher-process-id", type=int)
     args = parser.parse_args()
+    if args.dev:
+        if args.phone_access or args.wait_for_tailscale or args.launcher_session or args.launcher_process_id:
+            parser.error("--dev cannot be combined with launcher arguments.")
+        web.run_app(create_app(), host="127.0.0.1", port=PORT, access_log=None)
+        return
     if not args.launcher_session:
         parser.error("Start Reality Restyling from its launcher.")
     if not args.launcher_process_id:

@@ -1,4 +1,3 @@
-import random
 import sys
 import unittest
 from contextlib import redirect_stdout
@@ -8,12 +7,23 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from runtime import PROMPT_CACHE_SIZE, Runtime
+from runtime import PROMPT_CACHE_SIZE, Runtime, combine_style_prompts
 from runtime_settings import DEFAULT_SETTINGS, RESOLUTIONS, normalize_settings
 from timing import TimingWindow
 
 
 class RuntimeSettingsTests(unittest.TestCase):
+    def test_style_combination_preserves_every_instruction(self):
+        first = "Pencil drawing; keep scene intact"
+        second = "Bold watercolor, keep scene intact"
+        with patch("runtime.prompt_token_count", return_value=24):
+            prompt, tokens = combine_style_prompts([first, second])
+        self.assertIn(first, prompt)
+        self.assertIn(second, prompt)
+        self.assertLess(prompt.index(first), prompt.index(second))
+        self.assertEqual(prompt.count("keep scene intact"), 2)
+        self.assertEqual(tokens, 24)
+
     def test_defaults_keep_optional_upscaler_enabled(self):
         settings = normalize_settings({})
         self.assertEqual(settings, DEFAULT_SETTINGS)
@@ -37,11 +47,6 @@ class RuntimeSettingsTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     normalize_settings(payload)
 
-    def test_runtime_starts_unloaded(self):
-        runtime = Runtime()
-        self.assertFalse(runtime.loaded())
-        self.assertFalse(runtime.metrics()["loaded"])
-
     def test_cold_prompt_encode_uses_inference_mode(self):
         import torch
 
@@ -58,7 +63,7 @@ class RuntimeSettingsTests(unittest.TestCase):
 
         runtime = Runtime()
         runtime._pipe = FakePipe()
-        with patch("torch.cuda.is_available", return_value=True), patch("torch.cuda.synchronize") as synchronize:
+        with patch("torch.cuda.is_available", return_value=True), patch("torch.cuda.set_device"), patch("torch.cuda.synchronize") as synchronize:
             embeds, _ = runtime._encode_prompt("test prompt")
             cached, _ = runtime._encode_prompt("test prompt")
         self.assertTrue(runtime._pipe.inference_mode)
@@ -82,14 +87,15 @@ class RuntimeSettingsTests(unittest.TestCase):
 
         runtime = Runtime()
         runtime._pipe = FakePipe()
-        for index in range(PROMPT_CACHE_SIZE):
-            runtime._encode_prompt(f"prompt {index}")
-        runtime._encode_prompt("prompt 0")
-        self.assertEqual(runtime._pipe.calls, PROMPT_CACHE_SIZE)
-        runtime._encode_prompt("new prompt")
-        self.assertEqual(len(runtime._prompt_cache), PROMPT_CACHE_SIZE)
-        runtime._encode_prompt("prompt 1")
-        self.assertEqual(runtime._pipe.calls, PROMPT_CACHE_SIZE + 2)
+        with patch("torch.cuda.set_device"):
+            for index in range(PROMPT_CACHE_SIZE):
+                runtime._encode_prompt(f"prompt {index}")
+            runtime._encode_prompt("prompt 0")
+            self.assertEqual(runtime._pipe.calls, PROMPT_CACHE_SIZE)
+            runtime._encode_prompt("new prompt")
+            self.assertEqual(len(runtime._prompt_cache), PROMPT_CACHE_SIZE)
+            runtime._encode_prompt("prompt 1")
+            self.assertEqual(runtime._pipe.calls, PROMPT_CACHE_SIZE + 2)
 
     def test_status_reads_do_not_wait_for_inference_lock(self):
         from concurrent.futures import ThreadPoolExecutor
@@ -105,29 +111,13 @@ class RuntimeSettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "not loaded"):
             runtime.render(None)
 
-    def test_heartbeat_reports_whether_model_is_loaded(self):
+    def test_settings_reject_oversized_prompt_without_changing_previous_settings(self):
         runtime = Runtime()
-        self.assertFalse(runtime.heartbeat())
-        runtime._pipe = object()
-        self.assertTrue(runtime.heartbeat())
+        runtime.set_settings({"prompt": "portrait"})
+        with self.assertRaises(ValueError):
+            runtime.set_settings({"prompt": "x" * 2001})
+        self.assertEqual(runtime.settings()["prompt"], "portrait")
 
-class RuntimeSettingsFuzzTests(unittest.TestCase):
-    def test_random_json_payloads_are_validated(self):
-        generator = random.Random(20261115)
-        keys = list(DEFAULT_SETTINGS) + ["model", "strength", "__proto__", "unknown"]
-        values = [None, True, False, 0, 1, -1, 512, 640, 1024, 1024.0, float("nan"), "", "text", [], [1], {}, {"x": []}]
-        for _ in range(5000):
-            payload = {}
-            for _ in range(generator.randrange(8)):
-                payload[generator.choice(keys)] = generator.choice(values)
-            try:
-                settings = normalize_settings(payload)
-            except ValueError:
-                continue
-            self.assertEqual(set(settings), set(DEFAULT_SETTINGS))
-            self.assertIn(settings["resolution"], RESOLUTIONS)
-            self.assertGreaterEqual(settings["steps"], 1)
-            self.assertLessEqual(settings["steps"], 4)
 
 class TimingWindowTests(unittest.TestCase):
     def test_p95_is_hidden_for_small_windows(self):

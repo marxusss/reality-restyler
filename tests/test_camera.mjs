@@ -26,3 +26,52 @@ test("unidentified desktop cameras do not generate lens choices", () => {
   assert.deepEqual(cameraLenses(devices, {deviceId: "webcam"}), []);
   assert.deepEqual(cameraLenses(devices, {deviceId: "obs", facingMode: "user"}), []);
 });
+
+test("camera can open on a device with only one camera", async t => {
+  const originalWindow = globalThis.window;
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  t.after(() => {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+    if (originalNavigator) Object.defineProperty(globalThis, "navigator", originalNavigator);
+    else delete globalThis.navigator;
+  });
+  globalThis.window = {isSecureContext: true};
+  let calls = 0;
+  Object.defineProperty(globalThis, "navigator", {configurable: true, value: {
+    mediaDevices: {getUserMedia: async constraints => {
+      calls++;
+      assert.equal(constraints.video.facingMode.ideal, "environment");
+      return {getTracks: () => [{stop() {}}]};
+    }}
+  }});
+  const {openStartingCamera} = await import("../web/camera.js");
+  const stream = await openStartingCamera();
+  assert.ok(stream);
+  assert.equal(calls, 1);
+});
+
+test("missing selected camera falls back to the available camera", async t => {
+  const originalWindow = globalThis.window;
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  t.after(() => {
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+    if (originalNavigator) Object.defineProperty(globalThis, "navigator", originalNavigator);
+    else delete globalThis.navigator;
+  });
+  globalThis.window = {isSecureContext: true};
+  const requests = [];
+  Object.defineProperty(globalThis, "navigator", {configurable: true, value: {
+    mediaDevices: {getUserMedia: async constraints => {
+      requests.push(constraints.video);
+      if (constraints.video.deviceId) throw Object.assign(new Error("Missing camera"), {name: "NotFoundError"});
+      return {getTracks: () => [{stop() {}}]};
+    }}
+  }});
+  const {openStartingCamera} = await import("../web/camera.js");
+  assert.ok(await openStartingCamera({deviceId: "missing"}));
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].deviceId.exact, "missing");
+  assert.equal(requests[1].facingMode.ideal, "environment");
+});

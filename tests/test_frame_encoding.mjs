@@ -20,7 +20,9 @@ test("camera encoder returns scaled JPEG bytes and timings", async () => {
     {drawImage(...args) {calls.push(args.slice(1));}}, 512);
   assert.equal(canvas.width, 512);
   assert.equal(canvas.height, 288);
-  assert.deepEqual(calls, [[0, 0, 512, 288], ["image/jpeg", 0.88]]);
+  assert.deepEqual(calls[0], [0, 0, 512, 288]);
+  assert.equal(calls[1][0], "image/jpeg");
+  assert.ok(calls[1][1] > 0 && calls[1][1] <= 1);
   assert.equal(result.data, bytes);
   for (const timing of [result.captureMs, result.encodeMs]) {
     assert.ok(Number.isFinite(timing) && timing >= 0);

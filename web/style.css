@@ -75,63 +75,12 @@ button {
   pointer-events: none;
   background: linear-gradient(180deg, rgba(0,0,0,.24), transparent 24%, transparent 68%, rgba(0,0,0,.3));
 }
-.topbar {
-  position: absolute;
-  top: max(14px, env(safe-area-inset-top));
-  left: max(14px, env(safe-area-inset-left));
-  right: max(14px, env(safe-area-inset-right));
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 14px;
-}
-.icon-button {
-  width: 46px;
-  height: 46px;
-  flex: 0 0 auto;
-  margin: 0;
-  padding: 0;
-  appearance: none;
-  -webkit-appearance: none;
-  border: 1px solid rgba(255,255,255,.16);
-  border-radius: 15px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(13,15,18,.62);
-  color: #f7f8fa;
-  line-height: 0;
-  box-shadow: 0 8px 28px rgba(0,0,0,.22);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.icon-button:active, .toggle-button:active, .shutter-button:active {
-  transform: scale(.97);
-}
-.icon-button svg, .toggle-button svg {
-  display: block;
-  flex: 0 0 auto;
-  width: 21px;
-  height: 21px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
 .latency {
-  margin-left: auto;
-  padding: 9px 12px;
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 12px;
-  background: rgba(13,15,18,.66);
-  color: rgba(255,255,255,.88);
-  font-size: 12px;
+  margin-top: 10px;
+  color: rgba(235,238,242,.55);
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  text-align: right;
 }
 .startup {
   position: absolute;
@@ -159,6 +108,7 @@ button {
   height: 6px;
   accent-color: #a7ecd0;
 }
+#cancelStartupButton[hidden] { display: none; }
 .camera-controls {
   position: absolute;
   left: 50%;

@@ -4,6 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#050505">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Reality Restyle">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <title>Reality Restyle</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/style.css">
@@ -13,12 +17,10 @@
       <video id="output" autoplay playsinline muted></video>
       <canvas id="localOutput" hidden></canvas>
       <div id="shade"></div>
-      <header class="topbar">
-        <div id="latency" class="latency" hidden></div>
-      </header>
       <div id="startup" class="startup" role="status" aria-live="polite" hidden>
         <span id="startupLabel"></span>
         <progress id="startupProgress" max="8" value="0" aria-label="Startup stages completed"></progress>
+        <button id="cancelStartupButton" class="toggle-button" type="button" hidden>Cancel</button>
       </div>
       <div class="camera-controls">
         <div id="lensBar" class="lens-bar" role="group" aria-label="Camera lenses" hidden></div>
@@ -103,6 +105,7 @@
           <a class="toggle-button feedback-link" href="https://github.com/marxusss/reality-restyler/issues/new" target="_blank" rel="noopener noreferrer">Feedback</a>
           <button id="quitModelButton" class="toggle-button" type="button">Unload model</button>
         </div>
+        <div id="latency" class="latency" hidden></div>
       </section>
       <dialog id="stylesDialog" class="style-dialog" aria-labelledby="stylesTitle">
         <div class="panel-top">

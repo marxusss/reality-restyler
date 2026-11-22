@@ -1,4 +1,4 @@
-param([switch]$PhoneStartup)
+param([switch]$PhoneStartup, [switch]$FirstLaunch)
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -115,18 +115,17 @@ function Add-Control($Parent, $Type, $Text, $X, $Y, $Width, $Height) {
 $mode = Add-Control $window Panel '' 24 22 452 48
 $mode.BackColor = $soft
 $mode.Radius = 12
-$desktop = Add-Control $mode RadioButton '&Desktop' 4 4 222 40
-$phone = Add-Control $mode RadioButton '&Phone' 226 4 222 40
-foreach ($segment in @($desktop, $phone)) {
-    $segment.Appearance = 'Button'
-    $segment.FlatStyle = 'Flat'
-    $segment.FlatAppearance.BorderSize = 0
-    $segment.FlatAppearance.CheckedBackColor = $surface
-    $segment.TextAlign = 'MiddleCenter'
-    $segment.Cursor = 'Hand'
-}
-$desktop.Checked = -not $PhoneStartup
-$phone.Checked = [bool]$PhoneStartup
+$phone = Add-Control $mode CheckBox 'Phone access' 18 8 200 32
+$phone.AutoSize = $true
+$phone.BackColor = $soft
+$phone.Font = [Drawing.Font]::new('Segoe UI Semibold', 11)
+$phoneStatus = Add-Control $mode Label 'Disabled' 200 12 123 25
+$phoneStatus.TextAlign = 'MiddleRight'
+$phoneStatus.ForeColor = $muted
+$phoneSetup = Add-Control $mode Button 'Set up' 344 8 94 32
+$phoneSetup.Visible = $false
+$storedPhoneMode = (Get-ItemProperty -LiteralPath 'HKCU:\Software\RealityRestyling' -Name PhoneAccessEnabled -ErrorAction SilentlyContinue).PhoneAccessEnabled
+$phone.Checked = $PhoneStartup -or ($storedPhoneMode -eq 1)
 
 $statusCard = Add-Control $window Panel '' 24 88 452 118
 $statusTitle = Add-Control $statusCard Label '' 18 16 416 27
@@ -217,9 +216,15 @@ $startupValueName = 'RealityRestylingPhoneAccess'
 $startupCommand = '"' + (Join-Path $PSScriptRoot 'RealityRestyling.exe') + '" --phone-startup'
 $startupApprovalKeyPath = 'HKCU:\Software\RealityRestyling'
 $startupApprovalValueName = 'PhoneStartupApprovedHostname'
+$phoneApprovalValueName = 'PhoneAccessApprovedHostname'
 $startupValue = (Get-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -ErrorAction SilentlyContinue).$startupValueName
 $startupCheck.Checked = $startupValue -eq $startupCommand
 $startupWarning.Visible = $startupCheck.Checked
+
+function Get-PhoneAccessApproval {
+    $value = (Get-ItemProperty -LiteralPath $startupApprovalKeyPath -Name $phoneApprovalValueName -ErrorAction SilentlyContinue).$phoneApprovalValueName
+    return ([string]$value).TrimEnd([char[]]@('.'))
+}
 
 function Get-PhoneStartupApproval {
     $value = (Get-ItemProperty -LiteralPath $startupApprovalKeyPath -Name $startupApprovalValueName -ErrorAction SilentlyContinue).$startupApprovalValueName
@@ -232,13 +237,18 @@ function Clear-PhoneStartupApproval {
     if ($value) { Remove-ItemProperty -LiteralPath $startupApprovalKeyPath -Name $startupApprovalValueName -ErrorAction Stop }
 }
 
-function Get-TailscaleDnsName {
+function Find-TailscaleExecutable {
     $tailscale = (Get-Command tailscale -ErrorAction SilentlyContinue).Source
     if (-not $tailscale) {
         foreach ($candidate in @((Join-Path $env:ProgramFiles 'Tailscale\tailscale.exe'), (Join-Path $env:LOCALAPPDATA 'Tailscale\tailscale.exe'))) {
             if (Test-Path -LiteralPath $candidate -PathType Leaf) { $tailscale = $candidate; break }
         }
     }
+    return $tailscale
+}
+
+function Get-TailscaleDnsName {
+    $tailscale = Find-TailscaleExecutable
     if (-not $tailscale) { return '' }
     try {
         $output = & $tailscale status --json 2>$null
@@ -302,6 +312,9 @@ function Show-State($Name, $Heading, $Detail) {
 }
 
 function Sync-PhoneCard {
+    $phoneStatus.Text = if (-not $phone.Checked) { 'Disabled' } elseif ($state.Name -eq 'ready') { if ($phoneUrl.Text) { 'Ready' } else { 'Setup required' } } else { 'Enabled' }
+    $phoneStatus.ForeColor = if (-not $phone.Checked) { $muted } elseif ($state.Name -eq 'ready' -and $phoneUrl.Text) { $accent } else { [Drawing.ColorTranslator]::FromHtml('#AB7F2A') }
+    $phoneSetup.Visible = $phone.Checked -and -not ($state.Name -eq 'ready' -and $phoneUrl.Text)
     $desktopCard.Top = $statusCard.Bottom + 16
     $phoneCard.Visible = $state.Name -eq 'ready' -and $phone.Checked -and [bool]$phoneUrl.Text
     $phoneCard.Top = if ($desktopCard.Visible) { $desktopCard.Bottom + 16 } else { $statusCard.Bottom + 16 }
@@ -525,7 +538,27 @@ $open.Add_Click({
 $copyDesktop.Add_Click({ Set-ClipboardUrl $desktopUrl.Text })
 $copyPhone.Add_Click({ Set-ClipboardUrl $phoneUrl.Text })
 $log.Add_Click({ Start-Process explorer.exe -ArgumentList ('"{0}"' -f $logDirectory) })
-$phone.Add_CheckedChanged({ Sync-PhoneCard })
+$phoneSetup.Add_Click({
+    $tailscale = Find-TailscaleExecutable
+    try {
+        if (-not $tailscale) {
+            Start-Process 'https://tailscale.com/download'
+        } elseif (-not (Get-TailscaleDnsName)) {
+            Start-Process -FilePath $tailscale -ArgumentList 'up'
+        } else {
+            Start-Process 'https://login.tailscale.com/admin/dns'
+        }
+    } catch { Show-Detail 'Could not open Tailscale setup.' }
+})
+$phone.Add_CheckedChanged({
+    try {
+        if (-not (Test-Path -LiteralPath 'HKCU:\Software\RealityRestyling')) {
+            New-Item -Path 'HKCU:\Software\RealityRestyling' -Force | Out-Null
+        }
+        Set-ItemProperty -LiteralPath 'HKCU:\Software\RealityRestyling' -Name PhoneAccessEnabled -Value ([int]$phone.Checked)
+    } catch { Show-Detail 'Could not save phone access preference.' }
+    Sync-PhoneCard
+})
 $startupCheck.Add_CheckedChanged({ Set-PhoneStartup $startupCheck.Checked })
 $window.Add_Shown({
     Sync-PhoneCard
@@ -533,7 +566,9 @@ $window.Add_Shown({
     if ($PhoneStartup -and $startupCheck.Checked) {
         $state.NextStartUnattended = $true
         $start.PerformClick()
-    } elseif (-not $PhoneStartup) {
+    } elseif ($FirstLaunch) {
+        $start.PerformClick()
+    } else {
         Start-UpdateCheck
     }
 })
@@ -601,7 +636,7 @@ $timer.Add_Tick({
         if ($state.Directory) {
             $item = Get-Item -LiteralPath $state.Directory -Force -ErrorAction SilentlyContinue
             if ($item -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-                $known = @('stage.txt', 'stop', 'phone.json', 'phone.json.tmp', 'phone.png', 'phone.approved', 'phone.pending', 'ready.json', 'ready.json.tmp', 'error.json', 'error.json.tmp')
+                $known = @('stage.txt', 'stop', 'phone.json', 'phone.json.tmp', 'phone.png', 'phone.approved', 'phone.pending', 'phone-setup.json', 'phone-setup.json.tmp', 'ready.json', 'ready.json.tmp', 'error.json', 'error.json.tmp')
                 Get-ChildItem -LiteralPath $state.Directory -File -ErrorAction SilentlyContinue |
                     Where-Object { $_.Name -in $known -and -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) } |
                     Remove-Item -Force -ErrorAction SilentlyContinue
@@ -648,6 +683,7 @@ $timer.Add_Tick({
         try {
             $hostname = $consent.hostname
             $savedHostname = Get-PhoneStartupApproval
+            $savedPhoneHostname = Get-PhoneAccessApproval
             $currentHostname = ([string]$hostname).TrimEnd([char[]]@('.'))
             if ($savedHostname -and -not [string]::Equals($savedHostname, $currentHostname, [StringComparison]::OrdinalIgnoreCase)) {
                 Clear-PhoneStartupApproval
@@ -655,6 +691,9 @@ $timer.Add_Tick({
             }
             $startupValue = (Get-ItemProperty -LiteralPath $startupKeyPath -Name $startupValueName -ErrorAction SilentlyContinue).$startupValueName
             $autoApprove = $state.Unattended -and ($startupValue -eq $startupCommand) -and $savedHostname -and [string]::Equals($savedHostname, $currentHostname, [StringComparison]::OrdinalIgnoreCase)
+            if (-not $autoApprove -and -not $state.Unattended -and $savedPhoneHostname -and [string]::Equals($savedPhoneHostname, $currentHostname, [StringComparison]::OrdinalIgnoreCase)) {
+                $autoApprove = $true
+            }
             if ($autoApprove) {
                 $pending = Join-Path $state.Directory 'phone.pending'
                 [IO.File]::WriteAllText($pending, $hostname)
@@ -671,6 +710,8 @@ $timer.Add_Tick({
                 ) -join ([Environment]::NewLine * 2)
                 $reply = [Windows.Forms.MessageBox]::Show($window, $question, 'Phone access', 'YesNo', 'Warning', 'Button2')
                 if ($reply -eq 'Yes') {
+                    if (-not (Test-Path -LiteralPath $startupApprovalKeyPath)) { New-Item -Path $startupApprovalKeyPath -Force | Out-Null }
+                    Set-ItemProperty -LiteralPath $startupApprovalKeyPath -Name $phoneApprovalValueName -Value $currentHostname
                     $pending = Join-Path $state.Directory 'phone.pending'
                     [IO.File]::WriteAllText($pending, $hostname)
                     [IO.File]::Move($pending, (Join-Path $state.Directory 'phone.approved'))
@@ -689,8 +730,17 @@ $timer.Add_Tick({
                 try { $qr.Image = [Drawing.Bitmap]::new($source) } finally { $source.Dispose() }
             } catch { }
         }
-        Show-State 'ready' 'Server ready' ''
+        $phoneSetupState = Read-SessionJson 'phone-setup.json'
+        $detail = if ($phone.Checked -and $phoneSetupState) {
+            if ($phoneSetupState.message -match 'Sign in|local IP') { 'Phone: sign in to Tailscale' }
+            else { 'Phone: enable HTTPS in Tailscale' }
+        } else { '' }
+        Show-State 'ready' 'Server ready' $detail
         $open.Focus()
+        if ($FirstLaunch) {
+            $FirstLaunch = $false
+            try { Start-Process $desktopUrl.Text } catch { }
+        }
     }
 })
 $window.Add_FormClosing({
