@@ -167,6 +167,6 @@ test("Custom Styles and presets share a two-sided faded scroll area", () => {
 test("Pencil has no backing and is legible over bright thumbnails", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   assert.match(css, /\.style-edit-button\s*\{[^}]*width: 32px;[^}]*height: 32px;[^}]*background: transparent/);
-  assert.match(css, /\.style-edit-button svg\s*\{[^}]*width: 21px;[^}]*filter: drop-shadow/);
+  assert.match(css, /\.style-edit-button svg\s*\{[^}]*width: 19px;[^}]*stroke-width: 1.5;[^}]*filter: drop-shadow/);
   assert.match(css, /\.style-name\s*\{[^}]*background: transparent;[^}]*text-shadow:/);
 });
