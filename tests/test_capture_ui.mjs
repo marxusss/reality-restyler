@@ -70,6 +70,28 @@ test("styles sit above the smaller capture dock, with a visible glass background
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*bottom: calc\(max\(12px,env\(safe-area-inset-bottom\)\) \+ 86px \+ var\(--lens-height,0px\) \+ var\(--capture-save-height,0px\)\)/);
   assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*height: min\(72dvh,480px\)/);
-  assert.match(css, /\.shutter-button\s*\{[^}]*width: 48px; height: 48px/);
-  assert.match(css, /backdrop-filter: blur\(5px\) saturate\(112%\) contrast\(102%\)/);
+  assert.match(css, /\.shutter-button\s*\{[^}]*width: 42px; height: 42px/);
+  assert.match(css, /backdrop-filter: blur\(4px\) saturate\(108%\) contrast\(102%\)/);
+});
+
+test("video is opaque, modes readable, and pause stays aligned", () => {
+  const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
+  assert.match(css, /\.shutter-button:disabled\s*\{\s*opacity:\s*1/);
+  assert.match(css, /\.capture-mode-other\s*\{[^}]*rgba\(255,255,255,\.88\)/);
+  assert.match(css, /\.actions > #startButton\s*\{[^}]*align-self: end;[^}]*place-items: center/);
+});
+test("palette icon, outline Done, right-aligned Add style and less-wide thumbnails", () => {
+  const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
+  assert.equal((html.match(/a9 9 0 0 0 0 18/g) || []).length, 2);
+  assert.match(css, /\.prompt-line \.settings-done\s*\{[^}]*background: rgba\(255,255,255,\.06\)/);
+  assert.match(css, /#addStyleButton, #useStylesButton\s*\{ margin-left: auto; \}/);
+  assert.match(css, /\.style-thumbnail\s*\{[^}]*aspect-ratio: 7 \/ 5/);
+});
+test("styles have compact labels, custom titles truncate rather than wrap", () => {
+  const styles = JSON.parse(readFileSync(new URL("../web/styles/catalog.json", import.meta.url), "utf8"));
+  const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
+  assert.equal(styles.find(s => s.id === "hand-painted-animation").name, "Painted Fantasy");
+  assert.match(css, /\.style-card > span:last-child\s*\{[^}]*white-space: nowrap/);
+  assert.match(css, /\.style-card > span:last-child\s*\{[^}]*text-overflow: ellipsis/);
 });
