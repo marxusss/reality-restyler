@@ -8,7 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from runtime import PROMPT_CACHE_SIZE, Runtime, combine_style_prompts
-from runtime_settings import DEFAULT_SETTINGS, RESOLUTIONS, normalize_settings
+from runtime_settings import DEFAULT_SETTINGS, normalize_settings
 from timing import TimingWindow
 
 
@@ -104,7 +104,7 @@ class RuntimeSettingsTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=1) as executor:
             with runtime._lock:
                 self.assertTrue(executor.submit(runtime.metrics).result(timeout=1)["loaded"])
-                self.assertTrue(executor.submit(runtime.heartbeat).result(timeout=1))
+                self.assertTrue(executor.submit(runtime.loaded).result(timeout=1))
 
     def test_render_never_returns_an_unprocessed_frame(self):
         runtime = Runtime()
