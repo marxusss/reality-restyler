@@ -232,7 +232,6 @@ async def claim_session(request):
             token = manager.resume(supplied)
         else:
             token = await manager.transfer_control()
-        await asyncio.to_thread(runtime.heartbeat)
     return web.json_response({"token": token})
 
 
@@ -419,7 +418,7 @@ async def update_settings(request):
 async def heartbeat(request):
     async with request.app[SESSION_KEY].lock:
         require_owner(request)
-        loaded = await asyncio.to_thread(runtime.heartbeat)
+        loaded = runtime.loaded()
     return web.json_response({"ok": True, "loaded": loaded})
 
 
@@ -447,7 +446,7 @@ async def pause_runtime(request):
     await asyncio.to_thread(runtime.flush_timings)
     async with manager.lock:
         require_owner(request)
-        loaded = runtime.heartbeat()
+        loaded = runtime.loaded()
     return web.json_response({"ok": True, "loaded": loaded})
 
 
