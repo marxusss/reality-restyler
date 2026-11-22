@@ -69,7 +69,7 @@ test("diagnostics share one compact footer with Load or Unload model", () => {
 test("styles sit above the smaller capture dock, with a visible glass background", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*bottom: calc\(max\(12px,env\(safe-area-inset-bottom\)\) \+ 80px \+ var\(--lens-height,0px\) \+ var\(--capture-save-height,0px\)\)/);
-  assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*height: min\(72dvh,462px\)/);
+  assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*height: min\(72dvh,448px\)/);
   assert.match(css, /\.shutter-button\s*\{[^}]*width: 42px; height: 42px/);
   assert.match(css, /backdrop-filter: blur\(3px\)/);
 });
@@ -93,7 +93,7 @@ test("style names stay original and labels are overlaid within thumbnails", () =
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   assert.equal(styles.find(s => s.id === "hand-painted-animation").name, "Hand-painted fantasy animation");
   assert.match(css, /\.style-name\s*\{[^}]*white-space: normal/);
-  assert.match(css, /\.style-name\s*\{[^}]*background: rgba\(27,27,27,\.26\)/);
+  assert.match(css, /\.style-name\s*\{[^}]*background: rgba\(27,27,27,\.05\)/);
 });
 
 test("settings and lens gap matches lens and mode gap in portrait and landscape", () => {
@@ -120,7 +120,7 @@ test("styles layout keeps labels inside thumbnail, removes header, and aligns to
   assert.match(js, /thumbnail\.append\(label\);\s*button\.append\(thumbnail\);/);
   assert.match(css, /\.style-thumbnail img\s*\{[^}]*inset: 0;[^}]*width: 100%;[^}]*height: 100%/);
   assert.match(css, /#combineStylesButton\s*\{[^}]*padding-left: 4px/);
-  assert.match(css, /#closeStylesButton\s*\{[^}]*top: 12px/);
+  assert.match(css, /#closeStylesButton\s*\{[^}]*top: 16px/);
   assert.match(css, /\.lens-button\s*\{[^}]*backdrop-filter: blur\(3px\)/);
 });
 
@@ -139,11 +139,19 @@ test("glass uses blur without desaturating the background and displays quieter l
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
   assert.doesNotMatch(css, /backdrop-filter:[^;]*saturate\(/);
-  assert.match(css, /\.style-name\s*\{[^}]*background: rgba\(27,27,27,\.26\)/);
+  assert.match(css, /\.style-name\s*\{[^}]*background: rgba\(27,27,27,\.05\)/);
   assert.match(css, /\.capture-mode-other\s*\{[^}]*rgba\(244,245,246,\.44\)/);
   assert.match(css, /\.setting-footer #quitModelButton\s*\{[^}]*color: rgba\(235,238,242,\.58\)/);
   assert.match(css, /#combineStylesButton\s*\{[^}]*font-weight: 650/);
   assert.match(html, /id="customStylesTitle">Custom Styles</);
   assert.match(html, /id="combineStylesButton"[^>]*>Combine Styles</);
   assert.match(html, /id="addStyleButton"[^>]*>\+<span>Add Style<\/span>/);
+});
+
+test("Styles scroll fades softly behind a floating close button without obscuring custom thumbnails", () => {
+  const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
+  assert.match(css, /\.style-list\s*\{[^}]*mask-image: linear-gradient\(to bottom, transparent, #000 18px\)/);
+  assert.match(css, /#closeStylesButton\s*\{[^}]*border-radius: 50%/);
+  assert.match(css, /\.style-name\s*\{[^}]*background: rgba\(27,27,27,\.05\);[^}]*font-size: 9px/);
+  assert.match(css, /\.style-thumbnail img\s*\{[^}]*width: 100%;[^}]*height: 100%;[^}]*object-fit: cover/);
 });
