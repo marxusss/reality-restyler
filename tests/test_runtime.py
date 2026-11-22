@@ -63,7 +63,7 @@ class RuntimeSettingsTests(unittest.TestCase):
 
         runtime = Runtime()
         runtime._pipe = FakePipe()
-        with patch("torch.cuda.is_available", return_value=True), patch("torch.cuda.synchronize") as synchronize:
+        with patch("torch.cuda.is_available", return_value=True), patch("torch.cuda.set_device"), patch("torch.cuda.synchronize") as synchronize:
             embeds, _ = runtime._encode_prompt("test prompt")
             cached, _ = runtime._encode_prompt("test prompt")
         self.assertTrue(runtime._pipe.inference_mode)
@@ -87,14 +87,15 @@ class RuntimeSettingsTests(unittest.TestCase):
 
         runtime = Runtime()
         runtime._pipe = FakePipe()
-        for index in range(PROMPT_CACHE_SIZE):
-            runtime._encode_prompt(f"prompt {index}")
-        runtime._encode_prompt("prompt 0")
-        self.assertEqual(runtime._pipe.calls, PROMPT_CACHE_SIZE)
-        runtime._encode_prompt("new prompt")
-        self.assertEqual(len(runtime._prompt_cache), PROMPT_CACHE_SIZE)
-        runtime._encode_prompt("prompt 1")
-        self.assertEqual(runtime._pipe.calls, PROMPT_CACHE_SIZE + 2)
+        with patch("torch.cuda.set_device"):
+            for index in range(PROMPT_CACHE_SIZE):
+                runtime._encode_prompt(f"prompt {index}")
+            runtime._encode_prompt("prompt 0")
+            self.assertEqual(runtime._pipe.calls, PROMPT_CACHE_SIZE)
+            runtime._encode_prompt("new prompt")
+            self.assertEqual(len(runtime._prompt_cache), PROMPT_CACHE_SIZE)
+            runtime._encode_prompt("prompt 1")
+            self.assertEqual(runtime._pipe.calls, PROMPT_CACHE_SIZE + 2)
 
     def test_status_reads_do_not_wait_for_inference_lock(self):
         from concurrent.futures import ThreadPoolExecutor

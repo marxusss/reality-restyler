@@ -33,7 +33,7 @@
 ## Setup
 
 1. On Windows 11, run `RealityRestylingSetup.exe` and select your model folder or download the files.
-2. In **Reality Restyling**, select **Start server**, then **Open app**.
+2. In **Reality Restyling**, select **Start server**, then **Open app** (or opt to start it when installation finishes).
 3. Press **Start** and choose a style.
 
 ### Phone

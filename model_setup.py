@@ -52,7 +52,7 @@ PIPELINE_FILES = (
     "transformer/config.json",
     "vae/config.json",
     "vae/diffusion_pytorch_model.safetensors",
- )
+)
 FILE_SIZES = {
     "text_encoder/model-00001-of-00004.safetensors": 4902257696,
     "text_encoder/model-00002-of-00004.safetensors": 4915960368,

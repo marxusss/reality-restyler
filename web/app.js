@@ -1,6 +1,8 @@
 import { cameraFacing, cameraLenses, currentRotation, openStartingCamera, setCameraZoom } from "./camera.js";
 import { mountCapture } from "./capture.js";
 import { encodeCameraFrame } from "./frame_encoding.js";
+import { createLatencyMetrics } from "./metrics.js";
+import { openWebRTC, openLocalSocket } from "./transport.js";
 import { mountStyles } from "./styles.js";
 import { ErrorState } from "./errors.js";
 
@@ -72,9 +74,7 @@ let localEncodeMs = 0;
 let localImageDecodeMs = 0;
 let localDrawMs = 0;
 let localFrameTimingSamples = [];
-let previousStats = null;
-let jitterMs = 0;
-let decodeMs = 0;
+const latencyMetrics = createLatencyMetrics();
 let firstFrameReceived = false;
 const cameraFrameTimeout = 15000;
 const modelStartupStages = {
@@ -429,76 +429,41 @@ function setMirror(value) {
 }
 
 async function connectWebRTC() {
-  peer = new RTCPeerConnection({ iceServers: [] });
-  const activePeer = peer;
-  peer.addEventListener("track", event => {
-    if (peer !== activePeer || event.track.kind !== "video") return;
-    localOutput.hidden = true;
-    output.classList.remove("camera-source");
-    output.hidden = false;
-    const renderedStream = event.streams[0] || new MediaStream([event.track]);
-    output.srcObject = renderedStream;
-    if (output.requestVideoFrameCallback) {
-      if (presentationCallback) output.cancelVideoFrameCallback(presentationCallback);
-      const presented = () => {
-        if (peer !== activePeer || output.srcObject !== renderedStream) return;
-        notePresentation();
+  return openWebRTC(stream, {
+    created: current => { peer = current; },
+    isCurrent: current => peer === current && !document.hidden,
+    onTrack: (current, event) => {
+      if (peer !== current || event.track.kind !== "video") return;
+      localOutput.hidden = true;
+      output.classList.remove("camera-source");
+      output.hidden = false;
+      const renderedStream = event.streams[0] || new MediaStream([event.track]);
+      output.srcObject = renderedStream;
+      if (output.requestVideoFrameCallback) {
+        if (presentationCallback) output.cancelVideoFrameCallback(presentationCallback);
+        const presented = () => {
+          if (peer !== current || output.srcObject !== renderedStream) return;
+          notePresentation();
+          presentationCallback = output.requestVideoFrameCallback(presented);
+        };
         presentationCallback = output.requestVideoFrameCallback(presented);
-      };
-      presentationCallback = output.requestVideoFrameCallback(presented);
-    }
-    output.play().catch(() => {});
-  });
-  peer.addEventListener("connectionstatechange", () => {
-    if (peer !== activePeer) return;
-    clearTimeout(disconnectTimer);
-    if (["failed", "closed", "disconnected"].includes(activePeer.connectionState)) {
-      disconnectTimer = setTimeout(() => {
-        if (peer !== activePeer || !started || busy || activePeer.connectionState === "connected") return;
-        cameraLost("Camera connection lost.");
-      }, activePeer.connectionState === "disconnected" ? 3000 : 0);
-    }
-  });
-  for (const track of stream.getTracks()) peer.addTrack(track, stream);
-  const offer = await activePeer.createOffer();
-  await activePeer.setLocalDescription(offer);
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => finish(new Error("Camera connection timed out.")), 15000);
-    function finish(error) {
-      clearTimeout(timer);
-      activePeer.removeEventListener("icegatheringstatechange", check);
-      activePeer.removeEventListener("connectionstatechange", check);
-      if (error) reject(error); else resolve();
-    }
-    function check() {
-      if (peer !== activePeer || activePeer.connectionState === "closed") finish(new Error("Camera connection was interrupted."));
-      else if (activePeer.iceGatheringState === "complete") finish();
-    }
-    activePeer.addEventListener("icegatheringstatechange", check);
-    activePeer.addEventListener("connectionstatechange", check);
-    check();
-  });
-  if (peer !== activePeer || document.hidden) throw new Error("Camera connection was interrupted.");
-  const answer = await trackTransportRequest(request("/offer", {
-    sdp: activePeer.localDescription.sdp, type: activePeer.localDescription.type
-  }));
-  if (peer !== activePeer) throw new Error("Camera connection was interrupted.");
-  await activePeer.setRemoteDescription({ sdp: answer.sdp, type: answer.type });
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => finish(new Error("Camera connection timed out.")), 18000);
-    function finish(error) {
-      clearTimeout(timer);
-      activePeer.removeEventListener("connectionstatechange", check);
-      if (error) reject(error); else resolve();
-    }
-    function check() {
-      if (peer !== activePeer || ["failed", "closed"].includes(activePeer.connectionState)) finish(new Error("Camera connection failed."));
-      else if (activePeer.connectionState === "connected") finish();
-    }
-    activePeer.addEventListener("connectionstatechange", check);
-    check();
+      }
+      output.play().catch(() => {});
+    },
+    onState: current => {
+      if (peer !== current) return;
+      clearTimeout(disconnectTimer);
+      if (["failed", "closed", "disconnected"].includes(current.connectionState)) {
+        disconnectTimer = setTimeout(() => {
+          if (peer !== current || !started || busy || current.connectionState === "connected") return;
+          cameraLost("Camera connection lost.");
+        }, current.connectionState === "disconnected" ? 3000 : 0);
+      }
+    },
+    offer: data => trackTransportRequest(request("/offer", data))
   });
 }
+
 
 function trackTransportRequest(pending) {
   transportRequest = pending;
@@ -515,24 +480,16 @@ async function pauseHostTransport(current = () => true) {
 }
 
 function connectLocalWebSocket() {
-  const url = new URL("/local-stream", window.location.href);
-  url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const socket = new WebSocket(url, ["restyle." + sessionToken]);
-  socket.binaryType = "blob";
-  localSocket = socket;
-  socket.addEventListener("message", event => void handleLocalMessage(event, socket));
-  socket.addEventListener("close", () => {
-    if (localSocket !== socket || !started) return;
-    cameraLost("Camera connection closed.");
-  });
-  return trackTransportRequest(new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { socket.close(); reject(new Error("Local connection timed out.")); }, 10000);
-    const failed = () => { clearTimeout(timer); reject(new Error("Local camera connection failed.")); };
-    socket.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
-    socket.addEventListener("error", failed, { once: true });
-    socket.addEventListener("close", failed, { once: true });
+  return trackTransportRequest(openLocalSocket(sessionToken, {
+    created: socket => { localSocket = socket; },
+    onMessage: (socket, event) => void handleLocalMessage(event, socket),
+    onClose: socket => {
+      if (localSocket !== socket || !started) return;
+      cameraLost("Camera connection closed.");
+    }
   }));
 }
+
 
 async function handleLocalMessage(event, sourceSocket) {
   if (sourceSocket !== localSocket) return;
@@ -796,9 +753,7 @@ function closeCameraTransport() {
   clearTimeout(localFrameDeadline);
   localFrameDeadline = 0;
   localFailures = 0;
-  previousStats = null;
-  jitterMs = 0;
-  decodeMs = 0;
+  latencyMetrics.reset();
   firstFrameReceived = false;
   clearTimeout(localFrameTimer);
   localFrameTimer = 0;
@@ -942,39 +897,8 @@ async function updateMetrics() {
         !stream?.getVideoTracks()[0]?.muted && (!Number.isFinite(freshAge) || freshAge < 2500)) recoveryAttempts = 0;
     showError(metrics.error || "", "model");
     showError("", "metrics");
-    let roundTrip = 0;
-    if (currentPeer) {
-      const stats = await currentPeer.getStats();
-      let pair = null;
-      let incoming = null;
-      for (const item of stats.values()) {
-        if (item.type === "transport" && item.selectedCandidatePairId) pair = stats.get(item.selectedCandidatePairId) || pair;
-        if (item.type === "candidate-pair" && item.state === "succeeded" && (item.nominated || item.selected)) pair = item;
-        if (item.type === "inbound-rtp" && (item.kind === "video" || item.mediaType === "video")) incoming = item;
-      }
-      if (Number.isFinite(pair?.currentRoundTripTime)) roundTrip = Number(pair.currentRoundTripTime) * 1000;
-      if (incoming) {
-        const sample = {
-          jitterCount: Number(incoming.jitterBufferEmittedCount) || 0,
-          jitterDelay: Number(incoming.jitterBufferDelay) || 0,
-          decodedCount: Number(incoming.framesDecoded) || 0,
-          decodeTime: Number(incoming.totalDecodeTime) || 0
-        };
-        if (!previousStats || sample.jitterCount < previousStats.jitterCount || sample.jitterDelay < previousStats.jitterDelay || sample.decodedCount < previousStats.decodedCount || sample.decodeTime < previousStats.decodeTime) {
-          jitterMs = sample.jitterCount ? sample.jitterDelay * 1000 / sample.jitterCount : 0;
-          decodeMs = sample.decodedCount ? sample.decodeTime * 1000 / sample.decodedCount : 0;
-        } else {
-          const jitterCount = sample.jitterCount - previousStats.jitterCount;
-          const decodedCount = sample.decodedCount - previousStats.decodedCount;
-          if (jitterCount > 0) jitterMs = (sample.jitterDelay - previousStats.jitterDelay) * 1000 / jitterCount;
-          if (decodedCount > 0) decodeMs = (sample.decodeTime - previousStats.decodeTime) * 1000 / decodedCount;
-        }
-        previousStats = sample;
-      }
-    }
     const modelMs = Number(metrics.model_ms) || 0;
-    const totalMs = Number(metrics.total_ms) || modelMs;
-    const clientMs = transportMode === "local" ? localRoundTripMs : totalMs + roundTrip + jitterMs + decodeMs;
+    const clientMs = await latencyMetrics.measure(currentPeer, metrics, transportMode, localRoundTripMs);
     if (!sameTransport()) return;
     latency.textContent = "Model " + Math.round(modelMs) + " ms · " + (transportMode === "local" ? "Frame round trip " : "Estimated latency ") + Math.round(clientMs) + " ms";
   } catch (error) { if (sameTransport()) showError(error.message, "metrics"); }

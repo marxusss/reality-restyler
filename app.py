@@ -338,7 +338,7 @@ async def start_runtime(request):
             if stage["cancel"].is_set():
                 if result.get("ok"):
                     await asyncio.to_thread(runtime.unload)
-                return web.json_response({"ok": False, "error": "Startup cancelled."}, status=422)
+                return web.json_response({"ok": False, "error": "Start cancelled."}, status=422)
             async with manager.lock:
                 require_owner(request, touch=False)
             if result.get("ok"):
@@ -355,6 +355,8 @@ async def start_runtime(request):
     except ValueError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=422)
     except RuntimeError as exc:
+        if stage["cancel"].is_set():
+            return web.json_response({"ok": False, "error": "Start cancelled."}, status=422)
         return web.json_response({"ok": False, "error": str(exc)}, status=503)
     except Exception as exc:
         print(f"Runtime startup failed: {type(exc).__name__}: {exc}", flush=True)
@@ -543,7 +545,7 @@ def create_app():
     app[PREFERENCES_LOCK_KEY] = asyncio.Lock()
     app[STARTUP_PROGRESS_KEY] = {}
     app.router.add_get("/", index)
-    for script in ("app.js", "camera.js", "capture.js", "frame_encoding.js", "styles.js", "errors.js"):
+    for script in ("app.js", "camera.js", "capture.js", "frame_encoding.js", "styles.js", "errors.js", "metrics.js", "transport.js"):
         app.router.add_get("/" + script, app_script)
     app.router.add_get("/style.css", style_sheet)
     app.router.add_get("/favicon.svg", favicon)
