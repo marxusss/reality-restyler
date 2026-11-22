@@ -418,7 +418,7 @@ async def update_settings(request):
 async def heartbeat(request):
     async with request.app[SESSION_KEY].lock:
         require_owner(request)
-        loaded = runtime.loaded()
+        loaded = await asyncio.to_thread(runtime.loaded)
     return web.json_response({"ok": True, "loaded": loaded})
 
 
