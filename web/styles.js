@@ -191,8 +191,10 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
         thumbnail.append(image);
       }
       const label = document.createElement("span");
+      label.className = "style-name";
       label.textContent = style.name;
-      button.append(thumbnail, label);
+      thumbnail.append(label);
+      button.append(thumbnail);
       button.addEventListener("click", event => {
         if (styleSelection === null && !event.shiftKey) {
           applyStyleSelection(style.prompt, [style.prompt]);
