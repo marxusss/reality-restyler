@@ -605,8 +605,12 @@ textarea:focus, select:focus {
   width: min(430px, calc(100vw - 24px));
 }
 .style-editor .field + .field {
-  margin-top: 14px;
+  margin-top: 9px;
 }
+.style-editor .panel-top { margin-bottom: 7px; }
+.style-editor textarea { min-height: 64px; }
+.style-editor #styleCapturePreview { height: 84px; width: min(100%, 185px); margin-top: 8px; }
+.style-editor .style-toolbar-bottom { margin-top: 7px; }
 .style-editor input {
   width: 100%;
   min-width: 0;
@@ -733,3 +737,31 @@ textarea:focus, select:focus {
   background: linear-gradient(to bottom,rgba(24,29,33,.16),rgba(24,29,33,.66));
   border-radius: 10px;
 }
+
+/* In landscape, custom styles sit beside the presets rather than consuming
+   most of the available height. The existing selection behavior is unchanged. */
+@media (orientation: landscape) {
+  .style-list:has(#customStyleSection:not([hidden])) {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+  }
+  .style-list:has(#customStyleSection:not([hidden])) #customStyleSection {
+    grid-column: 1;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .style-list:has(#customStyleSection:not([hidden])) #customStyles {
+    grid-template-columns: 1fr;
+  }
+  .style-list:has(#customStyleSection:not([hidden])) #presetStyles {
+    grid-column: 2;
+    grid-row: 1;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+  }
+  .style-list .style-error:not([hidden]) { grid-column: 1 / -1; }
+}
+/* Opening the style editor should not leave a second glass dialog visible. */
+body:has(#styleEditor[open]) #stylesDialog { visibility: hidden; }
