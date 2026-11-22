@@ -68,7 +68,7 @@ test("diagnostics share one compact footer with Load or Unload model", () => {
 
 test("styles sit above the smaller capture dock, with a visible glass background", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
-  assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*bottom: calc\(max\(12px,env\(safe-area-inset-bottom\)\) \+ 86px\)/);
+  assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*bottom: calc\(max\(12px,env\(safe-area-inset-bottom\)\) \+ 86px \+ var\(--lens-height,0px\) \+ var\(--capture-save-height,0px\)\)/);
   assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*height: min\(72dvh,480px\)/);
   assert.match(css, /\.shutter-button\s*\{[^}]*width: 48px; height: 48px/);
   assert.match(css, /backdrop-filter: blur\(5px\) saturate\(112%\) contrast\(102%\)/);
