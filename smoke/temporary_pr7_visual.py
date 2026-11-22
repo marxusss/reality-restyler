@@ -52,7 +52,7 @@ try:
             assert all(abs(w - h) < 0.1 for w,h in lenses), lenses
             page.locator("#settingsButton").click()
             assert not page.locator("#settingsPanel").is_hidden()
-            page.locator("#promptInput").fill("Line one\\nLine two\\nLine three")
+            page.locator("#promptInput").fill("Line one\nLine two\nLine three")
             size = page.locator("#promptInput").evaluate("(el) => el.getBoundingClientRect().height")
             assert 65 <= size <= 83, ("Prompt did not grow to three lines", size)
             page.locator("#promptInput").blur()
