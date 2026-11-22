@@ -155,9 +155,9 @@ export function mountCapture({getFrame, isMirrored, reportError}) {
     const dy = event.clientY - swipe.y;
     const dx = event.clientX - swipe.x;
     swipe = null;
-    if (Math.abs(dx) < 24 || Math.abs(dx) <= Math.abs(dy)) return;
+    if (Math.abs(dy) < 24 || Math.abs(dx) >= Math.abs(dy)) return;
     suppressClick = true;
-    changeMode(!videoMode);
+    changeMode(dy > 0);
   });
   shutter.parentElement.addEventListener("pointercancel", () => { swipe = null; });
 
