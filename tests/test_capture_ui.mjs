@@ -93,7 +93,7 @@ test("style names stay original and labels are overlaid within thumbnails", () =
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   assert.equal(styles.find(s => s.id === "hand-painted-animation").name, "Hand-painted fantasy animation");
   assert.match(css, /\.style-name\s*\{[^}]*white-space: normal/);
-  assert.match(css, /\.style-name\s*\{[^}]*background: rgba\(27,27,27,\.05\)/);
+  assert.match(css, /\.style-name\s*\{[^}]*background: transparent/);
 });
 
 test("settings and lens gap matches lens and mode gap in portrait and landscape", () => {
@@ -108,7 +108,7 @@ test("thumbnail fits entire style image and custom edit icon clears overlay", ()
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   assert.match(css, /\.style-thumbnail img\s*\{[^}]*object-fit: cover/);
   assert.match(css, /\.style-name\s*\{[^}]*position: absolute;[^}]*bottom: 0/);
-  assert.match(css, /\.style-edit-button\s*\{[^}]*top: 5px/);
+  assert.match(css, /\.style-edit-button\s*\{[^}]*top: 0/);
 });
 
 test("styles layout keeps labels inside thumbnail, removes header, and aligns toolbar", () => {
@@ -130,16 +130,16 @@ test("styles neutral glass, edge-to-edge thumbnails and subtle controls", () => 
   assert.match(css, /\.style-thumbnail\s*\{[^}]*background: transparent/);
   assert.match(css, /\.style-thumbnail img\s*\{[^}]*object-fit: cover/);
   assert.match(css, /\.lens-button\s*\{[^}]*border: 0;[^}]*backdrop-filter: blur\(3px\)/);
-  assert.match(css, /\.style-list\s*\{[^}]*padding: 18px 0 3px/);
+  assert.match(css, /\.style-list\s*\{[^}]*padding: 28px 0 3px/);
   assert.match(css, /#addStyleButton \{ gap: 5px; padding-right: 13px; \}/);
-  assert.match(css, /\.style-edit-button\s*\{[^}]*right: 2px;[^}]*width: 24px/);
+  assert.match(css, /\.style-edit-button\s*\{[^}]*right: 0;[^}]*width: 32px/);
 });
 
 test("glass uses blur without desaturating the background and displays quieter labels", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
   assert.doesNotMatch(css, /backdrop-filter:[^;]*saturate\(/);
-  assert.match(css, /\.style-name\s*\{[^}]*background: rgba\(27,27,27,\.05\)/);
+  assert.match(css, /\.style-name\s*\{[^}]*background: transparent/);
   assert.match(css, /\.capture-mode-other\s*\{[^}]*rgba\(244,245,246,\.44\)/);
   assert.match(css, /\.setting-footer #quitModelButton\s*\{[^}]*color: rgba\(235,238,242,\.58\)/);
   assert.match(css, /#combineStylesButton\s*\{[^}]*font-weight: 650/);
@@ -150,8 +150,23 @@ test("glass uses blur without desaturating the background and displays quieter l
 
 test("Styles scroll fades softly behind a floating close button without obscuring custom thumbnails", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
-  assert.match(css, /\.style-list\s*\{[^}]*mask-image: linear-gradient\(to bottom, transparent, #000 18px\)/);
+  assert.match(css, /\.style-list\s*\{[^}]*mask-image: linear-gradient\(to bottom, transparent, #000 24px, #000 calc\(100% - 24px\), transparent\)/);
   assert.match(css, /#closeStylesButton\s*\{[^}]*border-radius: 50%/);
-  assert.match(css, /\.style-name\s*\{[^}]*background: rgba\(27,27,27,\.05\);[^}]*font-size: 9px/);
+  assert.match(css, /\.style-name\s*\{[^}]*background: transparent;[^}]*font-size: 9px/);
   assert.match(css, /\.style-thumbnail img\s*\{[^}]*width: 100%;[^}]*height: 100%;[^}]*object-fit: cover/);
+});
+
+test("Custom Styles and presets share a two-sided faded scroll area", () => {
+  const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
+  assert.match(html, /id="styleList"[^>]*>[\s\S]*?id="customStyleSection"[\s\S]*?id="presetStyles"/);
+  assert.match(css, /\.style-list\s*\{[^}]*flex: 1 1 auto;[^}]*overflow-y: auto/);
+  assert.match(css, /\.style-list\s*\{[^}]*mask-image: linear-gradient\(to bottom, transparent, #000 24px, #000 calc\(100% - 24px\), transparent\)/);
+});
+
+test("Pencil has no backing and is legible over bright thumbnails", () => {
+  const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
+  assert.match(css, /\.style-edit-button\s*\{[^}]*width: 32px;[^}]*height: 32px;[^}]*background: transparent/);
+  assert.match(css, /\.style-edit-button svg\s*\{[^}]*width: 21px;[^}]*filter: drop-shadow/);
+  assert.match(css, /\.style-name\s*\{[^}]*background: transparent;[^}]*text-shadow:/);
 });
