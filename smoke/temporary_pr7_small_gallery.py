@@ -166,9 +166,9 @@ try:
                 print("RR_GALLERY_STATUS "+orient+" "+state+" OK",flush=True)
             # Render a labeled gallery from ten actual Chromium screenshots.
             board=board_for(images,size,columns)
-            board.thumbnail((720,2500))
+            board.thumbnail((490,2000))
             buf=io.BytesIO()
-            board.save(buf,format="JPEG",quality=26,optimize=True,progressive=False)
+            board.save(buf,format="JPEG",quality=10,optimize=True,progressive=False,subsampling=2)
             print("RR_SMALL_GALLERY "+orient+" "+base64.b64encode(buf.getvalue()).decode(),flush=True)
             print("RR_GALLERY_COMPLETE "+orient,flush=True)
         browser.close()
