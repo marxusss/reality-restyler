@@ -33,6 +33,13 @@ try:
             page.locator("#startButton").click()
             page.wait_for_timeout(600)
             assert "activated" in page.locator("#cameraActions").get_attribute("class")
+            print("RR_UI_GEOMETRY " + name + " " + json.dumps({
+                "start": center("#startButton"), "shutter": center("#shutterButton"),
+                "dock": page.locator("#cameraActions").bounding_box(),
+                "capture": page.locator(".capture-controls").bounding_box()
+            }), flush=True)
+            print("RR_UI_SCREEN " + name + "_debug " +
+                  base64.b64encode(page.screenshot(type="jpeg", quality=58)).decode(), flush=True)
             assert abs(center("#shutterButton")[0] - width / 2) < 1.5, "Shutter not horizontally centered"
             start_x = center("#startButton")[0]
             assert start_x < width / 2 - 40, "Pause not in left dock slot"
