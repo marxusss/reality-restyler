@@ -87,7 +87,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   }
 
   function renderStyleCards(container, styles, editable = false) {
-    const cards = styles.map((style, index) => {
+    const cards = styles.map(style => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "style-card";
@@ -216,7 +216,6 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
         updatedAt: Math.max(Date.now(), previous.updatedAt + 1)
       });
       styleEditor.close();
-      renderCustomStyles();
     } catch (_) {
       setStyleError(styleEditorError, "Could not delete the style.");
     } finally {
@@ -259,7 +258,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     renderCustomStyles();
     const finalIndex = syncedStyles.findIndex(item => item.id === style.id);
     const savedCard = $("customStyles").querySelectorAll(".custom-style-card")[finalIndex];
-    savedCard?.querySelector(finalIndex < 0 ? ".style-card" : ".style-edit-button")?.focus();
+    savedCard?.querySelector(".style-edit-button")?.focus();
   }
 
 
