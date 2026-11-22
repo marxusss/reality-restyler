@@ -177,5 +177,5 @@ test("style-name caption never renders its own backdrop", () => {
   assert.ok(block, "style-name rule exists");
   assert.doesNotMatch(block, /background(?:-color)?\s*:/);
   assert.doesNotMatch(block, /backdrop-filter\s*:/);
-  assert.match(block, /text-shadow\\s*:/);
+  assert.match(block, /text-shadow\s*:/);
 });
