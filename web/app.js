@@ -460,7 +460,7 @@ async function populateCameras(track) {
 function updateFlashVisibility(track) {
   let available = false;
   try { available = Boolean(track && track.getCapabilities && track.getCapabilities().torch); } catch (_) {}
-  flashButton.hidden = false;
+  flashButton.hidden = !available;
   flashButton.disabled = !available;
   if (!available) flashButton.setAttribute("aria-pressed", "false");
 }
