@@ -93,7 +93,7 @@ test("style names stay original and labels are overlaid within thumbnails", () =
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   assert.equal(styles.find(s => s.id === "hand-painted-animation").name, "Hand-painted fantasy animation");
   assert.match(css, /\.style-name\s*\{[^}]*white-space: normal/);
-  assert.doesNotMatch(css.match(/\\.style-name\\s*\\{[^}]*\\}/)?.[0] ?? "", /background\\s*:/);
+  assert.doesNotMatch(css.match(/\.style-name\s*\{[^}]*\}/)?.[0] ?? "", /background\s*:/);
 });
 
 test("settings and lens gap matches lens and mode gap in portrait and landscape", () => {
@@ -139,7 +139,7 @@ test("glass uses blur without desaturating the background and displays quieter l
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
   assert.doesNotMatch(css, /backdrop-filter:[^;]*saturate\(/);
-  assert.doesNotMatch(css.match(/\\.style-name\\s*\\{[^}]*\\}/)?.[0] ?? "", /background\\s*:/);
+  assert.doesNotMatch(css.match(/\.style-name\s*\{[^}]*\}/)?.[0] ?? "", /background\s*:/);
   assert.match(css, /\.capture-mode-other\s*\{[^}]*rgba\(244,245,246,\.44\)/);
   assert.match(css, /\.setting-footer #quitModelButton\s*\{[^}]*color: rgba\(235,238,242,\.58\)/);
   assert.match(css, /#combineStylesButton\s*\{[^}]*font-weight: 650/);
@@ -173,9 +173,9 @@ test("Pencil has no backing and is legible over bright thumbnails", () => {
 
 test("style-name caption never renders its own backdrop", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
-  const block = css.match(/\\.style-name\\s*\\{[^}]*\\}/)?.[0];
+  const block = css.match(/\.style-name\s*\{[^}]*\}/)?.[0];
   assert.ok(block, "style-name rule exists");
-  assert.doesNotMatch(block, /background(?:-color)?\\s*:/);
-  assert.doesNotMatch(block, /backdrop-filter\\s*:/);
+  assert.doesNotMatch(block, /background(?:-color)?\s*:/);
+  assert.doesNotMatch(block, /backdrop-filter\s*:/);
   assert.match(block, /text-shadow\\s*:/);
 });
