@@ -110,7 +110,12 @@ button {
   color: rgba(235,238,242,.55);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: left;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .startup {
   position: absolute;
@@ -158,14 +163,14 @@ button {
   column-gap: 10px;
   width: 312px;
   max-width: calc(100vw - 16px);
-  height: 84px;
-  padding: 9px 8px;
+  height: 72px;
+  padding: 6px 8px;
   border: 1px solid rgba(255,255,255,.27);
   border-radius: 22px;
-  background: linear-gradient(132deg,rgba(46,56,59,.26),rgba(14,19,24,.30));
+  background: rgba(23,28,32,.28);
   box-shadow: 0 12px 32px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.16);
-  backdrop-filter: blur(10px) saturate(140%);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(6px) saturate(112%);
+  -webkit-backdrop-filter: blur(6px) saturate(112%);
 }
 .actions > #flashButton { grid-column: 1; grid-row: 1; }
 .actions > #startButton {
@@ -176,7 +181,7 @@ button {
 .actions > .capture-controls {
   grid-column: 3; grid-row: 1;
   display: flex; align-items: flex-end; justify-content: center;
-  position: relative; width: 68px; height: 72px; touch-action: pan-y;
+  position: relative; width: 68px; height: 60px; touch-action: pan-y;
   transition: opacity .2s ease .12s;
 }
 .actions:not(.activated) > .capture-controls { opacity: 0; pointer-events: none; }
@@ -237,7 +242,7 @@ button {
 .actions #flashButton:disabled { opacity: .48; cursor: default; }
 .actions .icon-button {
   width: 42px;
-  height: 46px;
+  height: 44px;
   border-color: transparent;
   box-shadow: none;
   background: transparent;
@@ -262,15 +267,15 @@ button {
 }
 .mode-strip {
   position: absolute;
-  bottom: 53px;
+  bottom: 44px;
   left: 50%; transform: translateX(-50%);
   display: grid; place-items: center;
-  width: 156px; height: 18px;
+  width: 136px; height: 16px;
   touch-action: pan-y;
 }
 .capture-mode, .capture-mode-other {
   border: 0; padding: 0 3px; background: transparent;
-  color: #f5e9bd; font-size: 11px; line-height: 18px;
+  color: #f5e9bd; font-size: 11px; line-height: 16px;
   font-weight: 650; white-space: nowrap; cursor: pointer;
 }
 .capture-mode-other {
@@ -280,25 +285,25 @@ button {
 .mode-strip.photo-active .capture-mode-other { right: auto; left: 0; }
 .shutter-button {
   display: grid; place-items: center;
-  flex: 0 0 54px;
-  width: 54px; height: 54px; min-width: 54px; min-height: 54px;
-  max-width: 54px; max-height: 54px; aspect-ratio: 1;
+  flex: 0 0 48px;
+  width: 48px; height: 48px; min-width: 48px; min-height: 48px;
+  max-width: 48px; max-height: 48px; aspect-ratio: 1;
   padding: 0; border: 2px solid #fff; border-radius: 50%;
   background: rgba(0,0,0,.12); cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 .shutter-button::before {
-  content: ""; width: 42px; height: 42px; aspect-ratio: 1;
+  content: ""; width: 38px; height: 38px; aspect-ratio: 1;
   border-radius: 50%; background: #fff;
 }
 .shutter-button[data-mode="video"]::before { background: #f14f58; }
-.shutter-button.recording::before { width: 22px; height: 22px; border-radius: 6px; }
+.shutter-button.recording::before { width: 20px; height: 20px; border-radius: 5px; }
 .shutter-button:disabled { opacity: .42; cursor: default; }
 .settings-panel {
   position: absolute;
   z-index: 2;
   left: 50%;
-  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 101px);
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 89px);
   width: min(430px, calc(100vw - 24px));
   max-height: min(58dvh, 330px);
   overflow: auto;
@@ -307,10 +312,10 @@ button {
   padding: 9px 12px;
   border: 1px solid rgba(255,255,255,.28);
   border-radius: 20px;
-  background: linear-gradient(132deg,rgba(50,61,66,.20),rgba(13,19,25,.26));
+  background: rgba(25,29,33,.29);
   box-shadow: 0 14px 42px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.12);
-  backdrop-filter: blur(9px) saturate(135%);
-  -webkit-backdrop-filter: blur(9px) saturate(135%);
+  backdrop-filter: blur(5px) saturate(112%) contrast(102%);
+  -webkit-backdrop-filter: blur(5px) saturate(112%) contrast(102%);
 }
 #app:has(.lens-bar:not([hidden])) {
   --lens-height: 42px;
@@ -361,7 +366,7 @@ button {
   flex: 1;
   min-width: 0;
   min-height: 36px;
-  max-height: 77px;
+  max-height: 83px;
   height: 36px;
   padding: 7px 2px;
   border: 0;
@@ -373,15 +378,17 @@ button {
   overflow-y: auto;
   resize: none;
 }
-.prompt-line #clearPromptButton {
-  flex: 0 0 26px;
-  width: 26px;
-  height: 30px;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+.prompt-line #stylesButton { flex: 0 0 auto; min-height: 30px; padding: 5px 7px; }
+.prompt-line .settings-done {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 10px;
+  border-color: rgba(255,255,255,.35);
+  background: rgba(244,245,246,.92);
+  color: #202328;
+  font-size: 11px;
+  font-weight: 650;
 }
-.prompt-line #stylesButton { flex: 0 0 auto; padding: 5px 7px; }
 .prompt-line #stylesButton svg { width: 18px; height: 18px; }
 .style-actions { display: flex; gap: 8px; align-items: center; }
 .toggle-button.keyboard-done {
@@ -451,6 +458,8 @@ textarea:focus, select:focus {
   border-top: 1px solid rgba(255,255,255,.13); padding-top: 3px;
 }
 .setting-footer #quitModelButton {
+  flex: 0 0 auto;
+  white-space: nowrap;
   padding: 3px 1px; min-height: 24px; background: none; border: 0; font-size: 11px;
 }
 .toggle-button {
@@ -484,14 +493,22 @@ textarea:focus, select:focus {
   padding: 12px;
   border: 1px solid rgba(255,255,255,.28);
   border-radius: 19px;
-  background: linear-gradient(130deg,rgba(48,59,62,.21),rgba(15,19,25,.27));
-  backdrop-filter: blur(9px) saturate(135%);
-  -webkit-backdrop-filter: blur(9px) saturate(135%);
+  background: rgba(24,29,33,.27);
+  backdrop-filter: blur(5px) saturate(112%) contrast(102%);
+  -webkit-backdrop-filter: blur(5px) saturate(112%) contrast(102%);
   color: inherit;
   box-shadow: 0 14px 48px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.12);
 }
 .style-dialog::backdrop { background: transparent; }
 #stylesDialog[open] {
+  position: fixed;
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: calc(max(12px,env(safe-area-inset-bottom)) + 86px);
+  margin: 0 auto;
+  height: min(72dvh,480px);
+  max-height: calc(100dvh - 126px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -649,7 +666,7 @@ textarea:focus, select:focus {
   position: absolute;
   z-index: 3;
   left: 50%;
-  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 112px);
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 100px);
   width: min(430px, calc(100vw - 24px));
   transform: translateX(-50%);
   padding: 11px 14px;
@@ -714,10 +731,10 @@ textarea:focus, select:focus {
 
 @media (orientation: landscape) {
   .camera-controls { bottom: max(6px,env(safe-area-inset-bottom)); gap: 5px; }
-  .actions { height: 76px; padding-top: 5px; padding-bottom: 5px; }
-  .actions > .capture-controls { height: 66px; }
-  .mode-strip { bottom: 51px; }
-  .settings-panel { bottom: calc(max(6px,env(safe-area-inset-bottom)) + 88px); max-height: min(50dvh,220px); }
+  .actions { height: 68px; padding-top: 5px; padding-bottom: 5px; }
+  .actions > .capture-controls { height: 57px; }
+  .mode-strip { bottom: 43px; }
+  .settings-panel { bottom: calc(max(6px,env(safe-area-inset-bottom)) + 80px); max-height: min(50dvh,220px); }
   .style-dialog { max-height: min(60dvh,245px); }
   .style-grid { grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; }
   .style-editor { max-height: min(60dvh,245px); }
