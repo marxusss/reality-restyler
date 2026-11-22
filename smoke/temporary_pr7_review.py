@@ -112,7 +112,10 @@ def render(page, state):
     elif state == "styles":
         open_styles(page)
         grid=page.locator("#presetStyles").evaluate("e=>getComputedStyle(e).gridTemplateColumns")
-        assert len(grid.split(" ")) == (5 if page.viewport_size["width"]>page.viewport_size["height"] else 3), ("Wrong style grid",grid)
+        assert len(grid.split(" ")) == 3, ("Wrong style grid",grid)
+        preset=page.locator("#presetStyles .style-card").first.bounding_box()
+        pane=page.locator("#styleList").bounding_box()
+        assert preset and pane and preset["y"] < pane["y"]+pane["height"], ("Preset styles not visible",preset,pane)
         first=page.locator("#customStyles .custom-style-card").first
         thumb=first.locator(".style-thumbnail").bounding_box()
         pencil=first.locator(".style-edit-button").bounding_box()
@@ -145,6 +148,8 @@ def render(page, state):
         save=page.locator('#styleEditor button[type="submit"]').bounding_box()
         assert save["y"]+save["height"] <= dialog["y"]+dialog["height"]+1, ("Editor Save clipped",save,dialog)
         assert dialog["y"]+dialog["height"] <= page.viewport_size["height"]-1, ("Editor overlaps bottom screen",dialog)
+        preview=page.locator("#styleCapturePreview").bounding_box()
+        assert preview and preview["y"]+preview["height"] <= save["y"]+3, ("Preview overlaps Save",preview,save)
     page.wait_for_timeout(100)
 
 def image_from_screenshot(page):
