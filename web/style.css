@@ -110,6 +110,7 @@ button {
   color: rgba(235,238,242,.55);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  display: flex; align-items: center; min-height: 28px; line-height: 16px;
   text-align: left;
   flex: 1 1 auto;
   min-width: 0;
@@ -174,14 +175,15 @@ button {
 }
 .actions > #flashButton { grid-column: 1; grid-row: 1; }
 .actions > #startButton {
-  grid-column: 2; grid-row: 1; justify-self: center; z-index: 1;
+  grid-column: 2; grid-row: 1; justify-self: center; align-self: end; z-index: 1;
+  display: grid; place-items: center;
   transition: transform .43s cubic-bezier(.25,.76,.18,1);
 }
 .actions:not(.activated) > #startButton { transform: translateX(65px); }
 .actions > .capture-controls {
   grid-column: 3; grid-row: 1;
   display: flex; align-items: flex-end; justify-content: center;
-  position: relative; width: 68px; height: 60px; touch-action: pan-y;
+  position: relative; width: 68px; height: 56px; touch-action: pan-y;
   transition: opacity .2s ease .12s;
 }
 .actions:not(.activated) > .capture-controls { opacity: 0; pointer-events: none; }
@@ -267,7 +269,7 @@ button {
 }
 .mode-strip {
   position: absolute;
-  bottom: 48px;
+  bottom: 44px;
   left: 50%; transform: translateX(-50%);
   display: grid; place-items: center;
   width: 136px; height: 16px;
@@ -275,30 +277,31 @@ button {
 }
 .capture-mode, .capture-mode-other {
   border: 0; padding: 0 3px; background: transparent;
-  color: #f5e9bd; font-size: 11px; line-height: 16px;
+  color: #fff; font-size: 11px; line-height: 16px;
   font-weight: 650; white-space: nowrap; cursor: pointer;
+  text-shadow: 0 1px 3px rgba(0,0,0,.7);
 }
 .capture-mode-other {
   position: absolute; right: 0;
-  color: rgba(244,245,246,.5); font-weight: 450;
+  color: rgba(255,255,255,.88); font-weight: 500;
 }
 .mode-strip.photo-active .capture-mode-other { right: auto; left: 0; }
 .shutter-button {
   display: grid; place-items: center;
-  flex: 0 0 48px;
-  width: 48px; height: 48px; min-width: 48px; min-height: 48px;
-  max-width: 48px; max-height: 48px; aspect-ratio: 1;
+  flex: 0 0 42px;
+  width: 42px; height: 42px; min-width: 42px; min-height: 42px;
+  max-width: 42px; max-height: 42px; aspect-ratio: 1;
   padding: 0; border: 2px solid #fff; border-radius: 50%;
-  background: rgba(0,0,0,.12); cursor: pointer;
+  background: rgba(0,0,0,.28); cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 .shutter-button::before {
-  content: ""; width: 38px; height: 38px; aspect-ratio: 1;
+  content: ""; width: 32px; height: 32px; aspect-ratio: 1;
   border-radius: 50%; background: #fff;
 }
 .shutter-button[data-mode="video"]::before { background: #f14f58; }
-.shutter-button.recording::before { width: 20px; height: 20px; border-radius: 5px; }
-.shutter-button:disabled { opacity: .42; cursor: default; }
+.shutter-button.recording::before { width: 18px; height: 18px; border-radius: 4px; }
+.shutter-button:disabled { opacity: 1; cursor: default; }
 .settings-panel {
   position: absolute;
   z-index: 2;
@@ -314,8 +317,8 @@ button {
   border-radius: 20px;
   background: rgba(25,29,33,.29);
   box-shadow: 0 14px 42px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.12);
-  backdrop-filter: blur(5px) saturate(112%) contrast(102%);
-  -webkit-backdrop-filter: blur(5px) saturate(112%) contrast(102%);
+  backdrop-filter: blur(4px) saturate(108%) contrast(102%);
+  -webkit-backdrop-filter: blur(4px) saturate(108%) contrast(102%);
 }
 #app:has(.lens-bar:not([hidden])) {
   --lens-height: 42px;
@@ -383,9 +386,9 @@ button {
   flex: 0 0 auto;
   min-height: 30px;
   padding: 0 10px;
-  border-color: rgba(255,255,255,.35);
-  background: rgba(244,245,246,.92);
-  color: #202328;
+  border-color: rgba(255,255,255,.48);
+  background: rgba(255,255,255,.06);
+  color: #f4f5f6;
   font-size: 11px;
   font-weight: 650;
 }
@@ -454,13 +457,16 @@ textarea:focus, select:focus {
 }
 .setting-footer {
   display: flex; align-items: center; justify-content: space-between;
-  min-height: 23px; gap: 8px;
+  min-height: 30px; gap: 8px;
+  line-height: 16px;
   border-top: 1px solid rgba(255,255,255,.13); padding-top: 3px;
 }
 .setting-footer #quitModelButton {
   flex: 0 0 auto;
   white-space: nowrap;
-  padding: 3px 1px; min-height: 24px; background: none; border: 0; font-size: 11px;
+  height: 28px; min-height: 28px; padding: 0 1px;
+  display: inline-flex; align-items: center; line-height: 16px;
+  background: none; border: 0; font-size: 11px;
 }
 .toggle-button {
   display: inline-flex;
@@ -494,8 +500,8 @@ textarea:focus, select:focus {
   border: 1px solid rgba(255,255,255,.28);
   border-radius: 19px;
   background: rgba(24,29,33,.27);
-  backdrop-filter: blur(5px) saturate(112%) contrast(102%);
-  -webkit-backdrop-filter: blur(5px) saturate(112%) contrast(102%);
+  backdrop-filter: blur(4px) saturate(108%) contrast(102%);
+  -webkit-backdrop-filter: blur(4px) saturate(108%) contrast(102%);
   color: inherit;
   box-shadow: 0 14px 48px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.12);
 }
@@ -551,13 +557,13 @@ textarea:focus, select:focus {
   width: 100%; min-width: 0; padding: 0;
   border: 1px solid transparent; border-radius: 9px;
   background: transparent; text-align: left;
-  font-size: 11px; line-height: 1.25; font-weight: 550; cursor: pointer;
+  font-size: 10px; line-height: 1.2; font-weight: 550; cursor: pointer;
 }
 .custom-style-card > .style-card { height: auto; padding-bottom: 0; }
 .style-edit-button {
   position: absolute;
   right: 5px;
-  top: max(2px,calc(100cqw / 1.6 - 23px));
+  top: max(2px,calc(100cqw / 1.4 - 23px));
   display: grid; width: 22px; height: 22px; place-items: center;
   padding: 4px;
   border: 1px solid rgba(255,255,255,.2);
@@ -594,13 +600,16 @@ textarea:focus, select:focus {
 }
 .style-card > span:last-child {
   padding-inline: 1px;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
+  line-height: 16px;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .style-thumbnail {
   display: block;
   width: 100%;
-  aspect-ratio: 8 / 5;
+  aspect-ratio: 7 / 5;
   overflow: hidden;
   border-radius: 7px;
   background: #22262d;
@@ -614,9 +623,17 @@ textarea:focus, select:focus {
 .style-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
 }
+#stylesDialog .style-toolbar .toggle-button {
+  min-height: 34px;
+  font-size: 12px;
+  line-height: 16px;
+}
+#addStyleButton, #useStylesButton { margin-left: auto; }
+#addStyleButton svg { width: 16px; height: 16px; flex: 0 0 16px; }
+#addStyleButton span { line-height: 16px; }
 .style-toolbar-bottom { margin-top: 9px; }
 .style-editor {
   width: min(430px, calc(100vw - 24px));
@@ -732,8 +749,8 @@ textarea:focus, select:focus {
 @media (orientation: landscape) {
   .camera-controls { bottom: max(6px,env(safe-area-inset-bottom)); gap: 5px; }
   .actions { height: 68px; padding-top: 5px; padding-bottom: 5px; }
-  .actions > .capture-controls { height: 57px; }
-  .mode-strip { bottom: 48px; }
+  .actions > .capture-controls { height: 54px; }
+  .mode-strip { bottom: 44px; }
   .settings-panel { bottom: calc(max(6px,env(safe-area-inset-bottom)) + 80px); max-height: min(50dvh,220px); }
   .style-dialog { max-height: min(60dvh,245px); }
   .style-grid { grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; }
