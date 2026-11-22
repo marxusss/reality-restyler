@@ -415,7 +415,7 @@ textarea:focus, select:focus {
 }
 .setting-row .steps-field { flex: 1 1 auto; }
 .setting-row .resolution-field {
-  flex: 0 0 69px; padding-left: 7px;
+  flex: 0 0 86px; padding-left: 7px;
   border-left: 1px solid rgba(255,255,255,.16);
 }
 .setting-row #upscaleButton {
@@ -426,7 +426,7 @@ textarea:focus, select:focus {
 .setting-row #upscaleButton svg { width: 15px; height: 15px; }
 .setting-row #upscaleButton[aria-pressed="true"] { color: #f4f0dd; background: transparent; }
 .setting-row .field { flex-direction: row; align-items: center; gap: 5px; font-size: 11px; }
-.setting-row select { height: 30px; font-size: 11px; padding: 0; background: transparent; border: 0; border-radius: 0; }
+.setting-row select { flex: 0 0 46px; width: 46px; min-width: 46px; height: 30px; font-size: 11px; padding: 0; background: transparent; border: 0; border-radius: 0; }
 .setting-row .range-wrap { flex: 1; height: 30px; gap: 5px; }
 .setting-row .range-wrap output { min-width: 12px; font-size: 11px; }
 .range-wrap {
@@ -727,7 +727,7 @@ textarea:focus, select:focus {
   .actions { width: 292px; grid-template-columns: 40px 40px 62px 40px 40px; column-gap: 8px; }
   .actions:not(.activated) > #startButton { transform: translateX(59px); }
   .setting-row { gap: 4px; }
-  .setting-row .resolution-field { flex-basis: 60px; padding-left: 4px; }
+  .setting-row .resolution-field { flex-basis: 82px; padding-left: 4px; }
   .setting-row #upscaleButton { padding-left: 4px; }
 }
 #styleEditor[open] { overflow: auto; }
