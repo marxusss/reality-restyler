@@ -312,7 +312,7 @@ function Show-State($Name, $Heading, $Detail) {
 }
 
 function Sync-PhoneCard {
-    $phoneStatus.Text = if (-not $phone.Checked) { 'Disabled' } elseif ($state.Name -eq 'ready' -and $phoneUrl.Text) { 'Ready' } else { 'Setup required' }
+    $phoneStatus.Text = if (-not $phone.Checked) { 'Disabled' } elseif ($state.Name -eq 'ready') { if ($phoneUrl.Text) { 'Ready' } else { 'Setup required' } } else { 'Enabled' }
     $phoneStatus.ForeColor = if (-not $phone.Checked) { $muted } elseif ($state.Name -eq 'ready' -and $phoneUrl.Text) { $accent } else { [Drawing.ColorTranslator]::FromHtml('#AB7F2A') }
     $phoneSetup.Visible = $phone.Checked -and -not ($state.Name -eq 'ready' -and $phoneUrl.Text)
     $desktopCard.Top = $statusCard.Bottom + 16

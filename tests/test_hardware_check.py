@@ -19,6 +19,15 @@ class HardwareAdvisoryTests(unittest.TestCase):
         class Cuda:
             device_count = staticmethod(lambda: 2)
             get_device_properties = staticmethod(lambda index: type("Device", (), {"total_memory": [8, 32][index]})())
+            get_device_capability = staticmethod(lambda index: (8, 6))
+
+        self.assertEqual(hardware_check.best_cuda_device(type("Torch", (), {"cuda": Cuda})()), 1)
+
+    def test_equal_vram_prefers_newer_architecture(self):
+        class Cuda:
+            device_count = staticmethod(lambda: 2)
+            get_device_properties = staticmethod(lambda index: type("Device", (), {"total_memory": 8})())
+            get_device_capability = staticmethod(lambda index: [(6, 1), (8, 6)][index])
 
         self.assertEqual(hardware_check.best_cuda_device(type("Torch", (), {"cuda": Cuda})()), 1)
 

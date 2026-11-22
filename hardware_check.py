@@ -2,12 +2,13 @@
 import json
 import subprocess
 
-SIMULTANEOUS_VRAM_GIB = 24
+SIMULTANEOUS_VRAM_GIB = 23  # Account for reserved memory on nominal 24 GiB cards.
 
 
 def best_cuda_device(torch):
     return max(range(torch.cuda.device_count()),
-               key=lambda index: torch.cuda.get_device_properties(index).total_memory)
+               key=lambda index: (torch.cuda.get_device_properties(index).total_memory,
+                                  torch.cuda.get_device_capability(index)))
 
 
 def assess(gpus):

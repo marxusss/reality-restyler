@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from hardware_check import best_cuda_device
+from hardware_check import SIMULTANEOUS_VRAM_GIB, best_cuda_device
 from model_setup import missing_files, model_directory, normalize_root
 from runtime_settings import DEFAULT_SETTINGS, PROMPT_TOKEN_LIMIT, normalize_settings
 from timing import TimingWindow
@@ -129,7 +129,7 @@ class Runtime:
             if missing:
                 raise RuntimeError("Required files are missing or invalid. Restart from the Reality Restyling launcher to set them up.")
             free, total = torch.cuda.mem_get_info(self._device_index)
-            low_vram = total < 24 * 1024 ** 3 or free < 20 * 1024 ** 3
+            low_vram = total < SIMULTANEOUS_VRAM_GIB * 1024 ** 3 or free < 20 * 1024 ** 3
             if low_vram and not allow_low_vram:
                 return {
                     "ok": False,
