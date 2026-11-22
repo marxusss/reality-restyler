@@ -11,6 +11,7 @@ def main():
     parser = argparse.ArgumentParser(description="Load the real model and render a frame on this machine.")
     parser.add_argument("--models", type=Path, help="Existing model directory (no download performed).")
     parser.add_argument("--output", type=Path, default=Path("gpu-smoke-output.png"))
+    parser.add_argument("--allow-low-vram", action="store_true", help="Use model CPU offloading.")
     args = parser.parse_args()
     if args.models:
         os.environ["REALITY_RESTYLE_MODELS_DIR"] = str(args.models.resolve())
@@ -24,7 +25,7 @@ def main():
         started = runtime.start(
             {"prompt": "A watercolor illustration, keep the scene intact",
              "steps": 2, "resolution": 512, "upscale": False},
-            allow_low_vram=True,
+            allow_low_vram=args.allow_low_vram,
         )
         if not started.get("ok") or not runtime.loaded():
             raise RuntimeError("The model did not load.")

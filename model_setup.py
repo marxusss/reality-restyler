@@ -5,6 +5,8 @@ import sys
 import webbrowser
 from pathlib import Path
 
+from hardware_check import best_cuda_device
+
 ROOT = Path(__file__).resolve().parent
 DEFAULT_ROOT = Path(os.environ.get("REALITY_RESTYLE_MODELS_DIR", ROOT / "models")).expanduser()
 MODEL_REPO = "tonera/FLUX.2-klein-9B-Nunchaku"
@@ -14,6 +16,21 @@ UPSCALE_REPO = "Phips/2xNomosUni_compact_multijpg"
 UPSCALE_REVISION = "4774921957bcbd222e7e4861728b02ebb3502c31"
 BUNDLE_NAME = "FLUX.2-klein-9B-Nunchaku"
 TRANSFORMER_NAME = "svdq-fp4_r32-FLUX.2-klein-9B-Nunchaku.safetensors"
+INT4_TRANSFORMER_NAME = "svdq-int4_r32-FLUX.2-klein-9B-Nunchaku.safetensors"
+
+
+def selected_transformer():
+    # FP4 weights require Blackwell; earlier NVIDIA generations use INT4.
+    try:
+        import torch
+        if torch.cuda.is_available():
+            device = best_cuda_device(torch)
+            if torch.cuda.get_device_capability(device)[0] < 12:
+                return INT4_TRANSFORMER_NAME
+    except Exception:
+        pass
+    return TRANSFORMER_NAME
+
 UPSCALE_NAME = "2xNomosUni_compact_multijpg.safetensors"
 PIPELINE_FILES = (
     "model_index.json",
@@ -35,8 +52,7 @@ PIPELINE_FILES = (
     "transformer/config.json",
     "vae/config.json",
     "vae/diffusion_pytorch_model.safetensors",
-    TRANSFORMER_NAME,
-)
+ )
 FILE_SIZES = {
     "text_encoder/model-00001-of-00004.safetensors": 4902257696,
     "text_encoder/model-00002-of-00004.safetensors": 4915960368,
@@ -44,6 +60,7 @@ FILE_SIZES = {
     "text_encoder/model-00004-of-00004.safetensors": 1580230264,
     "vae/diffusion_pytorch_model.safetensors": 168120878,
     TRANSFORMER_NAME: 5800843496,
+    INT4_TRANSFORMER_NAME: 5525885656,
 }
 UPSCALE_SIZE = 1205456
 
@@ -64,18 +81,19 @@ def model_directory(root):
     return root / BUNDLE_NAME
 
 
-def transformer_file(root, base_dir=None):
+def transformer_file(root, base_dir=None, name=None):
     root = Path(root).expanduser().resolve()
     base_dir = model_directory(root) if base_dir is None else Path(base_dir)
+    name = selected_transformer() if name is None else name
     candidates = (
-        base_dir / TRANSFORMER_NAME,
-        root / BUNDLE_NAME / TRANSFORMER_NAME,
-        base_dir.parent / BUNDLE_NAME / TRANSFORMER_NAME,
+        base_dir / name,
+        root / BUNDLE_NAME / name,
+        base_dir.parent / BUNDLE_NAME / name,
     )
     for candidate in dict.fromkeys(candidates):
         if candidate.is_file():
             return candidate
-    return base_dir / TRANSFORMER_NAME
+    return base_dir / name
 
 
 def upscaler_file(root):
@@ -92,10 +110,11 @@ def _valid_file(path, relative):
 def missing_files(root):
     root = Path(root).expanduser().resolve()
     base = model_directory(root)
-    transformer = transformer_file(root, base)
+    precision_file = selected_transformer()
+    transformer = transformer_file(root, base, precision_file)
     missing = []
-    for relative in PIPELINE_FILES:
-        if relative == TRANSFORMER_NAME:
+    for relative in (*PIPELINE_FILES, precision_file):
+        if relative == precision_file:
             if not _valid_file(transformer, relative):
                 missing.append(relative)
         elif not _valid_file(base / relative, relative):

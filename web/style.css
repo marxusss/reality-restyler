@@ -159,6 +159,7 @@ button {
   height: 6px;
   accent-color: #a7ecd0;
 }
+#cancelStartupButton[hidden] { display: none; }
 .camera-controls {
   position: absolute;
   left: 50%;

@@ -6,6 +6,7 @@ import os
 import socket
 import ssl
 import time
+import threading
 import traceback
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -123,6 +124,10 @@ async def style_sheet(_request):
 
 async def favicon(_request):
     return web.FileResponse(WEB_ROOT / "favicon.svg", headers={"Content-Type": "image/svg+xml"})
+
+
+async def touch_icon(_request):
+    return web.FileResponse(WEB_ROOT / "apple-touch-icon.png", headers={"Content-Type": "image/png"})
 
 async def style_asset(request):
     asset = request.match_info["asset"]
@@ -310,9 +315,11 @@ async def start_runtime(request):
 
     manager = request.app[SESSION_KEY]
     progress = request.app[STARTUP_PROGRESS_KEY]
-    stage = {"value": "checking"}
+    stage = {"value": "checking", "cancel": threading.Event()}
 
     def report_stage(value):
+        if stage["cancel"].is_set():
+            raise RuntimeError("Startup cancelled.")
         stage["value"] = value
 
     token = request.headers.get(TOKEN_HEADER)
@@ -328,6 +335,10 @@ async def start_runtime(request):
             async with manager.lock:
                 require_owner(request, touch=False)
             result = await asyncio.to_thread(runtime.start, settings, allow_low_vram, report_stage)
+            if stage["cancel"].is_set():
+                if result.get("ok"):
+                    await asyncio.to_thread(runtime.unload)
+                return web.json_response({"ok": False, "error": "Startup cancelled."}, status=422)
             async with manager.lock:
                 require_owner(request, touch=False)
             if result.get("ok"):
@@ -353,6 +364,18 @@ async def start_runtime(request):
             manager.finish_start(token)
         if startup_id and progress.get(startup_id) is stage:
             progress.pop(startup_id, None)
+
+
+async def cancel_startup(request):
+    data = await _json(request)
+    if set(data) != {"startup_id"} or not isinstance(data["startup_id"], str):
+        raise web.HTTPBadRequest(text="Invalid startup identifier.")
+    async with request.app[SESSION_KEY].lock:
+        require_owner(request, touch=False)
+        stage = request.app[STARTUP_PROGRESS_KEY].get(data["startup_id"])
+        if stage:
+            stage["cancel"].set()
+    return web.json_response({"ok": True, "cancelling": stage is not None})
 
 
 async def startup_progress(request):
@@ -524,6 +547,7 @@ def create_app():
         app.router.add_get("/" + script, app_script)
     app.router.add_get("/style.css", style_sheet)
     app.router.add_get("/favicon.svg", favicon)
+    app.router.add_get("/apple-touch-icon.png", touch_icon)
     app.router.add_get("/styles/{asset:catalog\\.json|[a-zA-Z0-9_-]+\\.webp}", style_asset)
     app.router.add_post("/styles/combine", combine_styles)
     app.router.add_get("/styles/user", get_user_styles)
@@ -537,6 +561,7 @@ def create_app():
     app.router.add_post("/session", claim_session)
     app.router.add_post("/start", start_runtime)
     app.router.add_get("/startup/{startup_id}", startup_progress)
+    app.router.add_post("/cancel-start", cancel_startup)
     app.router.add_post("/settings", update_settings)
     app.router.add_post("/heartbeat", heartbeat)
     app.router.add_post("/pause", pause_runtime)
@@ -562,42 +587,51 @@ async def _run_launcher_server(directory, stopped, phone_access, wait_for_tailsc
     addresses = []
     tls = None
     if phone_access:
-        (directory / "stage.txt").write_text("Checking Tailscale", encoding="utf-8")
-        deadline = time.monotonic() + (45 if wait_for_tailscale else 0)
-        while not stopped():
-            status = await asyncio.to_thread(tailscale_status)
-            dns_name = tailscale_dns_name(status)
-            addresses = tailscale_addresses(status)
-            if dns_name and addresses:
-                break
-            if time.monotonic() >= deadline:
-                if not dns_name:
-                    raise RuntimeError("Sign in to Tailscale before starting phone mode.")
-                raise RuntimeError("Tailscale did not report a usable local IP address.")
-            (directory / "stage.txt").write_text("Waiting for Tailscale", encoding="utf-8")
-            await asyncio.sleep(1)
-        else:
-            return
-        _write_launcher_json(directory, "phone.json", {"hostname": dns_name})
-        approval = directory / "phone.approved"
-        while not approval.exists():
+        try:
+            (directory / "stage.txt").write_text("Checking Tailscale", encoding="utf-8")
+            deadline = time.monotonic() + (45 if wait_for_tailscale else 0)
+            while not stopped():
+                status = await asyncio.to_thread(tailscale_status)
+                dns_name = tailscale_dns_name(status)
+                addresses = tailscale_addresses(status)
+                if dns_name and addresses:
+                    break
+                if time.monotonic() >= deadline:
+                    if not dns_name:
+                        raise RuntimeError("Sign in to Tailscale before starting phone mode.")
+                    raise RuntimeError("Tailscale did not report a usable local IP address.")
+                (directory / "stage.txt").write_text("Waiting for Tailscale", encoding="utf-8")
+                await asyncio.sleep(1)
+            else:
+                return
+            _write_launcher_json(directory, "phone.json", {"hostname": dns_name})
+            approval = directory / "phone.approved"
+            while not approval.exists():
+                if stopped():
+                    return
+                await asyncio.sleep(0.2)
             if stopped():
                 return
-            await asyncio.sleep(0.2)
-        if stopped():
-            return
-        approved = approval.read_text(encoding="utf-8")
-        if approved != dns_name:
-            raise RuntimeError("The selected Tailscale hostname changed. Start phone mode again.")
-        status = await asyncio.to_thread(tailscale_status)
-        if tailscale_dns_name(status) != dns_name:
-            raise RuntimeError("The selected Tailscale hostname changed. Start phone mode again.")
-        if stopped():
-            return
-        (directory / "stage.txt").write_text("Preparing phone HTTPS", encoding="utf-8")
-        tls = await asyncio.to_thread(tls_context, dns_name)
-        application[TLS_CONTEXT_KEY] = tls
-        application[PHONE_DNS_NAME_KEY] = dns_name
+            approved = approval.read_text(encoding="utf-8")
+            if approved != dns_name:
+                raise RuntimeError("The selected Tailscale hostname changed. Start phone mode again.")
+            status = await asyncio.to_thread(tailscale_status)
+            if tailscale_dns_name(status) != dns_name:
+                raise RuntimeError("The selected Tailscale hostname changed. Start phone mode again.")
+            if stopped():
+                return
+            (directory / "stage.txt").write_text("Preparing phone HTTPS", encoding="utf-8")
+            tls = await asyncio.to_thread(tls_context, dns_name)
+            application[TLS_CONTEXT_KEY] = tls
+            application[PHONE_DNS_NAME_KEY] = dns_name
+    
+        except RuntimeError as exc:
+            # Phone prerequisites must not prevent desktop access.
+            _write_launcher_json(directory, "phone-setup.json", {"message": str(exc)})
+            phone_access = False
+            addresses = []
+            tls = None
+            dns_name = ""
 
     if stopped():
         return

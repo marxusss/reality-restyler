@@ -13,6 +13,7 @@ if os.name == "nt":
     USER_DATA_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Reality Restyling"
 else:
     USER_DATA_ROOT = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "reality-restyling"
+USER_DATA_ROOT = Path(os.environ.get("REALITY_RESTYLE_USER_DATA", USER_DATA_ROOT))
 PREFERENCES_PATH = USER_DATA_ROOT / "camera_settings.json"
 PERSISTED_KEYS = ("prompt", "steps", "resolution", "upscale")
 _LOCK = threading.RLock()

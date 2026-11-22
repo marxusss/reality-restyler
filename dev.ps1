@@ -25,6 +25,19 @@ if (-not $env:REALITY_RESTYLE_MODELS_DIR) {
     }
 }
 $env:REALITY_RESTYLE_PORT = [string]$Port
+# If the data contract differs from the installed release, keep edits out of production data.
+$contracts = @('preferences.py', 'runtime_settings.py', 'user_styles.py')
+if ((Test-Path -LiteralPath $installed -PathType Container) -and
+    @($contracts | Where-Object {
+        $candidate = Join-Path $installed $_
+        -not (Test-Path -LiteralPath $candidate -PathType Leaf) -or
+        (Get-Item -LiteralPath (Join-Path $root $_)).Length -ne (Get-Item -LiteralPath $candidate).Length -or
+        (Get-FileHash -LiteralPath (Join-Path $root $_) -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash
+    }).Count -gt 0) {
+    $env:REALITY_RESTYLE_USER_DATA = Join-Path $env:LOCALAPPDATA 'Reality Restyling Dev'
+    Write-Host 'Development data isolated (persistence code differs).'
+}
+
 Write-Host "Developer server: http://127.0.0.1:$Port/"
 Write-Host "Serving current source: $root"
 Write-Host 'Restart after code changes. Installed releases are unchanged.'

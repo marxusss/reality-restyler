@@ -40,6 +40,8 @@ class DeveloperServerTests(unittest.TestCase):
             with urlopen(f"http://127.0.0.1:{port}/app.js", timeout=2) as response:
                 served = response.read()
             self.assertEqual(served, (ROOT / "web" / "app.js").read_bytes())
+            with urlopen(f"http://127.0.0.1:{port}/apple-touch-icon.png", timeout=2) as response:
+                self.assertEqual(response.read()[:8], b"\x89PNG\r\n\x1a\n")
         finally:
             server.terminate()
             server.wait(timeout=5)

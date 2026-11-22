@@ -19,6 +19,8 @@ const errorBox = $("error");
 const startup = $("startup");
 const startupLabel = $("startupLabel");
 const startupProgress = $("startupProgress");
+const cancelStartupButton = $("cancelStartupButton");
+let pendingStartupId = "";
 const latency = $("latency");
 const promptInput = $("promptInput");
 const stepsInput = $("stepsInput");
@@ -270,7 +272,7 @@ async function request(path, body) {
   const headers = body === undefined ? {} : {"Content-Type": "application/json"};
   if (sessionToken) headers["X-Restyle-Session"] = sessionToken;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), path === "/start" ? 600000 : 30000);
+  const timer = path === "/start" ? null : setTimeout(() => controller.abort(), 30000);
   try {
     const response = await fetch(path, {
       method: body === undefined ? "GET" : "POST", headers,
@@ -287,7 +289,7 @@ async function request(path, body) {
       throw failure;
     }
     return result;
-  } finally { clearTimeout(timer); }
+  } finally { if (timer) clearTimeout(timer); }
 }
 
 function stopHeartbeat() {
@@ -306,13 +308,25 @@ function loseOwnership(message) {
 
 async function requestRuntimeStart(allowLowVram) {
   const startupId = crypto.randomUUID();
+  pendingStartupId = startupId;
+  cancelStartupButton.hidden = false;
+  cancelStartupButton.disabled = false;
   let complete = false;
   let timer;
+  let lastStage = "";
+  let changedAt = performance.now();
   const poll = async () => {
     try {
       const progress = await request("/startup/" + startupId);
       const stage = modelStartupStages[progress.stage];
-      if (!complete && stage) showStartup(...stage);
+      if (progress.stage && progress.stage !== lastStage) {
+        lastStage = progress.stage;
+        changedAt = performance.now();
+      }
+      if (!complete && stage) {
+        if (performance.now() - changedAt > 120000) showStartup("Still loading", stage[1]);
+        else showStartup(...stage);
+      }
     } catch (_) {
     } finally {
       if (!complete) timer = setTimeout(poll, 350);
@@ -325,6 +339,10 @@ async function requestRuntimeStart(allowLowVram) {
   } finally {
     complete = true;
     clearTimeout(timer);
+    if (pendingStartupId === startupId) {
+      pendingStartupId = "";
+      cancelStartupButton.hidden = true;
+    }
   }
 }
 
@@ -336,7 +354,7 @@ async function startRuntime() {
     if (error.status === 409 && error.data && error.data.low_vram) {
       const free = Number(error.data.free_vram_gb) || 0;
       const total = Number(error.data.total_vram_gb) || 0;
-      const proceed = window.confirm(`Low VRAM: ${free.toFixed(1)} GB free of ${total.toFixed(1)} GB. Start anyway? This does not activate a low-memory mode.`);
+      const proceed = window.confirm(`Low VRAM: ${free.toFixed(1)} GiB free of ${total.toFixed(1)} GiB. Use CPU offloading? This may be slower.`);
       if (!proceed) throw new Error("Start cancelled.");
       result = await requestRuntimeStart(true);
     } else {
@@ -1148,6 +1166,17 @@ mountStyles({
   isMirrored: () => mirror, getRenderedFrame
 });
 startButton.addEventListener("click", () => started ? void pause() : void start());
+cancelStartupButton.addEventListener("click", async () => {
+  if (!pendingStartupId) return;
+  cancelStartupButton.disabled = true;
+  showStartup("Cancelling startup");
+  try {
+    await request("/cancel-start", {startup_id: pendingStartupId});
+  } catch (error) {
+    showError(error.message, "startup");
+    cancelStartupButton.disabled = false;
+  }
+});
 clearPromptButton.addEventListener("click", () => {
   promptInput.value = "";
   applyPromptNow();

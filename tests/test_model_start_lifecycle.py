@@ -59,6 +59,32 @@ class ModelStartupLeaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 409)
         self.unload_mock.assert_called()
 
+    async def test_user_can_cancel_model_start_and_retry(self):
+        started = threading.Event()
+        finish = threading.Event()
+
+        def slow_start(*_args, **_kwargs):
+            started.set()
+            finish.wait(timeout=5)
+            return {"ok": True}
+
+        with patch.object(app.runtime, "start", side_effect=slow_start):
+            pending = asyncio.create_task(self.client.post(
+                "/start", json={"settings": {}, "startup_id": "manual-cancel"},
+                headers=self.headers))
+            try:
+                self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                cancelled = await self.client.post(
+                    "/cancel-start", json={"startup_id": "manual-cancel"},
+                    headers=self.headers)
+                self.assertTrue((await cancelled.json())["cancelling"])
+            finally:
+                finish.set()
+            response = await asyncio.wait_for(pending, timeout=3)
+        self.assertEqual(response.status, 422)
+        self.assertIn("cancelled", (await response.json())["error"])
+        self.unload_mock.assert_called_once()
+
     async def test_failed_start_does_not_leave_idle_unload_disabled(self):
         with patch.object(app.runtime, "start", side_effect=RuntimeError("model unavailable")):
             response = await self.client.post("/start", json={"settings": {}}, headers=self.headers)
