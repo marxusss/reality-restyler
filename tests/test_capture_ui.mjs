@@ -127,7 +127,7 @@ test("styles layout keeps labels inside thumbnail, removes header, and aligns to
 test("styles neutral glass, edge-to-edge thumbnails and subtle controls", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*padding-top: 8px/);
-  assert.match(css, /\.style-thumbnail\s*\{[^}]*background: rgba\(27,27,27,\.08\)/);
+  assert.match(css, /\.style-thumbnail\s*\{[^}]*background: transparent/);
   assert.match(css, /\.style-thumbnail img\s*\{[^}]*object-fit: cover/);
   assert.match(css, /\.lens-button\s*\{[^}]*border: 0;[^}]*backdrop-filter: blur\(3px\)/);
   assert.match(css, /\.style-list\s*\{[^}]*padding: 28px 0 3px/);
@@ -166,7 +166,7 @@ test("Custom Styles and presets share a two-sided faded scroll area", () => {
 
 test("Pencil has no backing and is legible over bright thumbnails", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
-  assert.match(css, /\.style-edit-button\s*\{[^}]*width: 32px;[^}]*height: 32px;[^}]*background: rgba\(27,27,27,\.08\)/);
+  assert.match(css, /\.style-edit-button\s*\{[^}]*width: 32px;[^}]*height: 32px;[^}]*background: transparent/);
   assert.match(css, /\.style-edit-button svg\s*\{[^}]*width: 19px;[^}]*stroke-width: .85;[^}]*filter: drop-shadow/);
   assert.match(css, /\.style-name\s*\{[^}]*background: rgba\(27,27,27,\.08\);[^}]*text-shadow:/);
 });
