@@ -1,6 +1,8 @@
 export function mountCapture({getFrame, isMirrored, reportError}) {
   const shutter = document.getElementById("shutterButton");
   const modeButton = document.getElementById("captureModeButton");
+  const otherModeButton = document.getElementById("captureOtherModeButton");
+  const modeStrip = modeButton.parentElement;
   const fileActions = document.getElementById("captureFileActions");
   const save = document.getElementById("saveCaptureButton");
   const discard = document.getElementById("discardCaptureButton");
@@ -9,7 +11,7 @@ export function mountCapture({getFrame, isMirrored, reportError}) {
   const canRecord = Boolean(window.MediaRecorder && surface.captureStream);
   const touch = window.matchMedia("(any-pointer: coarse)");
   const recordingBudget = 64 * 1024 * 1024;
-  let videoMode = false;
+  let videoMode = canRecord;
   let available = false;
   let finishing = false;
   let recorder = null;
@@ -25,8 +27,11 @@ export function mountCapture({getFrame, isMirrored, reportError}) {
     shutter.setAttribute("aria-label", recording ? "Stop recording" : videoMode ? "Record video" : "Take photo");
     modeButton.textContent = videoMode ? "Video" : "Photo";
     modeButton.setAttribute("aria-label", videoMode ? "Switch to photo" : "Switch to video");
-    modeButton.disabled = Boolean(recorder) || finishing;
-    modeButton.hidden = !canRecord;
+    otherModeButton.textContent = videoMode ? "Photo" : "Video";
+    otherModeButton.setAttribute("aria-label", videoMode ? "Switch to photo" : "Switch to video");
+    modeStrip.classList.toggle("photo-active", !videoMode);
+    modeButton.disabled = otherModeButton.disabled = Boolean(recorder) || finishing;
+    modeButton.hidden = otherModeButton.hidden = !canRecord;
     fileActions.hidden = !captureFile;
   }
 
@@ -133,10 +138,12 @@ export function mountCapture({getFrame, isMirrored, reportError}) {
     updateControls();
   }
 
-  modeButton.addEventListener("click", event => {
-    if (event.detail && suppressClick) { suppressClick = false; return; }
-    changeMode(!videoMode);
-  });
+  for (const choice of [modeButton, otherModeButton]) {
+    choice.addEventListener("click", event => {
+      if (event.detail && suppressClick) { suppressClick = false; return; }
+      changeMode(!videoMode);
+    });
+  }
   shutter.parentElement.addEventListener("pointerdown", event => {
     if (!event.isPrimary || finishing || recorder) return;
     suppressClick = false;

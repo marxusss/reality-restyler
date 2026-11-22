@@ -10,7 +10,7 @@ export function stylesToSync(local, remote) {
       (style.updatedAt === previous.updatedAt && style.deleted === true && previous.deleted !== true);
   });
 }
-export function mountStyles({promptInput, applyPromptNow, request, getRenderedFrame, isMirrored}) {
+export function mountStyles({promptInput, applyPromptNow, request, getRenderedFrame, isMirrored, fitPrompt = () => {}}) {
   const $ = id => document.getElementById(id);
   const stylesDialog = $("stylesDialog");
   const styleEditor = $("styleEditor");
@@ -153,6 +153,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   function applyStyleSelection(prompt, styles) {
     appliedStyleSelection = { prompt, styles };
     promptInput.value = prompt;
+    fitPrompt();
     applyPromptNow();
     stylesDialog.close();
   }
@@ -178,6 +179,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       button.type = "button";
       button.className = "style-card";
       button.dataset.prompt = style.prompt;
+      button.title = style.name;
       const thumbnail = document.createElement("span");
       thumbnail.className = "style-thumbnail";
       if (style.thumbnail) {
@@ -189,8 +191,10 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
         thumbnail.append(image);
       }
       const label = document.createElement("span");
+      label.className = "style-name";
       label.textContent = style.name;
-      button.append(thumbnail, label);
+      thumbnail.append(label);
+      button.append(thumbnail);
       button.addEventListener("click", event => {
         if (styleSelection === null && !event.shiftKey) {
           applyStyleSelection(style.prompt, [style.prompt]);
@@ -249,7 +253,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     editingStyleId = style?.id || null;
     deleteStyleButton.hidden = !editingStyleId;
     styleForm.reset();
-    $("styleEditorTitle").textContent = style ? "Edit style" : "Add style";
+    $("styleEditorTitle").textContent = style ? "Edit Style" : "Add Style";
     styleName.value = style?.name || "";
     stylePrompt.value = style?.prompt ?? promptInput.value;
     if (style?.thumbnail) {
@@ -347,6 +351,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
 
 
   $("stylesButton").addEventListener("click", () => void openStyles());
+  $("quickStylesButton").addEventListener("click", () => void openStyles());
   $("combineStylesButton").addEventListener("click", () => setStyleSelection(styleSelection === null ? startStyleSelection() : null));
   $("useStylesButton").addEventListener("click", () => void useStyleSelection());
   $("closeStylesButton").addEventListener("click", () => stylesDialog.close());

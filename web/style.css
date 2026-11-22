@@ -75,12 +75,48 @@ button {
   pointer-events: none;
   background: linear-gradient(180deg, rgba(0,0,0,.24), transparent 24%, transparent 68%, rgba(0,0,0,.3));
 }
+.icon-button {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(13,15,18,.36);
+  color: #f7f8fa;
+  line-height: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.icon-button svg, .toggle-button svg {
+  display: block;
+  flex: 0 0 auto;
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .latency {
-  margin-top: 10px;
+  margin-top: 0;
   color: rgba(235,238,242,.55);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  display: flex; align-items: center; min-height: 28px; line-height: 16px;
+  text-align: left;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .startup {
   position: absolute;
@@ -112,7 +148,7 @@ button {
 .camera-controls {
   position: absolute;
   left: 50%;
-  bottom: max(20px, env(safe-area-inset-bottom));
+  bottom: max(12px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   display: grid;
   justify-items: center;
@@ -122,15 +158,39 @@ button {
 }
 .actions {
   display: grid;
-  grid-template-columns: repeat(2, 46px) 68px repeat(2, 46px);
+  grid-template-columns: 42px 42px 68px 42px 42px;
+  justify-content: center;
   align-items: end;
-  gap: 6px;
-  padding: 6px;
-  border: 1px solid rgba(255,255,255,.13);
+  column-gap: 10px;
+  width: 312px;
+  max-width: calc(100vw - 16px);
+  height: 72px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255,255,255,.27);
   border-radius: 22px;
-  background: rgba(11,13,16,.72);
-  box-shadow: 0 12px 40px rgba(0,0,0,.32);
-  backdrop-filter: blur(22px);
+  background: rgba(23,28,32,.28);
+  box-shadow: 0 12px 32px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.16);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.actions > #flashButton { grid-column: 1; grid-row: 1; }
+.actions > #startButton {
+  grid-column: 2; grid-row: 1; justify-self: center; align-self: end; z-index: 1;
+  display: grid; place-items: center;
+  transition: transform .43s cubic-bezier(.25,.76,.18,1);
+}
+.actions:not(.activated) > #startButton { transform: translateX(65px); }
+.actions > .capture-controls {
+  grid-column: 3; grid-row: 1;
+  display: flex; align-items: flex-end; justify-content: center;
+  position: relative; width: 68px; height: 56px; touch-action: pan-y;
+  transition: opacity .2s ease .12s;
+}
+.actions:not(.activated) > .capture-controls { opacity: 0; pointer-events: none; }
+.actions > #settingsButton { grid-column: 4; grid-row: 1; }
+.actions > #quickStylesButton { grid-column: 5; grid-row: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .actions > #startButton, .actions > .capture-controls { transition: none; }
 }
 .lens-bar, .capture-file-actions {
   display: flex;
@@ -139,8 +199,14 @@ button {
   flex-wrap: wrap;
 }
 .lens-bar {
-  gap: 6px;
+  gap: 7px;
+  flex-wrap: nowrap;
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
 }
+.lens-bar::-webkit-scrollbar { display: none; }
 .capture-file-actions {
   gap: 4px;
   padding: 4px;
@@ -148,33 +214,39 @@ button {
   border-radius: 18px;
   background: rgba(11,13,16,.86);
 }
-.lens-bar[hidden], .capture-file-actions[hidden], .capture-mode[hidden] {
+.lens-bar[hidden], .capture-file-actions[hidden], .capture-mode[hidden], .capture-mode-other[hidden] {
   display: none;
 }
 .lens-button {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  aspect-ratio: 1;
+  flex: 0 0 36px;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: rgba(5,5,5,.62);
+  background: rgba(25,29,33,.38);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
   color: #fff;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   cursor: pointer;
 }
 .lens-button[aria-pressed="true"] {
-  background: rgba(38,38,38,.88);
+  background: rgba(38,38,38,.52);
   color: #f3e8a7;
 }
-.actions #flashButton[hidden] {
-  display: inline-flex;
-  visibility: hidden;
-}
+.actions #flashButton:disabled { opacity: .48; cursor: default; }
 .actions .icon-button {
+  width: 42px;
+  height: 44px;
   border-color: transparent;
   box-shadow: none;
   background: transparent;
@@ -197,72 +269,61 @@ button {
   opacity: .5;
   cursor: wait;
 }
-.capture-controls {
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-  touch-action: none;
+.mode-strip {
+  position: absolute;
+  bottom: 44px;
+  left: 50%; transform: translateX(-50%);
+  display: grid; place-items: center;
+  width: 136px; height: 16px;
+  touch-action: pan-y;
 }
-.capture-mode {
-  min-height: 27px;
-  padding: 0 7px;
-  border: 0;
-  background: transparent;
-  font-size: 12px;
-  color: #f3e8a7;
-  cursor: pointer;
+.capture-mode, .capture-mode-other {
+  border: 0; padding: 0 3px; background: transparent;
+  color: rgba(244,245,246,.78); font-size: 11px; line-height: 16px;
+  font-weight: 650; white-space: nowrap; cursor: pointer;
+  text-shadow: 0 1px 3px rgba(0,0,0,.45);
 }
+.capture-mode-other {
+  position: absolute; right: 0;
+  color: rgba(244,245,246,.44); font-weight: 500;
+}
+.mode-strip.photo-active .capture-mode-other { right: auto; left: 0; }
 .shutter-button {
-  display: grid;
-  place-items: center;
-  width: 60px;
-  height: 60px;
-  padding: 0;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
+  display: grid; place-items: center;
+  flex: 0 0 42px;
+  width: 42px; height: 42px; min-width: 42px; min-height: 42px;
+  max-width: 42px; max-height: 42px; aspect-ratio: 1;
+  padding: 0; border: 2px solid #fff; border-radius: 50%;
+  background: rgba(0,0,0,.28); cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 .shutter-button::before {
-  content: "";
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: #fff;
+  content: ""; width: 32px; height: 32px; aspect-ratio: 1;
+  border-radius: 50%; background: #fff;
 }
-.shutter-button[data-mode="video"]::before {
-  background: #ff454f;
-}
-.shutter-button.recording::before {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-}
-.shutter-button:disabled {
-  opacity: .42;
-  cursor: default;
-}
+.shutter-button[data-mode="video"]::before { background: #f14f58; }
+.shutter-button.recording::before { width: 18px; height: 18px; border-radius: 4px; }
+.shutter-button:disabled { opacity: 1; cursor: default; }
 .settings-panel {
   position: absolute;
   z-index: 2;
   left: 50%;
-  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 112px);
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 88px);
   width: min(430px, calc(100vw - 24px));
-  max-height: min(72vh, 620px);
+  max-height: min(58dvh, 330px);
   overflow: auto;
   overscroll-behavior: contain;
   transform: translateX(-50%);
-  padding: 18px;
-  border: 1px solid rgba(255,255,255,.14);
-  border-radius: 22px;
-  background: rgba(14,16,20,.88);
-  box-shadow: 0 24px 80px rgba(0,0,0,.42);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
+  padding: 9px 12px;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 20px;
+  background: rgba(25,29,33,.29);
+  box-shadow: 0 14px 42px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.12);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
 }
 #app:has(.lens-bar:not([hidden])) {
-  --lens-height: 52px;
+  --lens-height: 42px;
 }
 #app:has(.capture-file-actions:not([hidden])) {
   --capture-save-height: 54px;
@@ -277,7 +338,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 17px;
+  margin-bottom: 10px;
   color: rgba(255,255,255,.9);
   font-size: 14px;
   font-weight: 600;
@@ -300,26 +361,41 @@ button {
   color: rgba(235,238,242,.68);
   font-size: 12px;
 }
-.prompt-field {
-  margin-bottom: 14px;
-}
-.prompt-heading {
+.prompt-line {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  min-height: 34px;
+  gap: 7px;
+  margin-bottom: 6px;
 }
-.prompt-heading label {
-  color: inherit;
+.prompt-line textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  max-height: 83px;
+  height: 36px;
+  padding: 7px 2px;
+  border: 0;
+  border-bottom: 1px solid rgba(255,255,255,.38);
+  border-radius: 0;
+  background: transparent;
+  font-size: 16px;
+  line-height: 20px;
+  overflow-y: auto;
+  resize: none;
 }
-.style-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.prompt-line #stylesButton { flex: 0 0 auto; min-height: 30px; padding: 5px 7px; }
+.prompt-line .settings-done {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 10px;
+  border-color: rgba(255,255,255,.13);
+  background: rgba(255,255,255,.018);
+  color: rgba(244,245,246,.78);
+  font-size: 11px;
+  font-weight: 650;
 }
-.style-actions .toggle-button {
-  min-height: 34px;
-}
+.prompt-line #stylesButton svg { width: 18px; height: 18px; }
+.style-actions { display: flex; gap: 8px; align-items: center; }
 .toggle-button.keyboard-done {
   display: none;
 }
@@ -346,11 +422,25 @@ textarea:focus, select:focus {
   border-color: rgba(255,255,255,.44);
 }
 .setting-row {
-  display: flex;
-  align-items: end;
-  gap: 12px;
-  margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+  min-height: 36px; margin-bottom: 3px;
 }
+.setting-row .steps-field { flex: 1 1 auto; }
+.setting-row .resolution-field {
+  flex: 0 0 86px; padding-left: 7px;
+  border-left: 1px solid rgba(255,255,255,.16);
+}
+.setting-row #upscaleButton {
+  flex: 0 0 auto; min-height: 28px; padding: 0 0 0 7px;
+  border: 0; border-left: 1px solid rgba(255,255,255,.16);
+  border-radius: 0; background: none; font-size: 11px;
+}
+.setting-row #upscaleButton svg { width: 15px; height: 15px; }
+.setting-row #upscaleButton[aria-pressed="true"] { color: #f4f0dd; background: transparent; }
+.setting-row .field { flex-direction: row; align-items: center; gap: 5px; font-size: 11px; }
+.setting-row select { flex: 0 0 46px; width: 46px; min-width: 46px; height: 30px; font-size: 11px; padding: 0; background: transparent; border: 0; border-radius: 0; }
+.setting-row .range-wrap { flex: 1; height: 30px; gap: 5px; }
+.setting-row .range-wrap output { min-width: 12px; font-size: 11px; }
 .range-wrap {
   display: flex;
   align-items: center;
@@ -368,16 +458,17 @@ textarea:focus, select:focus {
   font-variant-numeric: tabular-nums;
 }
 .setting-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  border-top: 1px solid rgba(255,255,255,.09);
-  padding-top: 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: 30px; gap: 8px;
+  line-height: 16px;
+  border-top: 1px solid rgba(255,255,255,.13); padding-top: 3px;
 }
-.feedback-link {
-  text-decoration: none;
+.setting-footer #quitModelButton {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  height: 28px; min-height: 28px; padding: 0 1px;
+  display: inline-flex; align-items: center; line-height: 16px;
+  background: none; border: 0; color: rgba(235,238,242,.58); font-size: 11px;
 }
 .toggle-button {
   display: inline-flex;
@@ -402,107 +493,122 @@ textarea:focus, select:focus {
   height: 17px;
 }
 .style-dialog {
-  width: min(600px, calc(100vw - 24px));
+  width: min(490px,calc(100vw - 18px));
   max-width: none;
-  max-height: min(75dvh, 700px);
+  max-height: min(66dvh,400px);
   overflow: auto;
   margin: auto;
-  padding: 16px;
-  border: 1px solid rgba(255,255,255,.15);
-  border-radius: 20px;
-  background: #131519;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 19px;
+  background: rgba(27,27,27,.23);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
   color: inherit;
-  box-shadow: 0 24px 80px rgba(0,0,0,.5);
+  box-shadow: 0 14px 48px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.12);
 }
-.style-dialog::backdrop {
-  background: rgba(0,0,0,.44);
-}
+.style-dialog::backdrop { background: transparent; }
 #stylesDialog[open] {
+  position: fixed;
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: calc(max(12px,env(safe-area-inset-bottom)) + 80px + var(--lens-height,0px) + var(--capture-save-height,0px));
+  margin: 0 auto;
+  height: min(72dvh,448px);
+  max-height: calc(100dvh - 126px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding-top: 8px;
 }
-#stylesDialog .panel-top, #stylesDialog .style-toolbar {
-  flex: 0 0 auto;
+#closeStylesButton {
+  position: absolute;
+  top: 16px;
+  right: 12px;
+  z-index: 3;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 50%;
+  background: rgba(27,27,27,.08);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
+#stylesDialog .style-toolbar { flex: 0 0 auto; }
 .style-list {
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 3px;
+  padding: 28px 0 3px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+#stylesDialog .style-list:has(#customStyleSection[hidden]) {
+  padding-top: 38px;
 }
 .style-dialog h2, .style-dialog h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 650;
 }
 .style-dialog h3 {
-  margin-bottom: 10px;
-  font-size: 13px;
+  margin-bottom: 7px;
+  padding-left: 3px;
+  font-size: 11px;
 }
 #customStyleSection {
-  margin-bottom: 16px;
-  padding-bottom: 16px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
   border-bottom: 1px solid rgba(255,255,255,.1);
 }
 .style-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 120px), 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 9px;
+  align-items: start; align-content: start;
 }
 .custom-style-card {
-  position: relative;
-  min-width: 0;
+  position: relative; min-width: 0;
+  container-type: inline-size;
 }
 .style-card {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 7px;
-  width: 100%;
-  min-width: 0;
-  padding: 5px 5px 8px;
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 12px;
-  background: rgba(255,255,255,.035);
-  text-align: left;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
+  display: block;
+  width: 100%; min-width: 0; padding: 0;
+  border: 1px solid transparent; border-radius: 9px;
+  background: transparent; text-align: left;
+  font-size: 10px; line-height: 1.2; font-weight: 550; cursor: pointer;
 }
-.custom-style-card > .style-card {
-  height: 100%;
-  padding-bottom: 34px;
-}
+.custom-style-card > .style-card { height: auto; padding-bottom: 0; }
 .style-edit-button {
   position: absolute;
-  right: 7px;
-  bottom: 7px;
+  top: 0;
+  right: 0;
+  z-index: 2;
   display: grid;
-  width: 26px;
-  height: 26px;
   place-items: center;
-  padding: 5px;
-  border: 1px solid rgba(255,255,255,.14);
-  border-radius: 8px;
-  background: #25282e;
-  color: #f4f5f6;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
   cursor: pointer;
 }
-.style-edit-button:hover, .style-edit-button:focus-visible {
-  background: #383c44;
-}
 .style-edit-button svg {
-  width: 15px;
-  height: 15px;
+  width: 19px;
+  height: 19px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.8;
+  stroke-width: .85;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.65));
 }
 .style-card:hover, .style-card:focus-visible {
-  border-color: rgba(255,255,255,.45);
-  background: rgba(255,255,255,.10);
+  border-color: rgba(255,255,255,.35);
+  background: rgba(255,255,255,.06);
 }
 .style-card[aria-pressed="true"] {
   border-color: #91d5bd;
@@ -515,18 +621,40 @@ textarea:focus, select:focus {
 #addStyleButton[hidden], #useStylesButton[hidden] {
   display: none;
 }
-.style-card > span:last-child {
-  padding-inline: 3px;
-  overflow-wrap: anywhere;
-}
 .style-thumbnail {
   display: block;
+  position: relative;
+  width: 100%;
   aspect-ratio: 8 / 5;
   overflow: hidden;
   border-radius: 7px;
-  background: #22262d;
+  background: transparent;
 }
-.style-thumbnail img, #styleCapturePreview {
+.style-thumbnail img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.style-name {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  display: block;
+  padding: 4px 5px;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 550;
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-shadow: 0 0 2px rgba(0,0,0,.8), 0 1px 2px rgba(0,0,0,.85);
+}
+#styleCapturePreview {
   display: block;
   width: 100%;
   height: 100%;
@@ -538,15 +666,36 @@ textarea:focus, select:focus {
   justify-content: space-between;
   gap: 12px;
 }
-.style-toolbar-bottom {
-  margin-top: 16px;
+#stylesDialog .style-toolbar {
+  justify-content: flex-start;
+  border-top: 1px solid rgba(255,255,255,.17);
+  padding-top: 7px;
 }
+#stylesDialog .style-toolbar .toggle-button {
+  min-height: 34px;
+  font-size: 12px;
+  line-height: 16px;
+}
+#combineStylesButton {
+  padding-left: 4px;
+  border: 0;
+  background: transparent;
+  font-weight: 650;
+}
+#addStyleButton, #useStylesButton { margin-left: auto; }
+#addStyleButton { gap: 5px; padding-right: 13px; }
+#addStyleButton span { line-height: 16px; }
+.style-toolbar-bottom { margin-top: 9px; }
 .style-editor {
   width: min(430px, calc(100vw - 24px));
 }
 .style-editor .field + .field {
-  margin-top: 14px;
+  margin-top: 9px;
 }
+.style-editor .panel-top { margin-bottom: 7px; }
+.style-editor textarea { min-height: 64px; }
+.style-editor #styleCapturePreview { height: 68px; width: min(100%, 185px); margin-top: 8px; }
+.style-editor .style-toolbar-bottom { margin-top: 7px; }
 .style-editor input {
   width: 100%;
   min-width: 0;
@@ -585,7 +734,7 @@ textarea:focus, select:focus {
   position: absolute;
   z-index: 3;
   left: 50%;
-  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 112px);
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 100px);
   width: min(430px, calc(100vw - 24px));
   transform: translateX(-50%);
   padding: 11px 14px;
@@ -602,7 +751,7 @@ textarea:focus, select:focus {
 }
 @media (max-width: 440px) {
   .settings-panel {
-    padding: 16px;
+    padding: 10px;
     border-radius: 20px;
   }
   .setting-row {
@@ -616,28 +765,24 @@ textarea:focus, select:focus {
   textarea {
     resize: none;
   }
-  .toggle-button.keyboard-done {
+  .text-entry .toggle-button.keyboard-done {
     display: inline-flex;
   }
   .text-entry .settings-panel {
     z-index: 4;
-    top: calc(var(--keyboard-top, 0px) + max(8px, env(safe-area-inset-top)));
-    bottom: auto;
+    top: auto;
+    bottom: calc(100dvh - var(--keyboard-top, 0px) - var(--keyboard-height, 100dvh) + 8px);
     margin-bottom: 0;
     max-height: calc(var(--keyboard-height, 100dvh) - 16px);
-    padding: 10px;
+    padding: 9px;
   }
-  .text-entry .settings-panel > :not(.prompt-field),
+  .text-entry .settings-panel > :not(.prompt-line),
   .text-entry .style-editor #styleCapturePreview,
-  .text-entry .style-editor .style-toolbar {
-    display: none;
-  }
-  .text-entry .prompt-field {
-    margin-bottom: 0;
-  }
+  .text-entry .style-editor .style-toolbar { display: none; }
+  .text-entry .prompt-line { margin-bottom: 0; }
   .text-entry .settings-panel textarea {
-    min-height: 40px;
-    max-height: calc(var(--keyboard-height, 100dvh) - 80px);
+    min-height: 37px;
+    max-height: 83px;
   }
   .text-entry .style-editor {
     position: fixed;
@@ -651,3 +796,103 @@ textarea:focus, select:focus {
 /* Delete is only shown while editing an existing custom style. */
 .style-delete { color: #f5a5a5; }
 #deleteStyleButton[hidden] { display: none; }
+
+@media (orientation: landscape) {
+  .camera-controls { bottom: max(6px,env(safe-area-inset-bottom)); gap: 5px; }
+  .actions { height: 68px; padding-top: 5px; padding-bottom: 5px; }
+  .actions > .capture-controls { height: 54px; }
+  .mode-strip { bottom: 44px; }
+  .settings-panel { bottom: calc(max(6px,env(safe-area-inset-bottom)) + 75px); max-height: min(50dvh,220px); }
+  .style-dialog { max-height: min(60dvh,245px); }
+  .style-grid { grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; }
+  .style-editor { max-height: min(60dvh,245px); }
+  #styleCapturePreview { width: 145px; height: 72px; }
+}
+@media (max-width: 360px) {
+  .actions { width: 292px; grid-template-columns: 40px 40px 62px 40px 40px; column-gap: 8px; }
+  .actions:not(.activated) > #startButton { transform: translateX(59px); }
+  .setting-row { gap: 4px; }
+  .setting-row .resolution-field { flex-basis: 82px; padding-left: 4px; }
+  .setting-row #upscaleButton { padding-left: 4px; }
+}
+#styleEditor[open] { overflow: auto; }
+#styleEditor .style-toolbar-bottom {
+  position: sticky; bottom: 0; z-index: 1;
+  padding-top: 6px;
+  background: linear-gradient(to bottom,rgba(24,29,33,.16),rgba(24,29,33,.66));
+  border-radius: 10px;
+}
+
+/* In landscape, custom styles sit beside the presets rather than consuming
+   most of the available height. The existing selection behavior is unchanged. */
+@media (orientation: landscape) {
+  .style-list:has(#customStyleSection:not([hidden])) {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+  }
+  .style-list:has(#customStyleSection:not([hidden])) #customStyleSection {
+    grid-column: 1;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .style-list:has(#customStyleSection:not([hidden])) #customStyles {
+    grid-template-columns: 1fr;
+  }
+  .style-list:has(#customStyleSection:not([hidden])) #presetStyles {
+    grid-column: 2;
+    grid-row: 1;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+  }
+  .style-list .style-error:not([hidden]) { grid-column: 1 / -1; }
+}
+/* Opening the style editor should not leave a second glass dialog visible. */
+body:has(#styleEditor[open]) #stylesDialog { visibility: hidden; }
+
+/* Landscape editor: make the captured preview visible beside the text fields. */
+@media (orientation: landscape) {
+  .style-editor { max-height: min(64dvh,265px); }
+  .style-editor .panel-top { margin-bottom: 4px; }
+  .style-editor .field { gap: 3px; }
+  .style-editor .field + .field { margin-top: 5px; }
+  .style-editor input { height: 31px; }
+  .style-editor textarea { min-height: 54px; height: 54px; }
+  .style-editor .toggle-button { min-height: 32px; padding-inline: 9px; }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) 118px;
+    column-gap: 10px;
+    row-gap: 4px;
+    align-items: start;
+  }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) .panel-top {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) > label:first-of-type {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) > label:nth-of-type(2) {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) #styleCapturePreview {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    margin-top: 0;
+    width: 118px;
+    height: 84px;
+    align-self: center;
+  }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) #styleEditorError {
+    grid-column: 1 / -1;
+  }
+  #styleEditor form:has(#styleCapturePreview:not([hidden])) .style-toolbar-bottom {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    padding-top: 4px;
+  }
+}
