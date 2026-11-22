@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { mountCapture } from "../web/capture.js";
 
 function element() {
@@ -46,4 +47,29 @@ test("camera defaults to video with a visible one-tap Photo alternative", () => 
     globalThis.window = originalWindow;
     globalThis.document = originalDocument;
   }
+});
+
+test("settings Done commits edits, closes the panel and replaces clear prompt", () => {
+  const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../web/app.js", import.meta.url), "utf8");
+  assert.match(html, /id="doneSettingsButton"/);
+  assert.doesNotMatch(html, /id="clearPromptButton"/);
+  assert.doesNotMatch(app, /clearPromptButton/);
+  assert.match(app, /doneSettingsButton\.addEventListener\("click",[\s\S]*?void applySettings\(\);\s*setPanel\(false\);/);
+});
+
+test("diagnostics share one compact footer with Load or Unload model", () => {
+  const html = readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
+  assert.match(html, /class="setting-footer"[\s\S]*?id="latency"[^>]*>Model[^<]*<\/div>\s*<button id="quitModelButton"/);
+  assert.doesNotMatch(html, /id="latency"[^>]*hidden/);
+  assert.match(css, /\.setting-footer #quitModelButton\s*\{\s*flex:\s*0 0 auto/);
+});
+
+test("styles sit above the smaller capture dock, with a visible glass background", () => {
+  const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
+  assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*bottom: calc\(max\(12px,env\(safe-area-inset-bottom\)\) \+ 86px\)/);
+  assert.match(css, /#stylesDialog\[open\]\s*\{[^}]*height: min\(72dvh,480px\)/);
+  assert.match(css, /\.shutter-button\s*\{[^}]*width: 48px; height: 48px/);
+  assert.match(css, /backdrop-filter: blur\(5px\) saturate\(112%\) contrast\(102%\)/);
 });
