@@ -1,15 +1,4 @@
-// Own the style catalog, editor, selection state and event handlers.
-
-// Keep client conflict resolution consistent with the server: a deletion
-// wins over a live style with the same revision timestamp.
-export function stylesToSync(local, remote) {
-  const remoteStyles = new Map(remote.map(style => [style.id, style]));
-  return local.filter(style => {
-    const previous = remoteStyles.get(style.id);
-    return !previous || style.updatedAt > previous.updatedAt ||
-      (style.updatedAt === previous.updatedAt && style.deleted === true && previous.deleted !== true);
-  });
-}
+// Custom styles are persisted and merged on the PC, not in the browser.
 export function mountStyles({promptInput, applyPromptNow, request, getRenderedFrame, isMirrored, fitPrompt = () => {}}) {
   const $ = id => document.getElementById(id);
   const stylesDialog = $("stylesDialog");
@@ -20,13 +9,12 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   const styleCapturePreview = $("styleCapturePreview");
   const deleteStyleButton = $("deleteStyleButton");
   const styleEditorError = $("styleEditorError");
-  const customStyleStorageKey = "reality-restyle-custom-styles";
 
   let styleSelection = null;
   let appliedStyleSelection = { prompt: "", styles: [] };
   let editingStyleId = null;
   let customStylesSync = Promise.resolve();
-  let syncedStyles = null;
+  let syncedStyles = [];
   const maxStyles = 5;
 
   function setStyleError(element, message = "") {
@@ -34,87 +22,12 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     element.hidden = !message;
   }
 
-  function legacyStyleId(style) {
-    let value = 2166136261;
-    for (const byte of new TextEncoder().encode(`${style.name}\0${style.prompt}`)) {
-      value = Math.imul(value ^ byte, 16777619) >>> 0;
-    }
-    return `legacy-${value.toString(16).padStart(8, "0")}`;
-  }
-
-  function normalizeStyles(styles) {
-    if (!Array.isArray(styles)) return [];
-    return styles.filter(style => style && (style.deleted === true
-      ? typeof style.id === "string" && style.id
-      : typeof style.name === "string" && style.name.trim() &&
-        typeof style.prompt === "string" && style.prompt.trim())).map(style => {
-      const updatedAt = Number.isFinite(style.updatedAt) ? Math.max(0, Math.trunc(style.updatedAt)) : 0;
-      if (style.deleted === true) return {id: style.id, updatedAt, deleted: true};
-      return {
-        id: typeof style.id === "string" && style.id ? style.id : legacyStyleId(style),
-        name: style.name.trim(),
-        prompt: style.prompt,
-        thumbnail: typeof style.thumbnail === "string" && style.thumbnail.startsWith("data:image/webp;base64,") ? style.thumbnail : null,
-        updatedAt
-      };
-    });
-  }
-
-  function browserStyles() {
-    try {
-      return normalizeStyles(JSON.parse(localStorage.getItem(customStyleStorageKey) || "[]"));
-    } catch (_) {}
-    return [];
-  }
-
-  function customStyles() {
-    return syncedStyles ?? browserStyles();
-  }
-
-  function saveLocalCustomStyles(styles) {
-    try {
-      localStorage.setItem(customStyleStorageKey, JSON.stringify(styles));
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  function mergeCustomStyles(remote, local) {
-    const merged = new Map();
-    for (const style of [...normalizeStyles(remote), ...normalizeStyles(local)]) {
-      const previous = merged.get(style.id);
-      if (!previous || style.updatedAt > previous.updatedAt ||
-          (style.updatedAt === previous.updatedAt && style.deleted && !previous.deleted)) {
-        merged.set(style.id, style);
-      }
-    }
-    return [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt);
-  }
-
   function syncCustomStyles(newStyle = null) {
+    // The PC is the only persistent store and already resolves edit conflicts.
+    // Serialize requests so saves cannot race with the initial load or each other.
     const operation = customStylesSync.then(async () => {
-      const local = mergeCustomStyles(browserStyles(), newStyle ? [newStyle] : []);
-      const localBackup = newStyle && saveLocalCustomStyles(local);
-      if (localBackup) syncedStyles = mergeCustomStyles(customStyles(), local);
-      let remote;
-      try {
-        remote = normalizeStyles((await request("/styles/user")).styles);
-      } catch (error) {
-        if (error.status !== 403) throw error;
-      }
-      if (remote) {
-        const updates = stylesToSync(local, remote);
-        for (let index = 0; index < updates.length; index += 10) {
-          const styles = updates.slice(index, index + 10);
-          remote = normalizeStyles((await request("/styles/user", { styles })).styles);
-        }
-        syncedStyles = remote;
-        saveLocalCustomStyles(remote);
-      } else {
-        if (newStyle && !localBackup) throw new Error("Could not save the style on this device.");
-        syncedStyles = local;
-      }
+      const {styles} = await request("/styles/user", newStyle === null ? undefined : {styles: [newStyle]});
+      syncedStyles = styles;
       setStyleError($("styleStorageError"));
       renderCustomStyles();
       return syncedStyles;
@@ -226,7 +139,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   }
 
   function renderCustomStyles() {
-    const styles = customStyles().filter(style => !style.deleted);
+    const styles = syncedStyles.filter(style => !style.deleted);
     $("customStyleSection").hidden = !styles.length;
     renderStyleCards($("customStyles"), styles, true);
   }
@@ -293,7 +206,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   }
 
   async function deleteStyle() {
-    const previous = editingStyleId ? customStyles().find(item => item.id === editingStyleId && !item.deleted) : null;
+    const previous = editingStyleId ? syncedStyles.find(item => item.id === editingStyleId && !item.deleted) : null;
     if (!previous || !window.confirm(`Delete "${previous.name}"? This removes it from synced devices.`)) return;
     deleteStyleButton.disabled = true;
     try {
@@ -321,7 +234,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       setStyleError(styleEditorError, "Enter a name and prompt.");
       return;
     }
-    const previous = editingStyleId ? customStyles().find(item => item.id === editingStyleId) : null;
+    const previous = editingStyleId ? syncedStyles.find(item => item.id === editingStyleId) : null;
     const style = {
       id: editingStyleId || (crypto.randomUUID ? crypto.randomUUID() : `style-${Date.now()}-${Math.random().toString(16).slice(2)}`),
       name,
@@ -344,7 +257,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     }
     styleEditor.close();
     renderCustomStyles();
-    const finalIndex = customStyles().findIndex(item => item.id === style.id);
+    const finalIndex = syncedStyles.findIndex(item => item.id === style.id);
     const savedCard = $("customStyles").querySelectorAll(".custom-style-card")[finalIndex];
     savedCard?.querySelector(finalIndex < 0 ? ".style-card" : ".style-edit-button")?.focus();
   }
