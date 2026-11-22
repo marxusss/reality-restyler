@@ -142,7 +142,7 @@ button {
 .camera-controls {
   position: absolute;
   left: 50%;
-  bottom: max(20px, env(safe-area-inset-bottom));
+  bottom: max(12px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   display: grid;
   justify-items: center;
@@ -152,36 +152,31 @@ button {
 }
 .actions {
   display: grid;
-  grid-template-columns: repeat(2, 46px) 68px repeat(2, 46px);
+  grid-template-columns: 42px 42px 68px 42px 42px;
+  justify-content: center;
   align-items: end;
-  gap: 6px;
-  padding: 6px;
-  border: 1px solid rgba(255,255,255,.2);
+  column-gap: 10px;
+  width: 312px;
+  max-width: calc(100vw - 16px);
+  height: 84px;
+  padding: 9px 8px;
+  border: 1px solid rgba(255,255,255,.27);
   border-radius: 22px;
-  background: rgba(35,43,48,.32);
-  box-shadow: 0 12px 36px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.12);
-  backdrop-filter: blur(18px) saturate(145%);
-  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  background: linear-gradient(132deg,rgba(46,56,59,.26),rgba(14,19,24,.30));
+  box-shadow: 0 12px 32px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.16);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
 }
 .actions > #flashButton { grid-column: 1; grid-row: 1; }
 .actions > #startButton {
-  grid-column: 2;
-  grid-row: 1;
-  justify-self: center;
-  z-index: 1;
-  transition: transform .36s cubic-bezier(.2,.8,.2,1);
+  grid-column: 2; grid-row: 1; justify-self: center; z-index: 1;
+  transition: transform .43s cubic-bezier(.25,.76,.18,1);
 }
-.actions:not(.activated) > #startButton { transform: translateX(63px); }
+.actions:not(.activated) > #startButton { transform: translateX(61px); }
 .actions > .capture-controls {
-  grid-column: 3;
-  grid-row: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  width: 68px;
-  height: 60px;
-  touch-action: pan-y;
+  grid-column: 3; grid-row: 1;
+  display: flex; align-items: flex-end; justify-content: center;
+  position: relative; width: 68px; height: 72px; touch-action: pan-y;
   transition: opacity .2s ease .12s;
 }
 .actions:not(.activated) > .capture-controls { opacity: 0; pointer-events: none; }
@@ -218,18 +213,18 @@ button {
 .lens-button {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  min-width: 42px;
-  min-height: 42px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   aspect-ratio: 1;
-  flex: 0 0 42px;
+  flex: 0 0 36px;
   padding: 0;
   border: 0;
   border-radius: 50%;
   background: rgba(5,5,5,.62);
   color: #fff;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -239,11 +234,10 @@ button {
   background: rgba(38,38,38,.88);
   color: #f3e8a7;
 }
-.actions #flashButton[hidden] {
-  display: inline-flex;
-  visibility: hidden;
-}
+.actions #flashButton:disabled { opacity: .48; cursor: default; }
 .actions .icon-button {
+  width: 42px;
+  height: 46px;
   border-color: transparent;
   box-shadow: none;
   background: transparent;
@@ -268,67 +262,38 @@ button {
 }
 .mode-strip {
   position: absolute;
-  left: 50%;
-  bottom: 62px;
-  transform: translateX(-50%);
-  display: grid;
-  place-items: center;
-  width: 154px;
-  height: 26px;
+  bottom: 53px;
+  left: 50%; transform: translateX(-50%);
+  display: grid; place-items: center;
+  width: 156px; height: 18px;
   touch-action: pan-y;
 }
 .capture-mode, .capture-mode-other {
-  border: 0;
-  padding: 3px 5px;
-  background: transparent;
-  color: #f5e9bd;
-  font-size: 12px;
-  font-weight: 650;
-  white-space: nowrap;
-  cursor: pointer;
+  border: 0; padding: 0 3px; background: transparent;
+  color: #f5e9bd; font-size: 11px; line-height: 18px;
+  font-weight: 650; white-space: nowrap; cursor: pointer;
 }
 .capture-mode-other {
-  position: absolute;
-  right: 0;
-  color: rgba(244,245,246,.44);
-  font-weight: 450;
+  position: absolute; right: 0;
+  color: rgba(244,245,246,.5); font-weight: 450;
 }
 .mode-strip.photo-active .capture-mode-other { right: auto; left: 0; }
 .shutter-button {
-  display: grid;
-  place-items: center;
-  width: 60px;
-  height: 60px;
-  min-width: 60px;
-  min-height: 60px;
-  aspect-ratio: 1;
-  padding: 0;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
+  display: grid; place-items: center;
+  flex: 0 0 54px;
+  width: 54px; height: 54px; min-width: 54px; min-height: 54px;
+  max-width: 54px; max-height: 54px; aspect-ratio: 1;
+  padding: 0; border: 2px solid #fff; border-radius: 50%;
+  background: rgba(0,0,0,.12); cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 .shutter-button::before {
-  content: "";
-  width: 48px;
-  height: 48px;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: #fff;
+  content: ""; width: 42px; height: 42px; aspect-ratio: 1;
+  border-radius: 50%; background: #fff;
 }
-.shutter-button[data-mode="video"]::before {
-  background: #ff454f;
-}
-.shutter-button.recording::before {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-}
-.shutter-button:disabled {
-  opacity: .42;
-  cursor: default;
-}
+.shutter-button[data-mode="video"]::before { background: #f14f58; }
+.shutter-button.recording::before { width: 22px; height: 22px; border-radius: 6px; }
+.shutter-button:disabled { opacity: .42; cursor: default; }
 .settings-panel {
   position: absolute;
   z-index: 2;
