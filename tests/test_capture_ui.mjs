@@ -114,7 +114,7 @@ test("settings and lens gap matches lens and mode gap in portrait and landscape"
   assert.match(css, /\.settings-panel \{ bottom: calc\(max\(6px,env\(safe-area-inset-bottom\)\) \+ 75px\)/);
 });
 
-test("thumbnail fits entire style image and custom edit icon clears overlay", () => {
+test("thumbnail crops to fill its card and custom edit icon clears overlay", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   assert.match(css, /\.style-thumbnail img\s*\{[^}]*object-fit: cover/);
   assert.match(css, /\.style-name\s*\{[^}]*position: absolute;[^}]*bottom: 0/);
