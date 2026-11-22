@@ -267,7 +267,7 @@ button {
 }
 .mode-strip {
   position: absolute;
-  bottom: 44px;
+  bottom: 48px;
   left: 50%; transform: translateX(-50%);
   display: grid; place-items: center;
   width: 136px; height: 16px;
@@ -733,7 +733,7 @@ textarea:focus, select:focus {
   .camera-controls { bottom: max(6px,env(safe-area-inset-bottom)); gap: 5px; }
   .actions { height: 68px; padding-top: 5px; padding-bottom: 5px; }
   .actions > .capture-controls { height: 57px; }
-  .mode-strip { bottom: 43px; }
+  .mode-strip { bottom: 48px; }
   .settings-panel { bottom: calc(max(6px,env(safe-area-inset-bottom)) + 80px); max-height: min(50dvh,220px); }
   .style-dialog { max-height: min(60dvh,245px); }
   .style-grid { grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; }
