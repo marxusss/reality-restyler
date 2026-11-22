@@ -256,8 +256,8 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     }
     styleEditor.close();
     renderCustomStyles();
-    const finalIndex = syncedStyles.findIndex(item => item.id === style.id);
-    const savedCard = $("customStyles").querySelectorAll(".custom-style-card")[finalIndex];
+    const visibleIndex = syncedStyles.filter(item => !item.deleted).findIndex(item => item.id === style.id);
+    const savedCard = $("customStyles").querySelectorAll(".custom-style-card")[visibleIndex];
     savedCard?.querySelector(".style-edit-button")?.focus();
   }
 
