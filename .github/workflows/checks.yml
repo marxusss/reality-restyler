@@ -15,6 +15,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Export PR7 frontend for visual verification
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 7
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-pr7-source
+          path: web/
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
