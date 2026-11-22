@@ -1209,6 +1209,7 @@ cancelStartupButton.addEventListener("click", async () => {
 });
 clearPromptButton.addEventListener("click", () => {
   promptInput.value = "";
+  fitPrompt();
   applyPromptNow();
 });
 quitModelButton.addEventListener("click", async () => {
