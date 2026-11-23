@@ -130,16 +130,18 @@
               </button>
             </div>
           </div>
-          <label class="field">
-            <span>Name</span>
-            <input id="styleName" type="text" maxlength="60" required autofocus>
-          </label>
-          <label class="field">
-            <span>Prompt</span>
-            <textarea id="stylePrompt" rows="4" maxlength="2000" spellcheck="false" required></textarea>
-          </label>
-          <img id="styleCapturePreview" width="320" height="200" alt="Captured style" hidden>
-          <p id="styleEditorError" class="style-error" role="alert" hidden></p>
+          <div class="style-editor-fields">
+            <label class="field">
+              <span>Name</span>
+              <input id="styleName" type="text" maxlength="60" required autofocus>
+            </label>
+            <label class="field">
+              <span>Prompt</span>
+              <textarea id="stylePrompt" rows="4" maxlength="2000" spellcheck="false" required></textarea>
+            </label>
+            <img id="styleCapturePreview" width="320" height="200" alt="Captured style" hidden>
+            <p id="styleEditorError" class="style-error" role="alert" hidden></p>
+          </div>
           <div class="style-toolbar style-toolbar-bottom">
             <div class="style-editor-actions">
               <button id="captureStyleButton" class="toggle-button" type="button">Capture style</button>

@@ -698,20 +698,34 @@ textarea:focus {
 .style-toolbar-bottom { margin-top: 9px; }
 /* Custom style editor. */
 #styleEditor.style-editor {
-  width: min(760px, calc(100vw - 32px));
-  max-height: min(88dvh, 800px);
-  padding: 22px;
-  border-radius: 22px;
-  background: rgba(24, 28, 32, .78);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  box-shadow: 0 18px 56px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.13);
+  width: min(900px, calc(100vw - 32px));
+  min-height: 560px;
+  max-height: min(92dvh, 900px);
+  padding: 24px;
+}
+#styleEditor[open] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 #styleEditor #styleForm {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
   gap: 16px;
 }
+#styleEditor .style-editor-fields {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 16px;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+}
+#styleEditor .style-editor-fields::-webkit-scrollbar { display: none; }
 #styleEditor .panel-top { margin: 0; }
 #styleEditor h2 { font-size: 18px; letter-spacing: -.02em; }
 #styleEditor .field { gap: 8px; color: rgba(245,247,249,.82); font-size: 13px; }
@@ -756,6 +770,7 @@ textarea:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   margin: 0;
   padding: 14px 0 0;
@@ -773,6 +788,9 @@ textarea:focus {
 #styleEditor .style-toolbar .style-save {
   min-width: 92px;
   margin-left: auto;
+  justify-content: center;
+  text-align: center;
+  line-height: 1;
 }
 #styleEditor .style-delete {
   border-color: rgba(255,145,145,.25);
@@ -780,52 +798,87 @@ textarea:focus {
   color: #ffc2c2;
 }
 @media (min-width: 700px) {
-  #styleEditor form:has(#styleCapturePreview:not([hidden])) {
-    grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  #styleEditor .style-editor-fields:has(#styleCapturePreview:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
     column-gap: 24px;
     row-gap: 18px;
     align-items: start;
   }
-  #styleEditor form:has(#styleCapturePreview:not([hidden])) > .panel-top,
-  #styleEditor form:has(#styleCapturePreview:not([hidden])) > #styleEditorError,
-  #styleEditor form:has(#styleCapturePreview:not([hidden])) > .style-toolbar-bottom {
-    grid-column: 1 / -1;
+  #styleEditor .style-editor-fields:has(#styleCapturePreview:not([hidden])) > label:first-of-type {
+    grid-column: 1;
+    grid-row: 1;
   }
-  #styleEditor form:has(#styleCapturePreview:not([hidden])) > label:first-of-type {
+  #styleEditor .style-editor-fields:has(#styleCapturePreview:not([hidden])) > label:nth-of-type(2) {
     grid-column: 1;
     grid-row: 2;
   }
-  #styleEditor form:has(#styleCapturePreview:not([hidden])) > label:nth-of-type(2) {
-    grid-column: 1;
-    grid-row: 3;
-  }
-  #styleEditor form:has(#styleCapturePreview:not([hidden])) > #styleCapturePreview {
+  #styleEditor .style-editor-fields:has(#styleCapturePreview:not([hidden])) > #styleCapturePreview {
     grid-column: 2;
-    grid-row: 2 / 4;
+    grid-row: 1 / 3;
     width: 100%;
     align-self: start;
   }
-  #styleEditor textarea { min-height: 190px; }
+  #styleEditor .style-editor-fields:has(#styleCapturePreview:not([hidden])) > #styleEditorError {
+    grid-column: 1 / -1;
+  }
+  #styleEditor textarea { min-height: 240px; }
 }
 @media (max-width: 699px) {
   #styleEditor.style-editor {
-    width: calc(100vw - 20px);
-    max-height: min(86dvh, 800px);
+    width: calc(100vw - max(20px, env(safe-area-inset-left) + env(safe-area-inset-right) + 16px));
+    height: calc(100dvh - max(20px, env(safe-area-inset-top) + env(safe-area-inset-bottom) + 16px));
+    min-height: 0;
+    max-height: calc(100dvh - max(20px, env(safe-area-inset-top) + env(safe-area-inset-bottom) + 16px));
     padding: 16px;
   }
   #styleEditor #styleForm { gap: 13px; }
+  #styleEditor .style-editor-fields { gap: 13px; }
   #styleEditor textarea { min-height: 140px; }
   #styleEditor .style-toolbar .toggle-button { padding-inline: 11px; }
-  #styleEditor form:has(#styleCapturePreview:not([hidden])) {
+  #styleEditor .style-editor-fields:has(#styleCapturePreview:not([hidden])) {
     grid-template-columns: minmax(0, 1fr);
     column-gap: 0;
   }
-  #styleEditor form:has(#styleCapturePreview:not([hidden])) > #styleCapturePreview {
+  #styleEditor .style-editor-fields:has(#styleCapturePreview:not([hidden])) > #styleCapturePreview {
     grid-column: 1;
     grid-row: auto;
     justify-self: center;
     width: min(100%, 320px);
   }
+}
+@media (max-width: 699px) and (orientation: landscape) {
+  #styleEditor.style-editor {
+    padding: 16px;
+  }
+  #styleEditor #styleForm { gap: 8px; }
+  #styleEditor .panel-top { min-height: 24px; }
+  #styleEditor .style-editor-fields { gap: 8px; }
+  #styleEditor .field { gap: 4px; }
+  #styleEditor .style-editor-fields:has(#styleCapturePreview:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 180px);
+    column-gap: 12px;
+    row-gap: 6px;
+  }
+  #styleEditor .style-editor-fields:has(#styleCapturePreview:not([hidden])) > label:first-of-type {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  #styleEditor .style-editor-fields:has(#styleCapturePreview:not([hidden])) > label:nth-of-type(2) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  #styleEditor .style-editor-fields:has(#styleCapturePreview:not([hidden])) > #styleCapturePreview {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    width: 100%;
+    align-self: start;
+  }
+  #styleEditor .style-toolbar-bottom { padding-top: 8px; }
+}
+@media (max-width: 360px) {
+  #styleEditor .style-editor-actions { gap: 6px; }
+  #styleEditor .style-toolbar .toggle-button { padding-inline: 8px; }
+  #styleEditor .style-toolbar .style-save { min-width: 72px; }
 }
 #styleCapturePreview {
   display: block;
