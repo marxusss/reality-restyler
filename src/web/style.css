@@ -1068,7 +1068,6 @@ textarea:focus {
 /* Opening the style editor should not leave a second glass dialog visible. */
 body:has(#styleEditor[open]) #stylesDialog { visibility: hidden; }
 
-<<<<<<< HEAD
 /* Home Screen app. With viewport-fit=cover, iOS can leave the layout viewport short of the screen by about the
    status bar (WebKit bug 237961), and dynamic-viewport units and `bottom` stop short with it. home_screen.js marks
    a full-screen Home Screen app and sets --app-height to the screen's height, so the app hangs from the top at that
