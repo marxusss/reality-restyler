@@ -1,4 +1,4 @@
-import { cameraFacing, cameraLenses, currentRotation, openStartingCamera, setCameraZoom } from "./camera.js";
+import { cameraFacing, cameraFacings, cameraFlipTarget, cameraLenses, currentRotation, openStartingCamera, setCameraZoom } from "./camera.js";
 import { mountCapture } from "./capture.js";
 import { encodeCameraFrame } from "./frame_encoding.js";
 import { createFrameRate, readWebRTCRoundTrip } from "./metrics.js";
@@ -35,6 +35,7 @@ let resolution = Number(resolutionValue.textContent);
 const lensBar = $("lensBar");
 const upscaleButton = $("upscaleButton");
 const flashButton = $("flashButton");
+const flipCameraButton = $("flipCameraButton");
 const cameraActions = $("cameraActions");
 let peer = null;
 let stream = null;
@@ -428,38 +429,75 @@ function applyCameraMirror(track, choice) {
 }
 
 let cameraDevices = [];
+let cameraChoices = [];
+const lastLensByFacing = {};
 const knownCameraZoom = new Map();
+const activeFacing = () => selectedCamera?.facing || "environment";
+
 function renderLenses(track) {
   const settings = track.getSettings();
   const zoom = typeof settings.zoom === "number" ? track.getCapabilities?.()?.zoom : null;
   if (settings.deviceId && zoom) knownCameraZoom.set(settings.deviceId, zoom);
   else knownCameraZoom.delete(settings.deviceId);
-  const lenses = cameraLenses(cameraDevices, settings, zoom, knownCameraZoom);
-  selectedCamera = lenses.find(lens => lens.active) ||
+  cameraChoices = cameraLenses(cameraDevices, settings, zoom, knownCameraZoom);
+  selectedCamera = cameraChoices.find(lens => lens.active) ||
     {deviceId: settings.deviceId, facing: settings.facingMode};
+  if (selectedCamera.facing) lastLensByFacing[selectedCamera.facing] = selectedCamera;
+  drawLensBar();
+}
+
+// The lens bar shows only the current side's lenses; the flip button changes sides.
+function drawLensBar() {
+  const facing = activeFacing();
+  const lenses = cameraChoices.filter(lens => lens.facing === facing);
   lensBar.replaceChildren();
   lensBar.hidden = lenses.length <= 1;
+  updateFlipButton();
   if (lensBar.hidden) return;
   for (const lens of lenses) {
     const button = document.createElement("button");
     button.type = "button";
-    const selfie = lens.facing === "user";
-    const number = String(lens.magnification).replace(/^0\./, ".");
     button.className = "lens-button";
-    button.textContent = `${selfie ? "−" : ""}${number}×`;
-    button.setAttribute("aria-label", `${selfie ? "Selfie" : "Rear"} ${lens.magnification}×`);
+    button.textContent = String(lens.magnification).replace(/^0\./, ".");
+    button.setAttribute("aria-label", `${facing === "user" ? "Selfie" : "Rear"} ${lens.magnification}×`);
     button.setAttribute("aria-pressed", String(lens.active));
     button.addEventListener("click", () => {
       if (busy) return;
       if (started) {
         if (!lens.active || cameraChanging) queueCameraSwitch(lens);
       } else {
-        selectedCamera = lens;
-        for (const item of lensBar.children) item.setAttribute("aria-pressed", String(item === button));
+        selectCameraWhilePaused(lens);
       }
     });
     lensBar.append(button);
   }
+}
+
+function selectCameraWhilePaused(choice) {
+  selectedCamera = choice;
+  for (const lens of cameraChoices) lens.active = lens === choice;
+  if (choice.facing) lastLensByFacing[choice.facing] = choice;
+  drawLensBar();
+}
+
+function updateFlipButton() {
+  const facings = cameraFacings(cameraDevices);
+  for (const lens of cameraChoices) facings.add(lens.facing);
+  flipCameraButton.hidden = !(facings.has("user") && facings.has("environment"));
+  const front = activeFacing() === "user";
+  const label = front ? "Switch to rear camera" : "Switch to front camera";
+  flipCameraButton.dataset.facing = front ? "user" : "environment";
+  flipCameraButton.setAttribute("aria-label", label);
+  flipCameraButton.title = label;
+}
+
+function flipCamera() {
+  if (busy || flipCameraButton.hidden) return;
+  const facing = activeFacing();
+  const next = facing === "user" ? "environment" : "user";
+  const target = cameraFlipTarget(cameraChoices, facing, lastLensByFacing[next]);
+  if (started) queueCameraSwitch(target);
+  else selectCameraWhilePaused(target);
 }
 
 async function populateCameras(track) {
@@ -1324,6 +1362,7 @@ quitModelButton.addEventListener("click", async () => {
   quitModelButton.disabled = false;
 });
 flashButton.addEventListener("click", () => void toggleFlash());
+flipCameraButton.addEventListener("click", flipCamera);
 upscaleButton.addEventListener("click", () => {
   upscale = !upscale;
   upscaleButton.setAttribute("aria-pressed", String(upscale));
@@ -1393,4 +1432,10 @@ window.addEventListener("pageshow", () => {
 
 // A passive page never acquires or extends ownership of another camera.
 const preferencesReady = loadHostPreferences();
+// Labels are only listed once camera access was granted; then Flip can pick a side before Start.
+navigator.mediaDevices?.enumerateDevices?.().then(devices => {
+  if (cameraDevices.length) return;
+  cameraDevices = devices.filter(device => device.kind === "videoinput");
+  updateFlipButton();
+}, () => {});
 
