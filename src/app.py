@@ -553,7 +553,7 @@ def create_app():
     app[PREFERENCES_LOCK_KEY] = asyncio.Lock()
     app[STARTUP_PROGRESS_KEY] = {}
     app.router.add_get("/", index)
-    for script in ("app.js", "camera.js", "capture.js", "frame_encoding.js", "styles.js", "errors.js", "metrics.js", "transport.js"):
+    for script in ("app.js", "camera.js", "capture.js", "frame_encoding.js", "home_screen.js", "styles.js", "errors.js", "metrics.js", "transport.js"):
         app.router.add_get("/" + script, app_script)
     app.router.add_get("/style.css", style_sheet)
     app.router.add_get("/favicon.svg", favicon)

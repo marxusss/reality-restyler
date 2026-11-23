@@ -5,6 +5,9 @@ import { createFrameRate, readWebRTCRoundTrip } from "./metrics.js";
 import { openWebRTC, openLocalSocket, setWebRTCInputResolution } from "./transport.js";
 import { mountStyles } from "./styles.js";
 import { ErrorState } from "./errors.js";
+import { mountHomeScreenHeight } from "./home_screen.js";
+
+mountHomeScreenHeight();
 
 const $ = id => document.getElementById(id);
 const output = $("output");
