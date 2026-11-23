@@ -1,10 +1,15 @@
+import importlib.util
 import unittest
 from unittest.mock import patch
 
 import model_setup
 
+HAS_TORCH = importlib.util.find_spec("torch") is not None
+needs_torch = unittest.skipUnless(HAS_TORCH, "needs torch, which this machine does not have installed")
+
 
 class ModelVariantTests(unittest.TestCase):
+    @needs_torch
     def test_ampere_uses_int4_and_blackwell_uses_fp4(self):
         with patch("torch.cuda.is_available", return_value=True), \
              patch("model_setup.best_cuda_device", return_value=1):
