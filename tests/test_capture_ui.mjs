@@ -242,25 +242,25 @@ test("styles toggle closed and Settings can take over", () => {
   assert.match(app, /settingsButton\.addEventListener\("click", \(\) => \{\s*const stylesDialog = \$\("stylesDialog"\);\s*if \(stylesDialog\.open\) stylesDialog\.close\(\);\s*setPanel\(settingsPanel\.hidden\);/);
 });
 
-test("flip is one tap in the dock, right of the shutter, and lenses show only the current side", () => {
+test("camera switching uses lens choices without a separate flip button", () => {
   const html = readFileSync(new URL("../src/web/index.html", import.meta.url), "utf8");
   const css = readFileSync(new URL("../src/web/style.css", import.meta.url), "utf8");
   const app = readFileSync(new URL("../src/web/app.js", import.meta.url), "utf8");
-  const dock = html.match(/<div id="cameraActions"[\s\S]*?id="quickStylesButton"/)?.[0] || "";
-  assert.match(dock, /id="shutterButton"[\s\S]*?<\/div>\s*<button id="flipCameraButton"[^>]*aria-label="Switch to front camera"[^>]*hidden/);
+  assert.doesNotMatch(html, /flipCameraButton/);
+  assert.doesNotMatch(app, /flipCameraButton|cameraFlipTarget|cameraFacings/);
+  assert.match(app, /const lenses = cameraLenses\(cameraDevices, settings, zoom, knownCameraZoom\);/);
+  assert.match(app, /button\.textContent = `\$\{selfie \? "−" : ""\}\$\{number\}×`;/);
+  assert.match(html, /id="quickStylesButton"/);
   assert.match(css, /\.actions > \.capture-controls\s*\{\s*grid-column: 3;/);
-  assert.match(css, /\.actions > #flipCameraButton \{ grid-column: 4;/);
-  assert.match(app, /flipCameraButton\.addEventListener\("click", flipCamera\)/);
-  assert.match(app, /const lenses = cameraChoices\.filter\(lens => lens\.facing === facing\);/);
-  const flip = app.match(/function flipCamera\(\) \{[\s\S]*?\n\}/)?.[0] || "";
-  assert.match(flip, /if \(started\) queueCameraSwitch\(target\);/);
+  assert.match(css, /\.actions > #quickStylesButton \{ grid-column: 4;/);
+  assert.doesNotMatch(css, /flipCameraButton/);
 });
 
 test("glass respects reduced transparency and motion, safe areas and no focus zoom", () => {
   const css = readFileSync(new URL("../src/web/style.css", import.meta.url), "utf8");
   const reduced = css.match(/@media \(prefers-reduced-transparency: reduce\) \{[\s\S]*?\n\}/)?.[0] || "";
   assert.match(reduced, /\.glass[^{]*\{[^}]*backdrop-filter: none/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*#flipCameraButton \.flip-arrows[^}]*transition: none/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*\.actions > #startButton[^}]*transition: none/);
   assert.match(css, /\.flash-button\s*\{[^}]*top: max\(12px, env\(safe-area-inset-top\)\);\s*left: max\(12px, env\(safe-area-inset-left\)\)/);
   assert.match(css, /\.camera-controls\s*\{[^}]*bottom: max\(12px, env\(safe-area-inset-bottom\)\)/);
   for (const selector of ["\\.prompt-line textarea", "#styleEditor input", "#styleEditor textarea"]) {

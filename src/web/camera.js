@@ -77,21 +77,6 @@ export function cameraFacing(label = "") {
   return "";
 }
 
-// Facings that labelled, non-virtual cameras can provide. Empty before camera permission on most browsers.
-export function cameraFacings(devices = []) {
-  return new Set(devices.filter(device => device.label && !/\bvirtual\b/i.test(device.label))
-    .map(device => cameraFacing(device.label)).filter(Boolean));
-}
-
-// The camera one flip tap opens: the lens last used on the other side, else its 1× lens, else just that facing.
-export function cameraFlipTarget(lenses, facing = "environment", remembered = null) {
-  const next = facing === "user" ? "environment" : "user";
-  const choices = lenses.filter(lens => lens.facing === next);
-  return choices.find(lens => remembered && lens.deviceId === remembered.deviceId &&
-      lens.magnification === remembered.magnification) ||
-    choices.find(lens => lens.magnification === 1) || choices[0] || {facing: next};
-}
-
 export function cameraLenses(devices, settings = {}, zoom = null, knownZoom = new Map()) {
   const activeDevice = devices.find(device => device.deviceId === settings.deviceId);
   const activeFacing = settings.facingMode || cameraFacing(activeDevice?.label);

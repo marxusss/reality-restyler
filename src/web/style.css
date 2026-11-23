@@ -207,11 +207,11 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
 .actions {
   position: relative;
   display: grid;
-  grid-template-columns: 42px 42px 68px 42px 42px;
+  grid-template-columns: 42px 42px 68px 42px;
   justify-content: center;
   align-items: end;
   column-gap: 10px;
-  width: 312px;
+  width: 270px;
   max-width: calc(100vw - 16px);
   height: 72px;
   padding: 6px 8px;
@@ -231,19 +231,15 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
   transition: opacity .2s ease .12s;
 }
 .actions:not(.activated) > .capture-controls { opacity: 0; pointer-events: none; }
-.actions > #flipCameraButton { grid-column: 4; grid-row: 1; }
-.actions > #quickStylesButton { grid-column: 5; grid-row: 1; }
+.actions > #quickStylesButton { grid-column: 4; grid-row: 1; }
 .actions .icon-button {
   width: 42px;
   height: 42px;
   background: transparent;
 }
 .actions .icon-button:active, .lens-button:active { background: var(--fill-strong); }
-#flipCameraButton svg { width: 23px; height: 23px; stroke-width: 1.6; }
-#flipCameraButton .flip-arrows { transform-origin: 12px 13.6px; transition: transform .35s cubic-bezier(.25,.76,.18,1); }
-#flipCameraButton[data-facing="user"] .flip-arrows { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) {
-  .actions > #startButton, .actions > .capture-controls, #flipCameraButton .flip-arrows { transition: none; }
+  .actions > #startButton, .actions > .capture-controls { transition: none; }
 }
 .lens-bar, .capture-file-actions {
   position: relative;
@@ -252,7 +248,7 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
   justify-content: center;
   flex-wrap: wrap;
 }
-/* Lenses for the current side share one small glass capsule. */
+/* Front and rear lens choices share one small glass capsule. */
 .lens-bar {
   gap: 2px;
   padding: 4px;
@@ -1025,7 +1021,7 @@ textarea:focus {
   .settings-panel { --settings-bottom: calc(max(6px,env(safe-area-inset-bottom)) + 75px); }
 }
 @media (max-width: 360px) {
-  .actions { width: 292px; grid-template-columns: 40px 40px 62px 40px 40px; column-gap: 8px; }
+  .actions { width: 260px; grid-template-columns: 40px 40px 62px 40px; column-gap: 8px; }
   .actions:not(.activated) > #startButton { transform: translateX(59px); }
   .setting-row { gap: 4px; }
   .setting-row #upscaleButton { padding-left: 6px; padding-right: 8px; }
