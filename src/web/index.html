@@ -17,14 +17,19 @@
       <video id="output" autoplay playsinline muted></video>
       <canvas id="localOutput" hidden></canvas>
       <div id="shade"></div>
-      <div id="startup" class="startup" role="status" aria-live="polite" hidden>
+      <div id="startup" class="startup glass" role="status" aria-live="polite" hidden>
         <span id="startupLabel"></span>
         <progress id="startupProgress" max="8" value="0" aria-label="Startup stages completed"></progress>
         <button id="cancelStartupButton" class="toggle-button" type="button" hidden>Cancel</button>
       </div>
+      <button id="flashButton" class="icon-button glass flash-button" type="button" aria-label="Flash" aria-pressed="false" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M13.3 2.5 5.8 13h5l-.5 8.5 7.9-11.1h-5.1l.2-7.9Z"/>
+        </svg>
+      </button>
       <div class="camera-controls">
-        <div id="lensBar" class="lens-bar" role="group" aria-label="Camera lenses" hidden></div>
-        <div id="captureFileActions" class="capture-file-actions" hidden>
+        <div id="lensBar" class="lens-bar glass" role="group" aria-label="Camera lenses" hidden></div>
+        <div id="captureFileActions" class="capture-file-actions glass" hidden>
           <button id="saveCaptureButton" class="toggle-button" type="button">Save</button>
           <button id="discardCaptureButton" class="icon-button small" type="button" aria-label="Discard capture">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -32,10 +37,10 @@
             </svg>
           </button>
         </div>
-        <div id="cameraActions" class="actions">
-          <button id="flashButton" class="icon-button" type="button" aria-label="Flash" aria-pressed="false" hidden>
+        <div id="cameraActions" class="actions glass">
+          <button id="settingsButton" class="icon-button" type="button" aria-label="Settings" aria-controls="settingsPanel" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M13.3 2.5 5.8 13h5l-.5 8.5 7.9-11.1h-5.1l.2-7.9Z"/>
+              <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.63-.07-.94l2.03-1.58c.18-.14.23-.39.12-.6l-1.92-3.32c-.11-.2-.35-.27-.56-.2l-2.39.96c-.5-.38-1.04-.7-1.63-.94l-.36-2.54c-.03-.22-.21-.38-.44-.38h-3.8c-.22 0-.41.16-.44.38l-.36 2.54c-.59.24-1.13.56-1.63.94l-2.39-.96c-.21-.08-.45 0-.56.2L2.88 8.88c-.11.2-.06.46.12.6l2.03 1.58c-.05.31-.07.63-.07.94s.02.63.07.94l-2.03 1.58c-.18.14-.23.39-.12.6l1.92 3.32c.11.2.35.27.56.2l2.39-.96c.5.38 1.04.7 1.63.94l.36 2.54c.03.22.21.38.44.38h3.8c.22 0 .41-.16.44-.38l.36-2.54c.59-.24 1.13-.56 1.63-.94l2.39.96c.21.08.45 0 .56-.2l1.92-3.32c.11-.2.06-.46-.12-.6l-2.02-1.58zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
             </svg>
           </button>
           <button id="startButton" class="icon-button" type="button" aria-label="Start" title="Start">
@@ -53,17 +58,12 @@
             </div>
             <button id="shutterButton" class="shutter-button" type="button" aria-label="Record video" disabled></button>
           </div>
-          <button id="settingsButton" class="icon-button" type="button" aria-label="Settings" aria-controls="settingsPanel" aria-expanded="false">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.63-.07-.94l2.03-1.58c.18-.14.23-.39.12-.6l-1.92-3.32c-.11-.2-.35-.27-.56-.2l-2.39.96c-.5-.38-1.04-.7-1.63-.94l-.36-2.54c-.03-.22-.21-.38-.44-.38h-3.8c-.22 0-.41.16-.44.38l-.36 2.54c-.59.24-1.13.56-1.63.94l-2.39-.96c-.21-.08-.45 0-.56.2L2.88 8.88c-.11.2-.06.46.12.6l2.03 1.58c-.05.31-.07.63-.07.94s.02.63.07.94l-2.03 1.58c-.18.14-.23.39-.12.6l1.92 3.32c.11.2.35.27.56.2l2.39-.96c.5.38 1.04.7 1.63.94l.36 2.54c.03.22.21.38.44.38h3.8c.22 0 .41-.16.44-.38l.36-2.54c.59-.24 1.13-.56 1.63-.94l2.39.96c.21.08.45 0 .56-.2l1.92-3.32c.11-.2.06-.46-.12-.6l-2.02-1.58zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
-            </svg>
-          </button>
           <button id="quickStylesButton" class="icon-button" type="button" aria-label="Styles" aria-haspopup="dialog" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18h1.7a3 3 0 0 0 2.2-5.1 1.7 1.7 0 0 1 1.2-2.9H19a3 3 0 0 0 3-3A9 9 0 0 0 12 3Z"/><circle cx="7.5" cy="10" r=".9"/><circle cx="10.5" cy="6.7" r=".9"/><circle cx="15.4" cy="7.5" r=".9"/><circle cx="7.2" cy="15" r=".9"/></svg>
           </button>
         </div>
       </div>
-      <section id="settingsPanel" class="settings-panel" aria-label="Settings" hidden>
+      <section id="settingsPanel" class="settings-panel glass" aria-label="Settings" hidden>
         <div class="prompt-line">
           <textarea id="promptInput" rows="1" maxlength="2000" spellcheck="false" enterkeyhint="done" aria-label="Prompt" placeholder="Describe a look…"></textarea>
           <button id="stylesButton" class="toggle-button" type="button" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18h1.7a3 3 0 0 0 2.2-5.1 1.7 1.7 0 0 1 1.2-2.9H19a3 3 0 0 0 3-3A9 9 0 0 0 12 3Z"/><circle cx="7.5" cy="10" r=".9"/><circle cx="10.5" cy="6.7" r=".9"/><circle cx="15.4" cy="7.5" r=".9"/><circle cx="7.2" cy="15" r=".9"/></svg><span>Styles</span></button>
@@ -95,7 +95,7 @@
           <button id="quitModelButton" class="toggle-button" type="button">Load model</button>
         </div>
       </section>
-      <dialog id="stylesDialog" class="style-dialog" aria-label="Styles">
+      <dialog id="stylesDialog" class="style-dialog glass" aria-label="Styles">
         <div class="style-search-row">
           <label class="style-search">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>
@@ -124,7 +124,7 @@
           <button id="useStylesButton" class="toggle-button style-save" type="button" hidden>Use</button>
         </div>
       </dialog>
-      <dialog id="styleEditor" class="style-dialog style-editor" aria-labelledby="styleEditorTitle">
+      <dialog id="styleEditor" class="style-dialog style-editor glass" aria-labelledby="styleEditorTitle">
         <form id="styleForm">
           <div class="panel-top">
             <h2 id="styleEditorTitle">Add Style</h2>
@@ -158,7 +158,7 @@
           </div>
         </form>
       </dialog>
-      <div id="error" class="error" role="alert" hidden></div>
+      <div id="error" class="error glass" role="alert" hidden></div>
     </main>
     <script type="module" src="/app.js"></script>
   </body>
