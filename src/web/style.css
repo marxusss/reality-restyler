@@ -1139,7 +1139,31 @@ body:has(#styleEditor[open]) #stylesDialog { visibility: hidden; }
 
 /* While the search field has the keyboard, the styles dialog hangs below the top of the visible area and ends
    above the keyboard, so results stay in view; the bottom toolbar steps aside until the keyboard goes. */
+/* Home Screen app. With viewport-fit=cover, iOS can leave the layout viewport short of the screen by about the
+   status bar (WebKit bug 237961), and dynamic-viewport units and `bottom` stop short with it. home_screen.js marks
+   a full-screen Home Screen app and sets --app-height to the screen's height, so the app hangs from the top at that
+   height and bottom-anchored layers measure from there. */
+html.home-screen-app, .home-screen-app body, .home-screen-app #app {
+  height: var(--app-height, 100lvh);
+}
+.home-screen-app body, .home-screen-app #app {
+  inset: 0 auto auto 0;
+}
+.home-screen-app .prompt-line textarea {
+  max-height: clamp(37px, calc(var(--app-height, 100lvh) - var(--settings-bottom) - var(--lens-height, 0px) - var(--capture-save-height, 0px) - 106px), 83px);
+}
+.home-screen-app #stylesDialog[open] {
+  top: calc(var(--app-height, 100lvh) - var(--styles-bottom));
+  bottom: auto;
+  transform: translateY(-100%);
+  height: min(calc(var(--app-height, 100lvh) * .76), 680px);
+  max-height: calc(var(--app-height, 100lvh) - var(--styles-bottom) - max(12px, env(safe-area-inset-top)));
+}
 @media (any-pointer: coarse) {
+  .home-screen-app .text-entry .settings-panel {
+    bottom: calc(var(--app-height, 100lvh) - var(--keyboard-top, 0px) - var(--keyboard-height, 100lvh) + 8px);
+  }
+  /* While the search field has the keyboard, the styles dialog hangs below the visible area and ends above the keyboard. */
   .text-entry #stylesDialog[open], .home-screen-app .text-entry #stylesDialog[open] {
     top: calc(var(--keyboard-top, 0px) + max(8px, env(safe-area-inset-top)));
     bottom: auto;
