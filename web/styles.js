@@ -197,15 +197,27 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     }
     try {
       const thumbnail = document.createElement("canvas");
-      const scale = Math.min(1, 320 / Math.max(width, height));
-      thumbnail.width = Math.max(1, Math.round(width * scale));
-      thumbnail.height = Math.max(1, Math.round(height * scale));
+      const aspectRatio = 8 / 5;
+      let sourceX = 0;
+      let sourceY = 0;
+      let sourceWidth = width;
+      let sourceHeight = height;
+      if (width / height > aspectRatio) {
+        sourceWidth = height * aspectRatio;
+        sourceX = (width - sourceWidth) / 2;
+      } else {
+        sourceHeight = width / aspectRatio;
+        sourceY = (height - sourceHeight) / 2;
+      }
+      const scale = Math.min(1, 320 / sourceWidth, 200 / sourceHeight);
+      thumbnail.width = Math.max(1, Math.round(sourceWidth * scale));
+      thumbnail.height = Math.max(1, Math.round(sourceHeight * scale));
       const context = thumbnail.getContext("2d", { alpha: false });
       if (isMirrored()) {
         context.translate(thumbnail.width, 0);
         context.scale(-1, 1);
       }
-      context.drawImage(frame, 0, 0, thumbnail.width, thumbnail.height);
+      context.drawImage(frame, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, thumbnail.width, thumbnail.height);
       styleCapturePreview.src = thumbnail.toDataURL("image/webp", 0.78);
       styleCapturePreview.hidden = false;
     } catch (_) {

@@ -111,9 +111,9 @@ test("style names stay original and labels are overlaid within thumbnails", () =
 test("settings and lens gap matches lens and mode gap in portrait and landscape", () => {
   const css = readFileSync(new URL("../web/style.css", import.meta.url), "utf8");
   // Portrait: dock 72 + row gap 8 + lens 36; 14px separates both layers.
-  assert.match(css, /\.settings-panel\s*\{[^}]*bottom: calc\(max\(12px, env\(safe-area-inset-bottom\)\) \+ 88px\)/);
+  assert.match(css, /\.settings-panel\s*\{[^}]*--settings-bottom: calc\(max\(12px, env\(safe-area-inset-bottom\)\) \+ 88px\)/);
   // Landscape uses 68px dock, 5px row gap and 8px separation.
-  assert.match(css, /\.settings-panel \{ bottom: calc\(max\(6px,env\(safe-area-inset-bottom\)\) \+ 75px\)/);
+  assert.match(css, /\.settings-panel \{ --settings-bottom: calc\(max\(6px,env\(safe-area-inset-bottom\)\) \+ 75px\)/);
 });
 
 test("thumbnail crops to fill its card and custom edit icon clears overlay", () => {

@@ -77,11 +77,11 @@
               <output id="stepsValue">4</output>
             </div>
           </label>
-          <button id="resolutionButton" class="resolution-field" type="button" aria-expanded="false" aria-controls="resolutionOptions">
-            <span>Res</span>
-            <span id="resolutionValue">512</span>
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
-          </button>
+          <div class="resolution-field" role="group" aria-label="Resolution">
+            <button id="decreaseResolution" type="button" aria-label="Decrease resolution" disabled>−</button>
+            <output id="resolutionValue" aria-label="Current resolution">512</output>
+            <button id="increaseResolution" type="button" aria-label="Increase resolution">+</button>
+          </div>
           <button id="upscaleButton" class="toggle-button" type="button" aria-pressed="true">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 15v5h5M20 9V4h-5"/>
@@ -89,13 +89,6 @@
             </svg>
             <span>Upscale</span>
           </button>
-        </div>
-        <div id="resolutionOptions" class="resolution-options" role="group" aria-label="Resolution" hidden>
-          <button type="button" value="512" aria-pressed="true">512</button>
-          <button type="button" value="640" aria-pressed="false">640</button>
-          <button type="button" value="768" aria-pressed="false">768</button>
-          <button type="button" value="896" aria-pressed="false">896</button>
-          <button type="button" value="1024" aria-pressed="false">1024</button>
         </div>
         <div class="setting-footer" aria-label="Diagnostics and model">
           <div id="latency" class="latency" title="Model inference, measured round trip, and AI frames per second">Model&nbsp;—&nbsp;ms · RTT&nbsp;—&nbsp;ms · —&nbsp;AI&nbsp;FPS</div>
@@ -148,8 +141,10 @@
           <img id="styleCapturePreview" width="320" height="200" alt="Captured style" hidden>
           <p id="styleEditorError" class="style-error" role="alert" hidden></p>
           <div class="style-toolbar style-toolbar-bottom">
-            <button id="captureStyleButton" class="toggle-button" type="button">Capture style</button>
-            <button id="deleteStyleButton" class="toggle-button style-delete" type="button" hidden>Delete</button>
+            <div class="style-editor-actions">
+              <button id="captureStyleButton" class="toggle-button" type="button">Capture style</button>
+              <button id="deleteStyleButton" class="toggle-button style-delete" type="button" hidden>Delete</button>
+            </div>
             <button class="toggle-button style-save" type="submit">Save</button>
           </div>
         </form>

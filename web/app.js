@@ -27,9 +27,10 @@ const latency = $("latency");
 const promptInput = $("promptInput");
 const stepsInput = $("stepsInput");
 const stepsValue = $("stepsValue");
-const resolutionButton = $("resolutionButton");
 const resolutionValue = $("resolutionValue");
-const resolutionOptions = $("resolutionOptions");
+const decreaseResolution = $("decreaseResolution");
+const increaseResolution = $("increaseResolution");
+const resolutions = [512, 640, 768, 896, 1024];
 let resolution = Number(resolutionValue.textContent);
 const lensBar = $("lensBar");
 const upscaleButton = $("upscaleButton");
@@ -1225,24 +1226,24 @@ async function toggleFlash() {
 }
 
 function selectResolution(value) {
-  const options = [...resolutionOptions.querySelectorAll("button")];
-  if (!options.some(option => Number(option.value) === value)) return;
+  const index = resolutions.indexOf(value);
+  if (index < 0) return false;
   resolution = value;
   resolutionValue.textContent = String(value);
-  for (const option of options) option.setAttribute("aria-pressed", String(Number(option.value) === value));
+  decreaseResolution.disabled = index === 0;
+  increaseResolution.disabled = index === resolutions.length - 1;
+  return true;
 }
 
-function setResolutionOptions(open) {
-  resolutionOptions.hidden = !open;
-  resolutionButton.setAttribute("aria-expanded", String(open));
-  scheduleErrorPosition();
+function stepResolution(direction) {
+  const next = resolutions[resolutions.indexOf(resolution) + direction];
+  if (selectResolution(next)) void applySettings();
 }
 
 function setPanel(open) {
   if (!open && settingsPanel.contains(document.activeElement)) dismissKeyboard();
   settingsPanel.hidden = !open;
   if (open) fitPrompt();
-  else setResolutionOptions(false);
   settingsButton.setAttribute("aria-expanded", String(open));
   scheduleErrorPosition();
 }
@@ -1318,25 +1319,8 @@ stepsInput.addEventListener("input", () => {
   markSettingsDirty();
 });
 stepsInput.addEventListener("change", () => void applySettings());
-resolutionButton.addEventListener("click", () => {
-  const open = resolutionOptions.hidden;
-  setResolutionOptions(open);
-  if (open) resolutionOptions.querySelector('[aria-pressed="true"]')?.focus();
-});
-resolutionOptions.addEventListener("click", event => {
-  const option = event.target.closest("button");
-  if (!option) return;
-  selectResolution(Number(option.value));
-  setResolutionOptions(false);
-  resolutionButton.focus();
-  void applySettings();
-});
-resolutionOptions.addEventListener("keydown", event => {
-  if (event.key !== "Escape") return;
-  event.preventDefault();
-  setResolutionOptions(false);
-  resolutionButton.focus();
-});
+decreaseResolution.addEventListener("click", () => stepResolution(-1));
+increaseResolution.addEventListener("click", () => stepResolution(1));
 promptInput.addEventListener("input", () => {
   fitPrompt();
   schedulePromptApply();
