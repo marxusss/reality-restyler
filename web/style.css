@@ -626,8 +626,8 @@ textarea:focus {
   background: rgba(255,255,255,.06);
 }
 .style-card[aria-pressed="true"] {
-  outline: 4px solid #a7f4d4;
-  outline-offset: -4px;
+  outline: 8px solid #a7f4d4;
+  outline-offset: -8px;
   background: rgba(145,213,189,.16);
 }
 .style-card:disabled {
