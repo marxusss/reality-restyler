@@ -96,18 +96,25 @@
         </div>
       </section>
       <dialog id="stylesDialog" class="style-dialog" aria-label="Styles">
-        <button id="closeStylesButton" class="icon-button small" type="button" aria-label="Close styles">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m6 6 12 12M18 6 6 18"/>
-          </svg>
-        </button>
+        <div class="style-search-row">
+          <label class="style-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>
+            <input id="styleSearch" type="search" placeholder="Search styles" aria-label="Search styles" aria-controls="styleList" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+          </label>
+          <button id="closeStylesButton" class="icon-button small" type="button" aria-label="Close styles" autofocus>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12M18 6 6 18"/>
+            </svg>
+          </button>
+        </div>
         <div id="styleList" class="style-list" role="region" aria-label="Style library" tabindex="0">
-          <section id="customStyleSection" aria-labelledby="customStylesTitle" hidden>
-            <h3 id="customStylesTitle">Custom Styles</h3>
+          <section id="customStyleSection" class="style-group" data-group="Custom Styles" aria-labelledby="customStylesTitle" hidden>
+            <h3><button class="style-group-header" type="button" aria-expanded="true" aria-controls="customStyles"><span id="customStylesTitle">Custom Styles</span><span class="style-group-count"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button></h3>
             <div id="customStyles" class="style-grid"></div>
           </section>
           <p id="styleStorageError" class="style-error" role="alert" hidden></p>
-          <div id="presetStyles" class="style-grid"></div>
+          <div id="presetStyles" class="style-groups"></div>
+          <p id="styleSearchEmpty" class="style-empty" role="status" hidden>No styles match</p>
           <p id="catalogError" class="style-error" role="alert" hidden></p>
         </div>
         <p id="styleCombineError" class="style-error" role="alert" hidden></p>

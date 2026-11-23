@@ -1,7 +1,47 @@
+const customGroup = "Custom Styles";
+const collapsedKey = "realityRestyle.collapsedStyleGroups";
+const chevron = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>';
+
+// Catalog groups keep the order in which they first appear.
+export function groupStyles(styles) {
+  const groups = new Map();
+  for (const style of styles) {
+    const name = style.group || "Other";
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(style);
+  }
+  return [...groups].map(([name, items]) => ({name, styles: items}));
+}
+
+export function styleSearchText(style, group = style.group || "") {
+  return {
+    label: `${style.name} ${group}`.toLowerCase(),
+    words: String(style.prompt || "").toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean)
+  };
+}
+
+// Every query word must appear in the name or group, or start a word of the prompt,
+// so "cat" finds Cat people without matching "delicate".
+export function matchesStyleSearch(text, query) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return words.every(word => text.label.includes(word) || text.words.some(promptWord => promptWord.startsWith(word)));
+}
+
+function openStorage(storage) {
+  if (storage !== undefined) return storage;
+  try { return window.localStorage; } catch (_) { return null; }
+}
+
 // Custom styles are persisted and merged on the PC, not in the browser.
-export function mountStyles({promptInput, applyPromptNow, request, getRenderedFrame, isMirrored, fitPrompt = () => {}, closeSettings}) {
+export function mountStyles({promptInput, applyPromptNow, request, getRenderedFrame, isMirrored, fitPrompt = () => {}, closeSettings, storage}) {
   const $ = id => document.getElementById(id);
   const stylesDialog = $("stylesDialog");
+  const styleSearch = $("styleSearch");
+  const styleSearchEmpty = $("styleSearchEmpty");
+  const customSection = $("customStyleSection");
+  const store = openStorage(storage);
+  const searchIndex = new WeakMap();
+  let catalogLoaded = false;
   const styleEditor = $("styleEditor");
   const styleForm = $("styleForm");
   const styleName = $("styleName");
@@ -16,6 +56,83 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   let customStylesSync = Promise.resolve();
   let syncedStyles = [];
   const maxStyles = 5;
+  const collapsedGroups = new Set(readCollapsedGroups());
+
+  function readCollapsedGroups() {
+    try {
+      const saved = JSON.parse(store?.getItem(collapsedKey) || "[]");
+      return Array.isArray(saved) ? saved.filter(name => typeof name === "string") : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function toggleGroup(section) {
+    // A search shows every match, so groups only fold while the field is empty.
+    if (styleSearch.value.trim()) return;
+    const name = section.dataset.group;
+    if (collapsedGroups.has(name)) collapsedGroups.delete(name);
+    else collapsedGroups.add(name);
+    try { store?.setItem(collapsedKey, JSON.stringify([...collapsedGroups])); } catch (_) {}
+    applyStyleFilter();
+  }
+
+  function applyStyleFilter() {
+    const query = styleSearch.value.trim();
+    const searching = Boolean(query);
+    let matches = 0;
+    for (const section of stylesDialog.querySelectorAll(".style-group")) {
+      const grid = section.querySelector(".style-grid");
+      const cards = [...grid.children];
+      let visible = 0;
+      for (const card of cards) {
+        const text = searchIndex.get(card);
+        card.hidden = searching && !(text && matchesStyleSearch(text, query));
+        if (!card.hidden) visible += 1;
+      }
+      matches += visible;
+      section.hidden = !visible;
+      const expanded = searching || !collapsedGroups.has(section.dataset.group);
+      grid.hidden = !expanded;
+      const header = section.querySelector(".style-group-header");
+      header.setAttribute("aria-expanded", String(expanded));
+      header.setAttribute("aria-disabled", String(searching));
+      section.querySelector(".style-group-count").textContent = String(visible);
+    }
+    styleSearchEmpty.hidden = !(searching && catalogLoaded && matches === 0);
+    if (!styleSearchEmpty.hidden) styleSearchEmpty.textContent = `No styles match \u201c${query}\u201d`;
+  }
+
+  function renderStyleGroups(container, styles) {
+    const sections = groupStyles(styles).map(({name, styles: items}, index) => {
+      const section = document.createElement("section");
+      section.className = "style-group";
+      section.dataset.group = name;
+      section.setAttribute("aria-label", name);
+      const heading = document.createElement("h3");
+      const header = document.createElement("button");
+      header.type = "button";
+      header.className = "style-group-header";
+      header.innerHTML = chevron;
+      const title = document.createElement("span");
+      title.className = "style-group-name";
+      title.textContent = name;
+      const count = document.createElement("span");
+      count.className = "style-group-count";
+      header.prepend(title, count);
+      const grid = document.createElement("div");
+      grid.className = "style-grid";
+      grid.id = `styleGroup${index}`;
+      header.setAttribute("aria-controls", grid.id);
+      header.addEventListener("click", () => toggleGroup(section));
+      heading.append(header);
+      section.append(heading, grid);
+      renderStyleCards(grid, items, false, name);
+      return section;
+    });
+    container.replaceChildren(...sections);
+    applyStyleFilter();
+  }
 
   function setStyleError(element, message = "") {
     element.textContent = message;
@@ -86,7 +203,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     }
   }
 
-  function renderStyleCards(container, styles, editable = false) {
+  function renderStyleCards(container, styles, editable = false, group = "") {
     const cards = styles.map(style => {
       const button = document.createElement("button");
       button.type = "button";
@@ -122,7 +239,10 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
           setStyleSelection(selected);
         }
       });
-      if (!editable) return button;
+      if (!editable) {
+        searchIndex.set(button, styleSearchText(style, group));
+        return button;
+      }
       const card = document.createElement("div");
       card.className = "custom-style-card";
       const edit = document.createElement("button");
@@ -132,6 +252,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       edit.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4.5-1 10.2-10.2a2.1 2.1 0 0 0-3-3L5.5 16 4 20Z"/></svg>';
       edit.addEventListener("click", () => openStyleEditor(style));
       card.append(button, edit);
+      searchIndex.set(card, styleSearchText(style, group));
       return card;
     });
     container.replaceChildren(...cards);
@@ -140,8 +261,8 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
 
   function renderCustomStyles() {
     const styles = syncedStyles.filter(style => !style.deleted);
-    $("customStyleSection").hidden = !styles.length;
-    renderStyleCards($("customStyles"), styles, true);
+    renderStyleCards($("customStyles"), styles, true, customGroup);
+    applyStyleFilter();
   }
 
   async function openStyles() {
@@ -155,6 +276,8 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     renderCustomStyles();
     closeSettings();
     stylesDialog.show();
+    styleSearch.value = "";
+    applyStyleFilter();
     for (const button of [$("stylesButton"), $("quickStylesButton")]) {
       button.setAttribute("aria-expanded", "true");
     }
@@ -164,7 +287,9 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     try {
       const response = await fetch("/styles/catalog.json");
       if (!response.ok) throw new Error();
-      renderStyleCards(presetStyles, await response.json());
+      const styles = await response.json();
+      catalogLoaded = true;
+      renderStyleGroups(presetStyles, styles);
     } catch (_) {
       setStyleError(catalogError, "Could not load styles.");
     }
@@ -288,7 +413,22 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       button.setAttribute("aria-expanded", expanded);
     }
   };
-  stylesDialog.addEventListener("close", updateStylesExpanded);
+  stylesDialog.addEventListener("close", () => {
+    styleSearch.blur();
+    updateStylesExpanded();
+  });
+  customSection.querySelector(".style-group-header").addEventListener("click", () => toggleGroup(customSection));
+  styleSearch.addEventListener("input", () => {
+    applyStyleFilter();
+    $("styleList").scrollTop = 0;
+  });
+  styleSearch.addEventListener("keydown", event => {
+    // Search runs as you type; Enter only puts the keyboard away so the results show.
+    if (event.key === "Enter") {
+      event.preventDefault();
+      styleSearch.blur();
+    }
+  });
   $("stylesButton").addEventListener("click", () => void openStyles());
   $("quickStylesButton").addEventListener("click", () => void openStyles());
   $("combineStylesButton").addEventListener("click", () => setStyleSelection(styleSelection === null ? startStyleSelection() : null));

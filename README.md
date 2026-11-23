@@ -13,13 +13,12 @@
 </p>
 
 <p align="center">
-  <a href="media/demo.mp4?raw=true"><img src="media/demo.gif" width="660" alt="Reality Restyling demo cycling through voxel, painting, and pencil sketch styles"></a>
+  <a href="media/demo.mp4?raw=true"><img src="media/demo.gif" width="660" alt="Reality Restyling live camera cycling through artistic styles"></a>
   <br>
   <a href="media/demo.mp4?raw=true">Full desktop demo (MP4)</a>
   <br>
   <sub>Demo from the development build on an RTX 5090.</sub>
   <br>
-  <em>(Note: The GIF encoding has reduced the color range to 95 colors in this demo.)</em>
 </p>
 
 ## Features
@@ -45,7 +44,6 @@ With Tailscale connected on both devices, open the phone link from the Windows l
   <br>
   <a href="media/phone.mp4?raw=true">Full phone demo (MP4)</a>
   <br>
-  <em>(Note: The GIF encoding has reduced the color range to 255 colors in this demo.)</em>
 </p>
 
 [Phone setup and troubleshooting](docs/setup.md)

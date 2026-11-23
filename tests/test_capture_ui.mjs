@@ -226,11 +226,12 @@ test("styles toggle closed and Settings can take over", () => {
 test("a Home Screen app fills the screen from the top at the screen height", () => {
   const css = readFileSync(new URL("../src/web/style.css", import.meta.url), "utf8");
   const home = css.slice(css.indexOf("/* Home Screen app."));
+  const homeHeightRules = home.split("/* While the search field has the keyboard")[0];
   assert.match(home, /html\.home-screen-app, \.home-screen-app body, \.home-screen-app #app\s*\{\s*height: var\(--app-height, 100lvh\);/);
   assert.match(home, /\.home-screen-app body, \.home-screen-app #app\s*\{\s*inset: 0 auto auto 0;/);
   assert.match(home, /\.home-screen-app #stylesDialog\[open\]\s*\{[^}]*top: calc\(var\(--app-height, 100lvh\) - var\(--styles-bottom\)\);[^}]*bottom: auto;/);
   assert.match(home, /\.home-screen-app \.text-entry \.settings-panel\s*\{\s*bottom: calc\(var\(--app-height, 100lvh\) - var\(--keyboard-top, 0px\)/);
-  assert.doesNotMatch(home, /dvh/);
+  assert.doesNotMatch(homeHeightRules, /dvh/);
 });
 
 test("Home Screen height is the screen's, even when iOS reports display-mode browser", async () => {
