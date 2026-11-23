@@ -26,7 +26,7 @@ body, #app {
   user-select: none;
   -webkit-touch-callout: none;
 }
-textarea, input[type="text"] {
+textarea, input[type="text"], input[type="search"] {
   -webkit-user-select: text;
   user-select: text;
   -webkit-touch-callout: default;
@@ -542,6 +542,53 @@ textarea:focus {
   overflow: hidden;
   background: rgba(27,27,27,.62);
 }
+/* Search shares the top row with Close: one flat capsule on the glass, never a second layer of glass. */
+.style-search-row {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin: -2px -2px 8px 0;
+}
+.style-search-row #closeStylesButton { margin: 0; }
+.style-search {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px 0 10px;
+  border-radius: 17px;
+  background: var(--fill, rgba(255,255,255,.1));
+  color: rgba(235,238,242,.58);
+}
+.style-search:focus-within { background: var(--fill-strong, rgba(255,255,255,.2)); }
+.style-search svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.style-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  color: #f4f5f6;
+  font-size: 16px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.style-search input::placeholder { color: rgba(235,238,242,.5); }
+.style-search input::-webkit-search-decoration { -webkit-appearance: none; }
 #closeStylesButton, #closeStyleEditorButton {
   align-self: flex-end;
   margin-bottom: 5px;
@@ -570,10 +617,52 @@ textarea:focus {
   padding-left: 3px;
   font-size: 13px;
 }
-#customStyleSection {
-  margin-bottom: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(255,255,255,.1);
+/* Groups are a header line over their grid: no card or fill around a group. */
+.style-group[hidden], .style-grid[hidden], .style-card[hidden], .custom-style-card[hidden], .style-empty[hidden] {
+  display: none;
+}
+.style-dialog .style-group h3 { margin: 0; padding: 0; }
+.style-group-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 4px 0 3px;
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,.92);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  text-align: left;
+  cursor: pointer;
+}
+.style-group-count {
+  color: rgba(235,238,242,.5);
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.style-group-header svg {
+  width: 17px;
+  height: 17px;
+  margin-left: auto;
+  fill: none;
+  stroke: rgba(235,238,242,.6);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform .18s ease;
+}
+.style-group-header[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.style-group-header[aria-disabled="true"] { cursor: default; }
+.style-group-header[aria-disabled="true"] svg { visibility: hidden; }
+.style-group .style-grid { padding-bottom: 10px; }
+.style-empty {
+  margin: 32px 0;
+  color: rgba(235,238,242,.62);
+  font-size: 14px;
+  text-align: center;
 }
 .style-grid {
   display: grid;
@@ -978,3 +1067,16 @@ textarea:focus {
 }
 /* Opening the style editor should not leave a second glass dialog visible. */
 body:has(#styleEditor[open]) #stylesDialog { visibility: hidden; }
+
+/* While the search field has the keyboard, the styles dialog hangs below the top of the visible area and ends
+   above the keyboard, so results stay in view; the bottom toolbar steps aside until the keyboard goes. */
+@media (any-pointer: coarse) {
+  .text-entry #stylesDialog[open], .home-screen-app .text-entry #stylesDialog[open] {
+    top: calc(var(--keyboard-top, 0px) + max(8px, env(safe-area-inset-top)));
+    bottom: auto;
+    transform: none;
+    height: calc(var(--keyboard-height, 100dvh) - max(8px, env(safe-area-inset-top)) - 8px);
+    max-height: none;
+  }
+  .text-entry #stylesDialog .style-toolbar, .text-entry #styleCombineError { display: none; }
+}
