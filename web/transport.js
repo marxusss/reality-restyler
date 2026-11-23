@@ -1,11 +1,31 @@
+import { cameraFrameSize } from "./frame_encoding.js";
+
 // Own the connection handshake; camera lifecycle and UI remain in app.js.
-export async function openWebRTC(stream, {created, isCurrent, onTrack, onState, offer}) {
+export async function setWebRTCInputResolution(peer, resolution) {
+  const sender = peer.getSenders().find(sender => sender.track?.kind === "video");
+  if (!sender) return;
+  try {
+    const {width, height} = sender.track.getSettings();
+    if (!width || !height) return;
+    const [targetWidth, targetHeight] = cameraFrameSize(width, height, resolution);
+    const parameters = sender.getParameters();
+    if (!parameters.encodings?.length) return;
+    parameters.encodings[0].scaleResolutionDownBy = Math.max(1, width / targetWidth, height / targetHeight);
+    await sender.setParameters(parameters);
+  } catch (error) {
+    // Input scaling is an optimization; do not interrupt an otherwise working camera.
+    console.warn("WebRTC input downscaling unavailable:", error);
+  }
+}
+
+export async function openWebRTC(stream, {created, isCurrent, onTrack, onState, offer, resolution}) {
   const peer = new RTCPeerConnection({iceServers: []});
   created(peer);
   peer.addEventListener("track", event => onTrack(peer, event));
   peer.addEventListener("connectionstatechange", () => onState(peer));
   for (const track of stream.getTracks()) peer.addTrack(track, stream);
   await peer.setLocalDescription(await peer.createOffer());
+  await setWebRTCInputResolution(peer, resolution);
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => finish(new Error("Camera connection timed out.")), 15000);
     function finish(error) {
