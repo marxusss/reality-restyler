@@ -1,3 +1,4 @@
+import importlib.util
 import sys
 import unittest
 from contextlib import redirect_stdout
@@ -10,6 +11,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from runtime import PROMPT_CACHE_SIZE, Runtime, combine_style_prompts
 from runtime_settings import DEFAULT_SETTINGS, normalize_settings
 from timing import TimingWindow
+
+HAS_TORCH = importlib.util.find_spec("torch") is not None
+needs_torch = unittest.skipUnless(HAS_TORCH, "needs torch, which this machine does not have installed")
 
 
 class RuntimeSettingsTests(unittest.TestCase):
@@ -62,6 +66,7 @@ class RuntimeSettingsTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     normalize_settings(payload)
 
+    @needs_torch
     def test_cold_prompt_encode_uses_inference_mode(self):
         import torch
 
@@ -88,6 +93,7 @@ class RuntimeSettingsTests(unittest.TestCase):
         self.assertEqual(runtime._pipe.calls, 1)
         synchronize.assert_called_once_with()
 
+    @needs_torch
     def test_prompt_cache_is_bounded_and_keeps_recent_prompts(self):
         import torch
 
