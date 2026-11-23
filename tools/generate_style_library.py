@@ -12,6 +12,17 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+# Groups in the order the styles dialog shows them. Catalog entries of one group sit together, in this order.
+GROUPS = (
+    "Painting",
+    "Drawing & print",
+    "Photography & light",
+    "Animation & comics",
+    "Craft & texture",
+    "Graphic & poster",
+    "Games & 3D",
+    "Strange",
+)
 SOURCE_URL = "https://matplinta.github.io/t2i-krea-2-style-library/data/styles.json"
 SOURCE_IDS = {
     "anime": "anime-style",
@@ -73,8 +84,8 @@ SOURCE_IDS = {
 }
 
 
-def load_catalog():
-    path = ROOT / "src" / "web" / "styles" / "catalog.json"
+def load_catalog(path=None):
+    path = Path(path) if path else ROOT / "src" / "web" / "styles" / "catalog.json"
     entries = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(entries, list):
         raise SystemExit("Style catalog must be a list.")
@@ -86,6 +97,12 @@ def load_catalog():
             raise SystemExit(f"Invalid style entry: {entry.get('id')}")
         if entry.get("thumbnail") != f"/styles/{entry['id']}.webp":
             raise SystemExit(f"Invalid thumbnail path: {entry['id']}")
+        if entry.get("group") not in GROUPS:
+            raise SystemExit(f"Unknown style group for {entry['id']}: {entry.get('group')!r}")
+    order = [GROUPS.index(entry["group"]) for entry in entries]
+    for index in range(1, len(order)):
+        if order[index] < order[index - 1]:
+            raise SystemExit(f"Style groups must be contiguous and in order: {entries[index]['id']}")
     return entries
 
 
@@ -150,6 +167,7 @@ def main():
     parser.add_argument("--models-dir", default=os.environ.get("REALITY_RESTYLE_MODELS_DIR", str(ROOT / "models")))
     parser.add_argument("--no-generate", action="store_true")
     parser.add_argument("--only", nargs="*", help="Render selected style IDs")
+    parser.add_argument("--missing", action="store_true", help="Render only styles without a thumbnail")
     parser.add_argument("--extract-to")
     args = parser.parse_args()
     entries = load_catalog()
@@ -158,6 +176,8 @@ def main():
     if unknown:
         parser.error(f"Unknown style IDs: {sorted(unknown)}")
     selected = [entry for entry in entries if not args.only or entry["id"] in args.only]
+    if args.missing:
+        selected = [entry for entry in selected if not (ROOT / "src" / "web" / "styles" / f"{entry['id']}.webp").is_file()]
     if args.extract_to:
         target = Path(args.extract_to).resolve()
         try:

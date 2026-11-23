@@ -1,488 +1,856 @@
 [
   {
-    "id": "anime",
-    "name": "Anime",
-    "prompt": "Use clean, confident linework, crisp cel shading and subtle gradients. Preserve identity, pose, expression and scene; keep scene intact",
-    "thumbnail": "/styles/anime.webp"
-  },
-  {
-    "id": "hand-painted-animation",
-    "name": "Hand-painted fantasy animation",
-    "prompt": "Use soft, hand-painted animation textures with watercolor-like light and carefully observed natural details. Favor rounded expressive shapes, layered foliage, warm atmospheric color and a quiet sense of wonder, balancing a cozy everyday mood with a hint of gentle fantasy., keep scene intact",
-    "thumbnail": "/styles/hand-painted-animation.webp"
-  },
-  {
-    "id": "manga",
-    "name": "Manga",
-    "prompt": "Render with precise black ink contours, expressive faces and dramatic panel-like contrast. Use fine hatching or screentone dots for shadow, clear white highlights and purposeful line weight, giving the image the energetic, carefully composed look of a printed graphic story., keep scene intact",
-    "thumbnail": "/styles/manga.webp"
-  },
-  {
-    "id": "technical-drawing",
-    "name": "Technical drawing",
-    "prompt": "Use disciplined drafting lines, consistent stroke weights and measured geometric construction. Define edges with clean contours, restrained labels or guide marks and minimal shading, so the result feels engineered and legible while the existing forms and relationships remain clear., keep scene intact",
-    "thumbnail": "/styles/technical-drawing.webp"
-  },
-  {
-    "id": "doodle",
-    "name": "Simple doodle",
-    "prompt": "Reduce the scene to playful, uneven hand-drawn outlines and a few simple color patches. Let lines wobble, proportions feel informal and details stay sparse, as if quickly sketched in a notebook by an untrained but imaginative hand., keep scene intact",
-    "thumbnail": "/styles/doodle.webp"
-  },
-  {
-    "id": "noir-animation",
-    "name": "Noir animation",
-    "prompt": "Simplify forms into elegant angular silhouettes, strong curved contours and sharply separated shadow shapes. Use a restrained noir palette with decisive highlights, clean graphic edges and expressive poses, creating a sleek animated crime-story mood without adding unnecessary detail., keep scene intact",
-    "thumbnail": "/styles/noir-animation.webp"
-  },
-  {
-    "id": "corporate-memphis",
-    "name": "Corporate Memphis",
-    "prompt": "Build figures from rounded geometric shapes, tube-like limbs and simplified anatomy. Apply flat cheerful color, minimal shadows and spacious clean forms, with playful asymmetry and an approachable presentation-illustration mood rather than naturalistic surface detail., keep scene intact",
-    "thumbnail": "/styles/corporate-memphis.webp"
-  },
-  {
-    "id": "travel-poster",
-    "name": "Flat travel poster",
-    "prompt": "Compose the scene from bold flat planes, angular cut-paper shapes and a compact vintage palette. Use simplified distant landmarks, confident silhouettes and subtle printed texture, like a destination poster designed for quick recognition from across a room., keep scene intact",
-    "thumbnail": "/styles/travel-poster.webp"
-  },
-  {
     "id": "post-impressionist",
     "name": "Post-impressionist brushwork",
+    "group": "Painting",
     "prompt": "Apply thick directional brush marks that curl and ripple across both subjects and surroundings. Layer vivid blues, yellows and greens in energetic bands, allowing visible paint texture and rhythmic movement to shape the light, sky and solid forms., keep scene intact",
     "thumbnail": "/styles/post-impressionist.webp"
   },
   {
-    "id": "cubism",
-    "name": "Cubism",
-    "prompt": "Repaint the existing subject and setting as a cubist composition of opaque, overlapping painted planes and fractured contours. Let adjacent facets shift viewpoint while keeping forms recognizable; flatten depth with muted ochre, slate, cream and blue, add visible brush texture, and avoid translucent polygon overlays., keep scene intact",
-    "thumbnail": "/styles/cubism.webp"
-  },
-  {
     "id": "watercolor-ink",
     "name": "Wet-on-wet watercolor ink",
+    "group": "Painting",
     "prompt": "Let translucent pigments bloom and bleed through damp paper, with soft-edged color pools beside selective dark ink lines. Preserve airy whites, delicate granulation and unexpected overlaps, giving the image a fluid handmade finish instead of crisp digital edges., keep scene intact",
     "thumbnail": "/styles/watercolor-ink.webp"
   },
   {
+    "id": "impasto-oil",
+    "name": "Impasto oil painting",
+    "group": "Painting",
+    "prompt": "Use thick oil paint and raised palette-knife marks, with visible ridges and directional strokes following existing forms. Preserve the image structure and recognizable details, keep scene intact",
+    "thumbnail": "/styles/impasto-oil.webp"
+  },
+  {
+    "id": "pointillist-painting",
+    "name": "Pointillist painting",
+    "group": "Painting",
+    "prompt": "Build color and volume from dense, distinct paint dots that follow existing contours and light. Vary dot size and hue while preserving the original forms and arrangement, keep scene intact",
+    "thumbnail": "/styles/pointillist-painting.webp"
+  },
+  {
+    "id": "cubism",
+    "name": "Cubism",
+    "group": "Painting",
+    "prompt": "Repaint the existing subject and setting as a cubist composition of opaque, overlapping painted planes and fractured contours. Let adjacent facets shift viewpoint while keeping forms recognizable; flatten depth with muted ochre, slate, cream and blue, add visible brush texture, and avoid translucent polygon overlays., keep scene intact",
+    "thumbnail": "/styles/cubism.webp"
+  },
+  {
+    "id": "surrealist-painting",
+    "name": "Surrealist painting",
+    "group": "Painting",
+    "prompt": "Give existing forms a precise dreamlike treatment through unusual color relationships and subtle distortions of scale and surface. Keep the same subjects and layout, with no added imagery, keep scene intact",
+    "thumbnail": "/styles/surrealist-painting.webp"
+  },
+  {
+    "id": "renaissance-fresco",
+    "name": "Renaissance fresco",
+    "group": "Painting",
+    "prompt": "Render in matte mineral pigments on plaster, with balanced form modeling, calm earth colors, soft depth and subtle fresco grain. Preserve the existing pose and scene layout, keep scene intact",
+    "thumbnail": "/styles/renaissance-fresco.webp"
+  },
+  {
+    "id": "tenebrism",
+    "name": "Tenebrism",
+    "group": "Painting",
+    "prompt": "Baroque tenebrism in oil. Set one sharp pool of light from the upper left against deep, engulfing darkness. Let the existing subject and nearby forms break abruptly into illumination, with almost no soft transition or fill light. Reserve careful, controlled brushwork for the lit passages and leave the shadows deliberately unresolved. Give the scene the theatrical immediacy and focused gravity of Caravaggio's chiaroscuro. Preserve expression, pose, and composition; keep scene intact",
+    "thumbnail": "/styles/tenebrism.webp"
+  },
+  {
     "id": "academic-realism",
     "name": "Academic precision realism",
+    "group": "Painting",
     "prompt": "Render forms with smooth layered tones, measured anatomy, precise edges and controlled reflected light. Build depth through subtle glazes rather than obvious brush marks, maintaining balanced classical composition and careful realism without making the scene feel photographic., keep scene intact",
     "thumbnail": "/styles/academic-realism.webp"
   },
   {
-    "id": "gothic-storybook",
-    "name": "Gothic storybook illustration",
-    "prompt": "Give the scene a whimsical gothic storybook mood with crooked silhouettes, spindly contours and slightly exaggerated proportions. Add scratchy pen texture, crosshatched shadows and muted aged colors, balancing playful charm with a gently macabre atmosphere., keep scene intact",
-    "thumbnail": "/styles/gothic-storybook.webp"
-  },
-  {
-    "id": "crayon-book",
-    "name": "Colored-pencil book illustration",
-    "prompt": "Fill simple outlined shapes with visible wax-crayon strokes, layered pigments and uneven hand pressure. Keep the colors cheerful and tactile, letting small gaps and overlapping marks show through so the result feels colored by hand on paper., keep scene intact",
-    "thumbnail": "/styles/crayon-book.webp"
-  },
-  {
-    "id": "animated-3d",
-    "name": "Expressive 3D animation",
-    "prompt": "Re-render the existing scene as polished 3D animation with smooth sculpted forms, soft material shading and warm cinematic light. Preserve identity, pose, facial expression and every existing scene element; add no props or characters, keep scene intact",
-    "thumbnail": "/styles/animated-3d.webp"
-  },
-  {
-    "id": "low-poly",
-    "name": "Low-poly",
-    "prompt": "Rebuild forms from broad flat-shaded polygons with crisp edges and visible faceted transitions. Simplify small details into angular planes, use a compact coordinated palette and preserve enough structure to make the portrait and surroundings easy to read., keep scene intact",
-    "thumbnail": "/styles/low-poly.webp"
-  },
-  {
-    "id": "claymation",
-    "name": "Claymation",
-    "prompt": "Use tactile stop-motion clay surfaces, subtle fingerprints and miniature-set lighting while retaining the original forms. Preserve identity, pose, expression and scene; keep scene intact",
-    "thumbnail": "/styles/claymation.webp"
-  },
-  {
-    "id": "pop-art",
-    "name": "Pop art",
-    "prompt": "Separate bold flat colors with strong outlines and repeated halftone dots. Use punchy primary hues, graphic shadow blocks and a slightly screen-printed texture, turning the full composition into a crisp poster-like image with lively visual rhythm., keep scene intact",
-    "thumbnail": "/styles/pop-art.webp"
-  },
-  {
-    "id": "etching",
-    "name": "Etching",
-    "prompt": "Construct light and shadow from fine engraved lines, crosshatching and carefully varied mark density. Keep contours sharp, tones monochrome and surface texture consistent, as if the entire image were cut into a metal plate and printed on paper., keep scene intact",
-    "thumbnail": "/styles/etching.webp"
-  },
-  {
-    "id": "mosaic",
-    "name": "Mosaic art",
-    "prompt": "Render the existing scene as a dense mosaic of small hand-cut tiles. Let tile shape and color follow forms already present; add a subtle glazed sheen and tiny diffuse highlights across tile faces, without mirror-like reflections or new details, keep scene intact",
-    "thumbnail": "/styles/mosaic.webp"
-  },
-  {
-    "id": "stained-glass",
-    "name": "Flat stained glass art",
-    "prompt": "Render the existing scene as a flat stained-glass illustration. Simplify each subject and background surface into distinct geometric panes of saturated color, separated by thick dark lead lines that follow the shapes. Keep the panes matte and non-reflective, with no shine, glare or added highlights. Preserve identity, pose, expression and scene; keep scene intact",
-    "thumbnail": "/styles/stained-glass.webp"
-  },
-  {
-    "id": "8-bit",
-    "name": "8-bit pixel art",
-    "prompt": "Translate all contours and shading into hard-edged square pixels with a tightly limited retro palette. Use stepped outlines, chunky blocks and simple contrast patterns, keeping the core pose and scenery recognizable at a glance., keep scene intact",
-    "thumbnail": "/styles/8-bit.webp"
-  },
-  {
-    "id": "voxel-world",
-    "name": "Voxel game art",
-    "prompt": "Construct the image from chunky cubic voxel forms, block-built surfaces and deliberately low-resolution textures. Use clear square silhouettes, stepped terrain and bright game-like colors, translating the person and surroundings into a cohesive miniature world., keep scene intact",
-    "thumbnail": "/styles/voxel-world.webp"
-  },
-  {
-    "id": "sketch",
-    "name": "Loose sketch",
-    "prompt": "Capture the image with loose searching pencil strokes, visible construction lines and varied pressure. Let contours overlap slightly, use sparse hatching for tone and keep the drawing immediate and unfinished, like a confident study made from observation., keep scene intact",
-    "thumbnail": "/styles/sketch.webp"
-  },
-  {
-    "id": "charcoal",
-    "name": "Charcoal rendering",
-    "prompt": "Model the scene through smoky charcoal values, soft smudges and expressive dark marks. Preserve a tactile dusty surface, rich blacks and gentle midtone transitions, with edges that fade into atmosphere while important forms remain clear., keep scene intact",
-    "thumbnail": "/styles/charcoal.webp"
-  },
-  {
-    "id": "vintage-comic",
-    "name": "Vintage comic art",
-    "prompt": "Use bold inked contours, dynamic simplified shapes and coarse halftone shading. Add slightly imperfect print registration, faded paper colors and crisp graphic highlights, creating the worn look of an older illustrated story page., keep scene intact",
-    "thumbnail": "/styles/vintage-comic.webp"
-  },
-  {
-    "id": "stylized-painting",
-    "name": "Hyper-stylized digital painting",
-    "prompt": "Push proportions and shapes into a bold painterly interpretation while keeping the subject recognizable. Combine layered brush texture, simplified color masses and dramatic accents, balancing expressive distortion with a clear composition and deliberate visual hierarchy., keep scene intact",
-    "thumbnail": "/styles/stylized-painting.webp"
-  },
-  {
-    "id": "graffiti",
-    "name": "Graffiti painting",
-    "prompt": "Apply layered graffiti marks across the whole existing image, treating the subject and background together. Use spray-textured edges, energetic contours, paint drips and vivid pigment while preserving the same identity, pose, framing, composition and recognizable setting rather than replacing it., keep scene intact",
-    "thumbnail": "/styles/graffiti.webp"
-  },
-  {
-    "id": "cyberpunk",
-    "name": "Cyberpunk",
-    "prompt": "Apply a restrained cyberpunk illustration treatment to existing shapes: charcoal shadows, sharp cyan and magenta accents and precise digital linework. Preserve the current composition and background structure, keep scene intact",
-    "thumbnail": "/styles/cyberpunk.webp"
-  },
-  {
-    "id": "dark-fantasy-painting",
-    "name": "Moody dark fantasy painting",
-    "prompt": "Render existing forms as a dark fantasy painting with textured brushwork, muted jewel tones, deep but readable shadows and controlled highlights. Keep subjects, background and composition unchanged, keep scene intact",
-    "thumbnail": "/styles/dark-fantasy-painting.webp"
-  },
-  {
-    "id": "concept-art",
-    "name": "Highly polished concept art",
-    "prompt": "Use a polished concept-art finish with precise shape design, controlled painterly texture and clear focal contrast. Refine only the forms already present; preserve all subjects, objects and composition, keep scene intact",
-    "thumbnail": "/styles/concept-art.webp"
-  },
-  {
     "id": "expressionist-painting",
     "name": "Expressionist painting",
+    "group": "Painting",
     "prompt": "Use angular, forceful brushstrokes, expressive contours and tense color contrast across the existing subject and background. Keep forms recognizable and preserve the original composition, keep scene intact",
     "thumbnail": "/styles/expressionist-painting.webp"
   },
   {
     "id": "fauvist-painting",
     "name": "Fauvist painting",
+    "group": "Painting",
     "prompt": "Use vivid non-naturalistic color blocks, confident brushwork, simplified outlines and warm-cool contrast across existing forms. Preserve identity, pose and arrangement, keep scene intact",
     "thumbnail": "/styles/fauvist-painting.webp"
   },
   {
-    "id": "pointillist-painting",
-    "name": "Pointillist painting",
-    "prompt": "Build color and volume from dense, distinct paint dots that follow existing contours and light. Vary dot size and hue while preserving the original forms and arrangement, keep scene intact",
-    "thumbnail": "/styles/pointillist-painting.webp"
+    "id": "gouache",
+    "name": "Gouache illustration",
+    "group": "Painting",
+    "prompt": "Paint the existing image in opaque gouache, with matte color, visible layered brushwork, soft-edged masses and selective crisp details. Preserve current subjects, shapes and composition, keep scene intact",
+    "thumbnail": "/styles/gouache.webp"
   },
   {
-    "id": "surrealist-painting",
-    "name": "Surrealist painting",
-    "prompt": "Give existing forms a precise dreamlike treatment through unusual color relationships and subtle distortions of scale and surface. Keep the same subjects and layout, with no added imagery, keep scene intact",
-    "thumbnail": "/styles/surrealist-painting.webp"
+    "id": "stylized-painting",
+    "name": "Hyper-stylized digital painting",
+    "group": "Painting",
+    "prompt": "Push proportions and shapes into a bold painterly interpretation while keeping the subject recognizable. Combine layered brush texture, simplified color masses and dramatic accents, balancing expressive distortion with a clear composition and deliberate visual hierarchy., keep scene intact",
+    "thumbnail": "/styles/stylized-painting.webp"
   },
   {
-    "id": "impasto-oil",
-    "name": "Impasto oil painting",
-    "prompt": "Use thick oil paint and raised palette-knife marks, with visible ridges and directional strokes following existing forms. Preserve the image structure and recognizable details, keep scene intact",
-    "thumbnail": "/styles/impasto-oil.webp"
+    "id": "concept-art",
+    "name": "Highly polished concept art",
+    "group": "Painting",
+    "prompt": "Use a polished concept-art finish with precise shape design, controlled painterly texture and clear focal contrast. Refine only the forms already present; preserve all subjects, objects and composition, keep scene intact",
+    "thumbnail": "/styles/concept-art.webp"
   },
   {
-    "id": "synthwave",
-    "name": "Synthwave",
-    "prompt": "Apply a graphic 1980s synthwave treatment to the existing forms: dark ink shadows, clean geometric color blocks and controlled neon gradients on current surfaces. Preserve the subject silhouette and existing backdrop, keep scene intact",
-    "thumbnail": "/styles/synthwave.webp"
+    "id": "dark-fantasy-painting",
+    "name": "Moody dark fantasy painting",
+    "group": "Painting",
+    "prompt": "Render existing forms as a dark fantasy painting with textured brushwork, muted jewel tones, deep but readable shadows and controlled highlights. Keep subjects, background and composition unchanged, keep scene intact",
+    "thumbnail": "/styles/dark-fantasy-painting.webp"
   },
   {
-    "id": "art-deco",
-    "name": "Art Deco illustration",
-    "prompt": "Use streamlined Art Deco contours, stepped geometry, balanced symmetry, jewel tones and restrained metallic accents within existing shapes. Preserve the same subjects and composition, keep scene intact",
-    "thumbnail": "/styles/art-deco.webp"
-  },
-  {
-    "id": "renaissance-fresco",
-    "name": "Renaissance fresco",
-    "prompt": "Render in matte mineral pigments on plaster, with balanced form modeling, calm earth colors, soft depth and subtle fresco grain. Preserve the existing pose and scene layout, keep scene intact",
-    "thumbnail": "/styles/renaissance-fresco.webp"
+    "id": "airbrush",
+    "name": "Airbrush illustration",
+    "group": "Painting",
+    "prompt": "Use clean airbrushed tonal transitions, soft gradients bounded by precise edges and controlled highlights over the existing scene. Preserve the source composition and recognizable details, keep scene intact",
+    "thumbnail": "/styles/airbrush.webp"
   },
   {
     "id": "byzantine-tempera",
     "name": "Byzantine tempera",
+    "group": "Painting",
     "prompt": "Use flat tempera color planes, precise dark contours, stylized proportions and restrained gold accents within existing forms. Preserve the same subjects, pose and scene, keep scene intact",
     "thumbnail": "/styles/byzantine-tempera.webp"
   },
   {
     "id": "persian-miniature",
     "name": "Persian miniature painting",
+    "group": "Painting",
     "prompt": "Use fine contours, jewel-toned opaque pigments, flattened depth and intricate pattern contained within existing surfaces. Preserve the original subjects, pose and arrangement, keep scene intact",
     "thumbnail": "/styles/persian-miniature.webp"
   },
   {
     "id": "black-figure-pottery",
     "name": "Greek black-figure painting",
+    "group": "Painting",
     "prompt": "Render existing forms as black-figure painting on matte terracotta, with clean silhouettes and fine incised details. Preserve the current poses, object arrangement and composition, keep scene intact",
     "thumbnail": "/styles/black-figure-pottery.webp"
   },
   {
-    "id": "linocut",
-    "name": "Linocut print",
-    "prompt": "Use broad gouged marks, rough carved edges, bold negative space and limited ink colors, with tactile print grain. Translate existing forms without changing their placement, keep scene intact",
-    "thumbnail": "/styles/linocut.webp"
+    "id": "sketch",
+    "name": "Loose sketch",
+    "group": "Drawing & print",
+    "prompt": "Capture the image with loose searching pencil strokes, visible construction lines and varied pressure. Let contours overlap slightly, use sparse hatching for tone and keep the drawing immediate and unfinished, like a confident study made from observation., keep scene intact",
+    "thumbnail": "/styles/sketch.webp"
   },
   {
-    "id": "embroidery",
-    "name": "Embroidery art",
-    "prompt": "Translate existing forms into stitched textile art: threads follow contours, dense stitches build color areas, and raised fibers sit over woven fabric grain. Preserve the original details and composition, keep scene intact",
-    "thumbnail": "/styles/embroidery.webp"
+    "id": "charcoal",
+    "name": "Charcoal rendering",
+    "group": "Drawing & print",
+    "prompt": "Model the scene through smoky charcoal values, soft smudges and expressive dark marks. Preserve a tactile dusty surface, rich blacks and gentle midtone transitions, with edges that fade into atmosphere while important forms remain clear., keep scene intact",
+    "thumbnail": "/styles/charcoal.webp"
   },
   {
-    "id": "felted-wool",
-    "name": "Felted wool art",
-    "prompt": "Render the scene as needle-felted wool with dense visible fibers, rounded handcrafted surfaces and soft fiber edges. Retain recognizable details, proportions and the full composition, keep scene intact",
-    "thumbnail": "/styles/felted-wool.webp"
+    "id": "conte-pastel",
+    "name": "Conté pastel drawing",
+    "group": "Drawing & print",
+    "prompt": "Render with visible Conté pastel strokes, rubbed tonal blocks, paper tooth and varied pressure, while retaining the original forms and fine visual relationships, keep scene intact",
+    "thumbnail": "/styles/conte-pastel.webp"
   },
   {
-    "id": "paper-collage",
-    "name": "Torn-paper collage",
-    "prompt": "Rebuild the same image from torn and cut matte paper pieces with visible fibers, overlapping sheets and soft cast shadows. Keep each existing form and position, adding no new imagery, keep scene intact",
-    "thumbnail": "/styles/paper-collage.webp"
+    "id": "crayon-book",
+    "name": "Colored-pencil book illustration",
+    "group": "Drawing & print",
+    "prompt": "Fill simple outlined shapes with visible wax-crayon strokes, layered pigments and uneven hand pressure. Keep the colors cheerful and tactile, letting small gaps and overlapping marks show through so the result feels colored by hand on paper., keep scene intact",
+    "thumbnail": "/styles/crayon-book.webp"
   },
   {
-    "id": "bauhaus",
-    "name": "Bauhaus graphic art",
-    "prompt": "Use disciplined geometric construction, asymmetrical balance, primary color fields and clear line derived from the existing forms. Preserve the subject and original layout, keep scene intact",
-    "thumbnail": "/styles/bauhaus.webp"
-  },
-  {
-    "id": "marble-sculpture",
-    "name": "Marble relief",
-    "prompt": "Model existing forms as carved marble relief with subtle stone veining, fine chisel marks, sculpted edges and carved shadows. Preserve the original contours and layout, keep scene intact",
-    "thumbnail": "/styles/marble-sculpture.webp"
-  },
-  {
-    "id": "art-nouveau",
-    "name": "Art Nouveau illustration",
-    "prompt": "Use flowing contours that follow existing forms, flat jewel-tone color and refined line ornament contained within existing shapes. Preserve the original subjects and composition, keep scene intact",
-    "thumbnail": "/styles/art-nouveau.webp"
+    "id": "doodle",
+    "name": "Simple doodle",
+    "group": "Drawing & print",
+    "prompt": "Reduce the scene to playful, uneven hand-drawn outlines and a few simple color patches. Let lines wobble, proportions feel informal and details stay sparse, as if quickly sketched in a notebook by an untrained but imaginative hand., keep scene intact",
+    "thumbnail": "/styles/doodle.webp"
   },
   {
     "id": "ukiyo-e",
     "name": "Japanese woodblock print",
+    "group": "Drawing & print",
     "prompt": "Render the existing scene as a Japanese woodblock print, with flattened color planes, carved outlines, patterned texture within existing forms and restrained ink grain. Preserve silhouettes, pose, framing and background layout, keep scene intact",
     "thumbnail": "/styles/ukiyo-e.webp"
   },
   {
-    "id": "paper-cut",
-    "name": "Paper-cut illustration",
-    "prompt": "Rebuild the existing image from layered cut-paper shapes, crisp cut edges, visible paper fibers and shallow shadows between existing forms. Keep every subject and object in its original position, keep scene intact",
-    "thumbnail": "/styles/paper-cut.webp"
-  },
-  {
-    "id": "gouache",
-    "name": "Gouache illustration",
-    "prompt": "Paint the existing image in opaque gouache, with matte color, visible layered brushwork, soft-edged masses and selective crisp details. Preserve current subjects, shapes and composition, keep scene intact",
-    "thumbnail": "/styles/gouache.webp"
-  },
-  {
     "id": "woodcut",
     "name": "Woodcut print",
+    "group": "Drawing & print",
     "prompt": "Translate existing forms into bold woodcut marks, carved negative space, coarse ink edges and a limited palette. Keep the original composition and recognizable shapes intact, keep scene intact",
     "thumbnail": "/styles/woodcut.webp"
   },
   {
+    "id": "linocut",
+    "name": "Linocut print",
+    "group": "Drawing & print",
+    "prompt": "Use broad gouged marks, rough carved edges, bold negative space and limited ink colors, with tactile print grain. Translate existing forms without changing their placement, keep scene intact",
+    "thumbnail": "/styles/linocut.webp"
+  },
+  {
+    "id": "etching",
+    "name": "Etching",
+    "group": "Drawing & print",
+    "prompt": "Construct light and shadow from fine engraved lines, crosshatching and carefully varied mark density. Keep contours sharp, tones monochrome and surface texture consistent, as if the entire image were cut into a metal plate and printed on paper., keep scene intact",
+    "thumbnail": "/styles/etching.webp"
+  },
+  {
     "id": "lithograph",
     "name": "Contemporary lithograph",
+    "group": "Drawing & print",
     "prompt": "Use flat lithographic color layers, fine grain, confident contour lines and slightly imperfect registration. Preserve existing shapes, placement and scene, keep scene intact",
     "thumbnail": "/styles/lithograph.webp"
   },
   {
     "id": "risograph",
     "name": "Risograph print",
+    "group": "Drawing & print",
     "prompt": "Use a small palette of vivid spot inks, fine halftone grain and subtle color registration offsets across existing forms. Keep all scene elements and their positions unchanged, keep scene intact",
     "thumbnail": "/styles/risograph.webp"
   },
   {
     "id": "screenprint",
     "name": "Screenprint illustration",
+    "group": "Drawing & print",
     "prompt": "Convert existing forms into flat opaque screen-printed color layers with crisp edges, restrained halftone texture and a compact palette. Preserve the current image layout and all existing content, keep scene intact",
     "thumbnail": "/styles/screenprint.webp"
   },
   {
-    "id": "conte-pastel",
-    "name": "Conté pastel drawing",
-    "prompt": "Render with visible Conté pastel strokes, rubbed tonal blocks, paper tooth and varied pressure, while retaining the original forms and fine visual relationships, keep scene intact",
-    "thumbnail": "/styles/conte-pastel.webp"
-  },
-  {
-    "id": "editorial-illustration",
-    "name": "Editorial illustration",
-    "prompt": "Apply a bold editorial illustration treatment with economical linework, simplified shape design, controlled color blocks and subtle print texture. Keep the same subjects, pose and framing, keep scene intact",
-    "thumbnail": "/styles/editorial-illustration.webp"
-  },
-  {
-    "id": "origami",
-    "name": "Folded-paper illustration",
-    "prompt": "Convert the image into a high-detail handmade paper illustration: smooth layered paper shapes form the existing objects, with fine paper grain, crisp stacked edges and gentle folds following their contours. Keep facial features, clothing texture and scene detail clear; avoid large polygonal facets or torn-paper overlays, keep scene intact",
-    "thumbnail": "/styles/origami.webp"
-  },
-  {
-    "id": "mixed-media",
-    "name": "Mixed-media illustration",
-    "prompt": "Combine dry-brush texture, ink-like contours and muted printed grain over existing forms only. Keep the composition and objects fixed; use texture rather than collage elements, keep scene intact",
-    "thumbnail": "/styles/mixed-media.webp"
-  },
-  {
-    "id": "airbrush",
-    "name": "Airbrush illustration",
-    "prompt": "Use clean airbrushed tonal transitions, soft gradients bounded by precise edges and controlled highlights over the existing scene. Preserve the source composition and recognizable details, keep scene intact",
-    "thumbnail": "/styles/airbrush.webp"
-  },
-  {
-    "id": "psychedelic-poster",
-    "name": "Psychedelic poster",
-    "prompt": "Transform the existing image into a vivid psychedelic poster using saturated color shifts and flowing contour patterns that follow existing shapes. Keep face, pose and scene recognizable; add no lettering, symbols or objects, keep scene intact",
-    "thumbnail": "/styles/psychedelic-poster.webp"
-  },
-  {
-    "id": "cel-shaded-cartoon",
-    "name": "Cel-shaded cartoon",
-    "prompt": "Render existing forms as a clean cel-shaded cartoon with crisp contour lines, broad flat colors and two or three clear shadow tones. Preserve expression, proportions and background layout, keep scene intact",
-    "thumbnail": "/styles/cel-shaded-cartoon.webp"
-  },
-  {
-    "id": "comic-halftone",
-    "name": "Comic halftone",
-    "prompt": "Apply visible black halftone dots and limited print shading to existing forms, with dot density following image values. Preserve subject details and composition; no panels, text or speech balloons, keep scene intact",
-    "thumbnail": "/styles/comic-halftone.webp"
-  },
-  {
     "id": "cyanotype-print",
     "name": "Cyanotype print",
+    "group": "Drawing & print",
     "prompt": "Render the scene as a cyanotype print in Prussian blue and pale white, with clear photographic detail and subtle fibrous paper grain. Keep shapes and composition intact, keep scene intact",
     "thumbnail": "/styles/cyanotype-print.webp"
   },
   {
-    "id": "split-color-lighting",
-    "name": "Split-color lighting",
-    "prompt": "Apply broad off-camera color lighting to the existing scene: warm amber across left-facing surfaces and cool cyan across right-facing surfaces, with even natural falloff. Show no lamps, sun or glowing orbs, keep scene intact",
-    "thumbnail": "/styles/split-color-lighting.webp"
+    "id": "technical-drawing",
+    "name": "Technical drawing",
+    "group": "Drawing & print",
+    "prompt": "Use disciplined drafting lines, consistent stroke weights and measured geometric construction. Define edges with clean contours, restrained labels or guide marks and minimal shading, so the result feels engineered and legible while the existing forms and relationships remain clear., keep scene intact",
+    "thumbnail": "/styles/technical-drawing.webp"
   },
   {
-    "id": "rim-lighting",
-    "name": "Rim lighting",
-    "prompt": "Add a restrained cool-white rim light from behind and upper-left, tracing existing hair, shoulders and object edges against shadow. Keep the face naturally exposed and avoid a forehead hotspot; add no objects, keep scene intact",
-    "thumbnail": "/styles/rim-lighting.webp"
+    "id": "gothic-storybook",
+    "name": "Gothic storybook illustration",
+    "group": "Drawing & print",
+    "prompt": "Give the scene a whimsical gothic storybook mood with crooked silhouettes, spindly contours and slightly exaggerated proportions. Add scratchy pen texture, crosshatched shadows and muted aged colors, balancing playful charm with a gently macabre atmosphere., keep scene intact",
+    "thumbnail": "/styles/gothic-storybook.webp"
   },
   {
-    "id": "chromatic-aberration",
-    "name": "Chromatic aberration",
-    "prompt": "Add subtle red-cyan color fringing only at high-contrast edges, strongest near the frame perimeter. Keep the center sharp and forms single, with no blur, duplicate subjects or added shapes, keep scene intact",
-    "thumbnail": "/styles/chromatic-aberration.webp"
+    "id": "editorial-illustration",
+    "name": "Editorial illustration",
+    "group": "Drawing & print",
+    "prompt": "Apply a bold editorial illustration treatment with economical linework, simplified shape design, controlled color blocks and subtle print texture. Keep the same subjects, pose and framing, keep scene intact",
+    "thumbnail": "/styles/editorial-illustration.webp"
   },
   {
-    "id": "blue-hour-cinema",
-    "name": "Blue hour cinema",
-    "prompt": "Use cool blue-violet twilight across the existing scene, with a soft key light from the upper-left of the frame and shadows falling gently right. Keep existing warm lights subdued and preserve all scene content, keep scene intact",
-    "thumbnail": "/styles/blue-hour-cinema.webp"
+    "id": "mixed-media",
+    "name": "Mixed-media illustration",
+    "group": "Drawing & print",
+    "prompt": "Combine dry-brush texture, ink-like contours and muted printed grain over existing forms only. Keep the composition and objects fixed; use texture rather than collage elements, keep scene intact",
+    "thumbnail": "/styles/mixed-media.webp"
   },
   {
     "id": "golden-hour",
     "name": "Golden-hour cinema",
+    "group": "Photography & light",
     "prompt": "Use low warm sunlight from the upper-left of the frame, amber highlights and long soft shadows falling toward the lower-right. Keep shade cool and natural; preserve original colors and composition, keep scene intact",
     "thumbnail": "/styles/golden-hour.webp"
   },
   {
+    "id": "film-noir",
+    "name": "Film noir",
+    "group": "Photography & light",
+    "prompt": "Use classic black-and-white crime-film lighting: a hard key from upper-left cuts across the subject and background, creating broad diagonal shadow shapes, bright sculpted planes and deep negative space. Add subtle silver-gelatin grain, preserve detail and avoid artificial sharpening, keep scene intact",
+    "thumbnail": "/styles/film-noir.webp"
+  },
+  {
+    "id": "blue-hour-cinema",
+    "name": "Blue hour cinema",
+    "group": "Photography & light",
+    "prompt": "Use cool blue-violet twilight across the existing scene, with a soft key light from the upper-left of the frame and shadows falling gently right. Keep existing warm lights subdued and preserve all scene content, keep scene intact",
+    "thumbnail": "/styles/blue-hour-cinema.webp"
+  },
+  {
+    "id": "neon-photo",
+    "name": "Neon photography",
+    "group": "Photography & light",
+    "prompt": "Apply restrained cyan and magenta light from the upper-left across existing surfaces, with luminous edges and deep neutral shadows. Keep surfaces dry and textures natural, keep scene intact",
+    "thumbnail": "/styles/neon-photo.webp"
+  },
+  {
     "id": "window-light",
     "name": "Soft window light",
+    "group": "Photography & light",
     "prompt": "Use broad, soft side lighting from the upper-left of the frame, with even exposure and gentle highlight falloff. Keep facial detail clear and avoid flares or blown highlights, keep scene intact",
     "thumbnail": "/styles/window-light.webp"
   },
   {
     "id": "direct-flash",
     "name": "Direct-flash photography",
+    "group": "Photography & light",
     "prompt": "Use a hard frontal flash slightly above and left of the camera, exposing the existing subject evenly and casting short shadows to the right. Keep colors direct and textures crisp, keep scene intact",
     "thumbnail": "/styles/direct-flash.webp"
   },
   {
-    "id": "neon-photo",
-    "name": "Neon photography",
-    "prompt": "Apply restrained cyan and magenta light from the upper-left across existing surfaces, with luminous edges and deep neutral shadows. Keep surfaces dry and textures natural, keep scene intact",
-    "thumbnail": "/styles/neon-photo.webp"
-  },
-  {
-    "id": "tenebrism",
-    "name": "Tenebrism",
-    "prompt": "Baroque tenebrism in oil. Set one sharp pool of light from the upper left against deep, engulfing darkness. Let the existing subject and nearby forms break abruptly into illumination, with almost no soft transition or fill light. Reserve careful, controlled brushwork for the lit passages and leave the shadows deliberately unresolved. Give the scene the theatrical immediacy and focused gravity of Caravaggio's chiaroscuro. Preserve expression, pose, and composition; keep scene intact",
-    "thumbnail": "/styles/tenebrism.webp"
-  },
-  {
-    "id": "film-noir",
-    "name": "Film noir",
-    "prompt": "Use classic black-and-white crime-film lighting: a hard key from upper-left cuts across the subject and background, creating broad diagonal shadow shapes, bright sculpted planes and deep negative space. Add subtle silver-gelatin grain, preserve detail and avoid artificial sharpening, keep scene intact",
-    "thumbnail": "/styles/film-noir.webp"
+    "id": "instant-film",
+    "name": "Instant film",
+    "group": "Photography & light",
+    "prompt": "Render the frame as a faded instant-camera photo: soft focus, creamy lifted blacks, a slight cyan-green cast in the shadows, warm washed-out highlights, gentle vignette and fine chemical grain. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/instant-film.webp"
   },
   {
     "id": "anamorphic-cinema",
     "name": "Anamorphic cinema",
+    "group": "Photography & light",
     "prompt": "Use a wide cinematic lens character, subtle horizontal flares, oval highlights and gentle edge falloff while retaining framing. Preserve identity, pose, expression and scene; keep scene intact",
     "thumbnail": "/styles/anamorphic-cinema.webp"
   },
   {
-    "id": "fisheye",
-    "name": "Fisheye photography",
-    "prompt": "Apply extreme convex barrel-lens distortion to the existing scene: bend the building edges and riverbank into broad arcs, bulge the centered subject toward the viewer, and stretch forms at the left and right edges. Keep all content in a full-bleed rectangle with no circular mask or black corners, keep scene intact",
-    "thumbnail": "/styles/fisheye.webp"
-  },
-  {
     "id": "tilt-shift",
     "name": "Tilt-shift photography",
+    "group": "Photography & light",
     "prompt": "Use selective focus with a narrow sharp plane and gradual optical blur toward the frame edges. Preserve identity, pose, expression and scene; keep scene intact",
     "thumbnail": "/styles/tilt-shift.webp"
   },
   {
+    "id": "fisheye",
+    "name": "Fisheye photography",
+    "group": "Photography & light",
+    "prompt": "Apply extreme convex barrel-lens distortion to the existing scene: bend the building edges and riverbank into broad arcs, bulge the centered subject toward the viewer, and stretch forms at the left and right edges. Keep all content in a full-bleed rectangle with no circular mask or black corners, keep scene intact",
+    "thumbnail": "/styles/fisheye.webp"
+  },
+  {
     "id": "motion-blur",
     "name": "Motion-blur photography",
+    "group": "Photography & light",
     "prompt": "Apply lateral camera-motion blur in one consistent direction across existing background detail, with a mostly clear central subject and natural edge smearing. Keep current light sources and colors unchanged; add no light trails, keep scene intact",
     "thumbnail": "/styles/motion-blur.webp"
   },
   {
+    "id": "vintage-negative",
+    "name": "Vintage color negative",
+    "group": "Photography & light",
+    "prompt": "Use warm highlight rolloff, softly faded color, fine grain and a slight analog halation around bright areas. Preserve identity, pose, expression and scene; keep scene intact",
+    "thumbnail": "/styles/vintage-negative.webp"
+  },
+  {
     "id": "cross-processed-film",
     "name": "Cross-processed film",
+    "group": "Photography & light",
     "prompt": "Use a cross-processed film grade with cyan-blue shadows, warm amber and magenta highlights, crisp contrast and restrained saturation. Keep skin midtones natural and avoid a green cast, keep scene intact",
     "thumbnail": "/styles/cross-processed-film.webp"
   },
   {
-    "id": "vintage-negative",
-    "name": "Vintage color negative",
-    "prompt": "Use warm highlight rolloff, softly faded color, fine grain and a slight analog halation around bright areas. Preserve identity, pose, expression and scene; keep scene intact",
-    "thumbnail": "/styles/vintage-negative.webp"
+    "id": "infrared-film",
+    "name": "Infrared film",
+    "group": "Photography & light",
+    "prompt": "Render as false-color infrared film: every leaf, plant and tree turns vivid hot pink and magenta, skies become deep teal, skin goes pale and luminous, with fine film grain and high contrast. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/infrared-film.webp"
+  },
+  {
+    "id": "rim-lighting",
+    "name": "Rim lighting",
+    "group": "Photography & light",
+    "prompt": "Add a restrained cool-white rim light from behind and upper-left, tracing existing hair, shoulders and object edges against shadow. Keep the face naturally exposed and avoid a forehead hotspot; add no objects, keep scene intact",
+    "thumbnail": "/styles/rim-lighting.webp"
+  },
+  {
+    "id": "split-color-lighting",
+    "name": "Split-color lighting",
+    "group": "Photography & light",
+    "prompt": "Apply broad off-camera color lighting to the existing scene: warm amber across left-facing surfaces and cool cyan across right-facing surfaces, with even natural falloff. Show no lamps, sun or glowing orbs, keep scene intact",
+    "thumbnail": "/styles/split-color-lighting.webp"
+  },
+  {
+    "id": "chromatic-aberration",
+    "name": "Chromatic aberration",
+    "group": "Photography & light",
+    "prompt": "Add subtle red-cyan color fringing only at high-contrast edges, strongest near the frame perimeter. Keep the center sharp and forms single, with no blur, duplicate subjects or added shapes, keep scene intact",
+    "thumbnail": "/styles/chromatic-aberration.webp"
+  },
+  {
+    "id": "anime",
+    "name": "Anime",
+    "group": "Animation & comics",
+    "prompt": "Use clean, confident linework, crisp cel shading and subtle gradients. Preserve identity, pose, expression and scene; keep scene intact",
+    "thumbnail": "/styles/anime.webp"
+  },
+  {
+    "id": "saturday-morning-cartoon",
+    "name": "Saturday-morning cartoon",
+    "group": "Animation & comics",
+    "prompt": "Redraw everything as a 1980s and 90s Saturday-morning TV cartoon: thick uniform black outlines, flat bright cel colors with one hard shadow tone, simplified friendly faces with large expressive eyes, and painted flat backgrounds. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/saturday-morning-cartoon.webp"
+  },
+  {
+    "id": "animated-3d",
+    "name": "Expressive 3D animation",
+    "group": "Animation & comics",
+    "prompt": "Re-render the existing scene as polished 3D animation with smooth sculpted forms, soft material shading and warm cinematic light. Preserve identity, pose, facial expression and every existing scene element; add no props or characters, keep scene intact",
+    "thumbnail": "/styles/animated-3d.webp"
+  },
+  {
+    "id": "hand-painted-animation",
+    "name": "Hand-painted fantasy animation",
+    "group": "Animation & comics",
+    "prompt": "Use soft, hand-painted animation textures with watercolor-like light and carefully observed natural details. Favor rounded expressive shapes, layered foliage, warm atmospheric color and a quiet sense of wonder, balancing a cozy everyday mood with a hint of gentle fantasy., keep scene intact",
+    "thumbnail": "/styles/hand-painted-animation.webp"
+  },
+  {
+    "id": "manga",
+    "name": "Manga",
+    "group": "Animation & comics",
+    "prompt": "Render with precise black ink contours, expressive faces and dramatic panel-like contrast. Use fine hatching or screentone dots for shadow, clear white highlights and purposeful line weight, giving the image the energetic, carefully composed look of a printed graphic story., keep scene intact",
+    "thumbnail": "/styles/manga.webp"
+  },
+  {
+    "id": "chibi",
+    "name": "Chibi",
+    "group": "Animation & comics",
+    "prompt": "Redraw every person as a cute chibi character: oversized head on a tiny rounded body, huge sparkling eyes, rosy cheeks, clean soft outlines and pastel cel shading. Draw the same background in the same cute style with full saturated color., keep scene intact",
+    "thumbnail": "/styles/chibi.webp"
+  },
+  {
+    "id": "anime-ova",
+    "name": "90s anime OVA",
+    "group": "Animation & comics",
+    "prompt": "Redraw as a hand-painted 1990s anime video frame: sharp detailed cel linework, dramatic hard shadows with a second shade, glossy hair highlights, painted background art, soft analog bloom and slight film grain. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/anime-ova.webp"
+  },
+  {
+    "id": "rubber-hose",
+    "name": "1930s rubber-hose cartoon",
+    "group": "Animation & comics",
+    "prompt": "Redraw as a 1930s black-and-white rubber-hose cartoon: bendy noodle limbs, white pie-cut eyes, round bouncy shapes, white gloved hands, grey ink-wash backgrounds, flicker, scratches and old film grain. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/rubber-hose.webp"
+  },
+  {
+    "id": "limited-animation",
+    "name": "1960s TV cartoon",
+    "group": "Animation & comics",
+    "prompt": "Redraw as a 1960s limited-animation TV cartoon: bold angular character shapes, thick brush outlines, flat mid-century colors, simple dot eyes and stylized flat backgrounds of loose painted shapes and outlines. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/limited-animation.webp"
+  },
+  {
+    "id": "claymation",
+    "name": "Claymation",
+    "group": "Animation & comics",
+    "prompt": "Use tactile stop-motion clay surfaces, subtle fingerprints and miniature-set lighting while retaining the original forms. Preserve identity, pose, expression and scene; keep scene intact",
+    "thumbnail": "/styles/claymation.webp"
+  },
+  {
+    "id": "felt-stop-motion",
+    "name": "Felt stop-motion",
+    "group": "Animation & comics",
+    "prompt": "Rebuild the scene as a handmade stop-motion puppet set: the person becomes a fuzzy felt puppet with stitched seams, bead eyes and yarn hair, the surroundings become miniature felt and fabric props, with warm small-studio lighting. Add no extra characters. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/felt-stop-motion.webp"
+  },
+  {
+    "id": "cutout-animation",
+    "name": "Cutout animation",
+    "group": "Animation & comics",
+    "prompt": "Rebuild the scene as crude construction-paper cutout animation: flat paper shapes with rough scissor edges, simple round heads with dot eyes, visible paper texture, no shading and shapes overlapping like layered cutouts., keep scene intact",
+    "thumbnail": "/styles/cutout-animation.webp"
+  },
+  {
+    "id": "flash-cartoon",
+    "name": "2000s web cartoon",
+    "group": "Animation & comics",
+    "prompt": "Redraw as a 2000s vector web cartoon: perfectly smooth even-weight black outlines, flat saturated fills with a single crisp shadow shape, simplified geometric faces and clean flat gradient backgrounds. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/flash-cartoon.webp"
+  },
+  {
+    "id": "magical-girl-anime",
+    "name": "Sparkly 90s shoujo anime",
+    "group": "Animation & comics",
+    "prompt": "Redraw as a 1990s shoujo anime frame: large glittering eyes, glossy hair, soft pastel pink and lavender cel colors, sparkles, bubbles and flower petals floating around and a dreamy glowing background. Keep the person's gender, face shape, hair and beard. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/magical-girl-anime.webp"
+  },
+  {
+    "id": "rotoscope",
+    "name": "Rotoscope",
+    "group": "Animation & comics",
+    "prompt": "Trace the scene as rotoscoped animation: wobbly hand-drawn contour lines over real forms, flat posterized color areas that shift slightly, few shadow shapes and a dreamy painterly fill. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/rotoscope.webp"
+  },
+  {
+    "id": "silhouette-animation",
+    "name": "Silhouette animation",
+    "group": "Animation & comics",
+    "prompt": "Render as silhouette animation: the person, trees, lamp posts and buildings become crisp solid black cut-paper silhouettes with lacy edges, set against a bright glowing gradient sky of warm amber and pale gold. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/silhouette-animation.webp"
+  },
+  {
+    "id": "pencil-test",
+    "name": "Pencil test animation",
+    "group": "Animation & comics",
+    "prompt": "Render as a rough animation pencil test on white paper: loose blue construction lines, cleaner graphite contours on top, no color, smudges, registration holes and peg-bar marks at the edges. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/pencil-test.webp"
+  },
+  {
+    "id": "cel-shaded-cartoon",
+    "name": "Cel-shaded cartoon",
+    "group": "Animation & comics",
+    "prompt": "Render existing forms as a clean cel-shaded cartoon with crisp contour lines, broad flat colors and two or three clear shadow tones. Preserve expression, proportions and background layout, keep scene intact",
+    "thumbnail": "/styles/cel-shaded-cartoon.webp"
+  },
+  {
+    "id": "noir-animation",
+    "name": "Noir animation",
+    "group": "Animation & comics",
+    "prompt": "Simplify forms into elegant angular silhouettes, strong curved contours and sharply separated shadow shapes. Use a restrained noir palette with decisive highlights, clean graphic edges and expressive poses, creating a sleek animated crime-story mood without adding unnecessary detail., keep scene intact",
+    "thumbnail": "/styles/noir-animation.webp"
+  },
+  {
+    "id": "vintage-comic",
+    "name": "Vintage comic art",
+    "group": "Animation & comics",
+    "prompt": "Use bold inked contours, dynamic simplified shapes and coarse halftone shading. Add slightly imperfect print registration, faded paper colors and crisp graphic highlights, creating the worn look of an older illustrated story page., keep scene intact",
+    "thumbnail": "/styles/vintage-comic.webp"
+  },
+  {
+    "id": "comic-halftone",
+    "name": "Comic halftone",
+    "group": "Animation & comics",
+    "prompt": "Apply visible black halftone dots and limited print shading to existing forms, with dot density following image values. Preserve subject details and composition; no panels, text or speech balloons, keep scene intact",
+    "thumbnail": "/styles/comic-halftone.webp"
+  },
+  {
+    "id": "plush-toy",
+    "name": "Plush toy",
+    "group": "Craft & texture",
+    "prompt": "Turn the person and everything around them into soft stuffed plush toys: fuzzy minky fabric, rounded puffy shapes, visible stitched seams, embroidered features, and plush trees, lamp posts and buildings. Everything looks squeezable. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/plush-toy.webp"
+  },
+  {
+    "id": "toy-bricks",
+    "name": "Toy bricks",
+    "group": "Craft & texture",
+    "prompt": "Rebuild the same scene from glossy plastic interlocking toy bricks, keeping its composition: the person, trees, lamp posts and buildings are blocky stepped brick sculptures with round studs on top, in bright toy colors. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/toy-bricks.webp"
+  },
+  {
+    "id": "knitted-yarn",
+    "name": "Knitted yarn",
+    "group": "Craft & texture",
+    "prompt": "Remake the entire scene from chunky knitted yarn: the face, hair, hands, clothes, trees, ground and sky are all made of visible knit stitches and woolly fibers, like a hand-knitted toy world in soft handmade colors. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/knitted-yarn.webp"
+  },
+  {
+    "id": "liquid-chrome",
+    "name": "Liquid chrome",
+    "group": "Craft & texture",
+    "prompt": "Turn every person and object into polished liquid chrome: mirror-bright metal surfaces, sharp reflections of the surroundings, smooth molten curves, bright specular highlights and deep dark reflections. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/liquid-chrome.webp"
+  },
+  {
+    "id": "gilded-gold",
+    "name": "Solid gold",
+    "group": "Craft & texture",
+    "prompt": "Recast the person and every object as solid polished gold: rich warm metallic yellow surfaces, bright gleaming highlights, deep amber reflections and sculpted detail, like a gold statue. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/gilded-gold.webp"
+  },
+  {
+    "id": "balloon-animal",
+    "name": "Balloon art",
+    "group": "Craft & texture",
+    "prompt": "Rebuild every person and object from twisted inflated balloons: shiny latex tubes, glossy highlights, rounded bulging segments with pinched twists, bright party colors. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/balloon-animal.webp"
+  },
+  {
+    "id": "gummy-candy",
+    "name": "Gummy candy",
+    "group": "Craft & texture",
+    "prompt": "Turn every person and object into translucent gummy candy: glossy jelly surfaces, bright fruity colors, light glowing through, a light dusting of sugar crystals and soft squishy shapes. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/gummy-candy.webp"
+  },
+  {
+    "id": "blown-glass",
+    "name": "Blown glass",
+    "group": "Craft & texture",
+    "prompt": "Recreate everything as translucent hand-blown glass: clear and tinted glass forms, refractions, bright caustic highlights, swirls of colored glass inside and light shining through every surface. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/blown-glass.webp"
+  },
+  {
+    "id": "porcelain",
+    "name": "Glazed porcelain",
+    "group": "Craft & texture",
+    "prompt": "Turn the person and every object into glossy white glazed porcelain with delicate cobalt blue painted patterns, smooth ceramic surfaces, soft reflections and fine hairline glaze crackle. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/porcelain.webp"
+  },
+  {
+    "id": "brushed-metal",
+    "name": "Brushed metal",
+    "group": "Craft & texture",
+    "prompt": "Recast the person, clothes, trees, lamp posts and buildings as sculpted brushed steel: fine directional brushed grain on every surface, cool grey metallic sheen, crisp machined edges and panel seams, like a polished metal statue in a metal world. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/brushed-metal.webp"
+  },
+  {
+    "id": "carved-wood",
+    "name": "Carved wood",
+    "group": "Craft & texture",
+    "prompt": "Recreate everything as hand-carved wood: visible wood grain, chisel and gouge marks, warm oiled walnut and pale oak tones, rounded whittled forms and soft varnished highlights. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/carved-wood.webp"
+  },
+  {
+    "id": "ice-sculpture",
+    "name": "Ice sculpture",
+    "group": "Craft & texture",
+    "prompt": "Recreate the person and every object as carved clear ice: translucent frosty blue surfaces, chiseled facets, trapped air bubbles, cold refractions and melting droplets. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/ice-sculpture.webp"
+  },
+  {
+    "id": "marble-sculpture",
+    "name": "Marble relief",
+    "group": "Craft & texture",
+    "prompt": "Model existing forms as carved marble relief with subtle stone veining, fine chisel marks, sculpted edges and carved shadows. Preserve the original contours and layout, keep scene intact",
+    "thumbnail": "/styles/marble-sculpture.webp"
+  },
+  {
+    "id": "felted-wool",
+    "name": "Felted wool art",
+    "group": "Craft & texture",
+    "prompt": "Render the scene as needle-felted wool with dense visible fibers, rounded handcrafted surfaces and soft fiber edges. Retain recognizable details, proportions and the full composition, keep scene intact",
+    "thumbnail": "/styles/felted-wool.webp"
+  },
+  {
+    "id": "craft-felt",
+    "name": "Felt craft",
+    "group": "Craft & texture",
+    "prompt": "Rebuild the scene from layered cut felt sheets: thick matte felt pieces with soft fuzzy edges, simple stitched details and visible blanket stitching, flat bright craft colors stacked in layers. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/craft-felt.webp"
+  },
+  {
+    "id": "embroidery",
+    "name": "Embroidery art",
+    "group": "Craft & texture",
+    "prompt": "Translate existing forms into stitched textile art: threads follow contours, dense stitches build color areas, and raised fibers sit over woven fabric grain. Preserve the original details and composition, keep scene intact",
+    "thumbnail": "/styles/embroidery.webp"
+  },
+  {
+    "id": "patchwork-quilt",
+    "name": "Patchwork quilt",
+    "group": "Craft & texture",
+    "prompt": "Rebuild the person and the whole scene as a stitched fabric quilt: skin, hair, clothes, trees and sky are sewn from patterned cotton patches in gingham, floral and polka-dot prints, with puffy padding and running stitches on every seam. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/patchwork-quilt.webp"
+  },
+  {
+    "id": "cardboard",
+    "name": "Cardboard craft",
+    "group": "Craft & texture",
+    "prompt": "Rebuild the scene from corrugated cardboard: brown cardboard cutouts with visible corrugated edges, tape, glue marks and marker lines, like a handmade cardboard diorama. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/cardboard.webp"
+  },
+  {
+    "id": "origami",
+    "name": "Folded-paper illustration",
+    "group": "Craft & texture",
+    "prompt": "Convert the image into a high-detail handmade paper illustration: smooth layered paper shapes form the existing objects, with fine paper grain, crisp stacked edges and gentle folds following their contours. Keep facial features, clothing texture and scene detail clear; avoid large polygonal facets or torn-paper overlays, keep scene intact",
+    "thumbnail": "/styles/origami.webp"
+  },
+  {
+    "id": "paper-cut",
+    "name": "Paper-cut illustration",
+    "group": "Craft & texture",
+    "prompt": "Rebuild the existing image from layered cut-paper shapes, crisp cut edges, visible paper fibers and shallow shadows between existing forms. Keep every subject and object in its original position, keep scene intact",
+    "thumbnail": "/styles/paper-cut.webp"
+  },
+  {
+    "id": "paper-collage",
+    "name": "Torn-paper collage",
+    "group": "Craft & texture",
+    "prompt": "Rebuild the same image from torn and cut matte paper pieces with visible fibers, overlapping sheets and soft cast shadows. Keep each existing form and position, adding no new imagery, keep scene intact",
+    "thumbnail": "/styles/paper-collage.webp"
+  },
+  {
+    "id": "mosaic",
+    "name": "Mosaic art",
+    "group": "Craft & texture",
+    "prompt": "Render the existing scene as a dense mosaic of small hand-cut tiles. Let tile shape and color follow forms already present; add a subtle glazed sheen and tiny diffuse highlights across tile faces, without mirror-like reflections or new details, keep scene intact",
+    "thumbnail": "/styles/mosaic.webp"
+  },
+  {
+    "id": "stained-glass",
+    "name": "Flat stained glass art",
+    "group": "Craft & texture",
+    "prompt": "Render the existing scene as a flat stained-glass illustration. Simplify each subject and background surface into distinct geometric panes of saturated color, separated by thick dark lead lines that follow the shapes. Keep the panes matte and non-reflective, with no shine, glare or added highlights. Preserve identity, pose, expression and scene; keep scene intact",
+    "thumbnail": "/styles/stained-glass.webp"
+  },
+  {
+    "id": "pop-art",
+    "name": "Pop art",
+    "group": "Graphic & poster",
+    "prompt": "Separate bold flat colors with strong outlines and repeated halftone dots. Use punchy primary hues, graphic shadow blocks and a slightly screen-printed texture, turning the full composition into a crisp poster-like image with lively visual rhythm., keep scene intact",
+    "thumbnail": "/styles/pop-art.webp"
+  },
+  {
+    "id": "art-deco",
+    "name": "Art Deco illustration",
+    "group": "Graphic & poster",
+    "prompt": "Use streamlined Art Deco contours, stepped geometry, balanced symmetry, jewel tones and restrained metallic accents within existing shapes. Preserve the same subjects and composition, keep scene intact",
+    "thumbnail": "/styles/art-deco.webp"
+  },
+  {
+    "id": "art-nouveau",
+    "name": "Art Nouveau illustration",
+    "group": "Graphic & poster",
+    "prompt": "Use flowing contours that follow existing forms, flat jewel-tone color and refined line ornament contained within existing shapes. Preserve the original subjects and composition, keep scene intact",
+    "thumbnail": "/styles/art-nouveau.webp"
+  },
+  {
+    "id": "travel-poster",
+    "name": "Flat travel poster",
+    "group": "Graphic & poster",
+    "prompt": "Compose the scene from bold flat planes, angular cut-paper shapes and a compact vintage palette. Use simplified distant landmarks, confident silhouettes and subtle printed texture, like a destination poster designed for quick recognition from across a room., keep scene intact",
+    "thumbnail": "/styles/travel-poster.webp"
+  },
+  {
+    "id": "synthwave",
+    "name": "Synthwave",
+    "group": "Graphic & poster",
+    "prompt": "Apply a graphic 1980s synthwave treatment to the existing forms: dark ink shadows, clean geometric color blocks and controlled neon gradients on current surfaces. Preserve the subject silhouette and existing backdrop, keep scene intact",
+    "thumbnail": "/styles/synthwave.webp"
+  },
+  {
+    "id": "cyberpunk",
+    "name": "Cyberpunk",
+    "group": "Graphic & poster",
+    "prompt": "Apply a restrained cyberpunk illustration treatment to existing shapes: charcoal shadows, sharp cyan and magenta accents and precise digital linework. Preserve the current composition and background structure, keep scene intact",
+    "thumbnail": "/styles/cyberpunk.webp"
+  },
+  {
+    "id": "psychedelic-poster",
+    "name": "Psychedelic poster",
+    "group": "Graphic & poster",
+    "prompt": "Transform the existing image into a vivid psychedelic poster using saturated color shifts and flowing contour patterns that follow existing shapes. Keep face, pose and scene recognizable; add no lettering, symbols or objects, keep scene intact",
+    "thumbnail": "/styles/psychedelic-poster.webp"
+  },
+  {
+    "id": "graffiti",
+    "name": "Graffiti painting",
+    "group": "Graphic & poster",
+    "prompt": "Apply layered graffiti marks across the whole existing image, treating the subject and background together. Use spray-textured edges, energetic contours, paint drips and vivid pigment while preserving the same identity, pose, framing, composition and recognizable setting rather than replacing it., keep scene intact",
+    "thumbnail": "/styles/graffiti.webp"
+  },
+  {
+    "id": "bauhaus",
+    "name": "Bauhaus graphic art",
+    "group": "Graphic & poster",
+    "prompt": "Use disciplined geometric construction, asymmetrical balance, primary color fields and clear line derived from the existing forms. Preserve the subject and original layout, keep scene intact",
+    "thumbnail": "/styles/bauhaus.webp"
+  },
+  {
+    "id": "corporate-memphis",
+    "name": "Corporate Memphis",
+    "group": "Graphic & poster",
+    "prompt": "Build figures from rounded geometric shapes, tube-like limbs and simplified anatomy. Apply flat cheerful color, minimal shadows and spacious clean forms, with playful asymmetry and an approachable presentation-illustration mood rather than naturalistic surface detail., keep scene intact",
+    "thumbnail": "/styles/corporate-memphis.webp"
+  },
+  {
+    "id": "8-bit",
+    "name": "8-bit pixel art",
+    "group": "Games & 3D",
+    "prompt": "Translate all contours and shading into hard-edged square pixels with a tightly limited retro palette. Use stepped outlines, chunky blocks and simple contrast patterns, keeping the core pose and scenery recognizable at a glance., keep scene intact",
+    "thumbnail": "/styles/8-bit.webp"
+  },
+  {
+    "id": "voxel-world",
+    "name": "Voxel game art",
+    "group": "Games & 3D",
+    "prompt": "Construct the image from chunky cubic voxel forms, block-built surfaces and deliberately low-resolution textures. Use clear square silhouettes, stepped terrain and bright game-like colors, translating the person and surroundings into a cohesive miniature world., keep scene intact",
+    "thumbnail": "/styles/voxel-world.webp"
+  },
+  {
+    "id": "low-poly",
+    "name": "Low-poly",
+    "group": "Games & 3D",
+    "prompt": "Rebuild forms from broad flat-shaded polygons with crisp edges and visible faceted transitions. Simplify small details into angular planes, use a compact coordinated palette and preserve enough structure to make the portrait and surroundings easy to read., keep scene intact",
+    "thumbnail": "/styles/low-poly.webp"
+  },
+  {
+    "id": "early-console-3d",
+    "name": "Early console 3D",
+    "group": "Games & 3D",
+    "prompt": "Render as a late-1990s console game: low-polygon models with blocky faces, blurry low-resolution textures, wobbly vertices, dithered colors and flat vertex lighting. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/early-console-3d.webp"
+  },
+  {
+    "id": "cat-people",
+    "name": "Cat people",
+    "group": "Strange",
+    "prompt": "Every person has the head of a realistic cat, with fur, whiskers, cat ears and cat eyes, matching the original head angle and expression. Keep their human bodies, hands, clothes and pose exactly, and the background unchanged, keep scene intact",
+    "thumbnail": "/styles/cat-people.webp"
+  },
+  {
+    "id": "dog-people",
+    "name": "Dog people",
+    "group": "Strange",
+    "prompt": "Every person has the head of a realistic dog, with fur, a wet nose, floppy ears and dog eyes, matching the original head angle and expression. Keep their human bodies, hands, clothes and pose exactly, and the background unchanged, keep scene intact",
+    "thumbnail": "/styles/dog-people.webp"
+  },
+  {
+    "id": "alien-world",
+    "name": "Alien planet",
+    "group": "Strange",
+    "prompt": "Transform the scene into an extraterrestrial world: turquoise and violet alien vegetation, glowing spores, two moons in a strange green sky, and every person with pale blue-green alien skin and large dark eyes. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/alien-world.webp"
+  },
+  {
+    "id": "made-of-food",
+    "name": "Made of food",
+    "group": "Strange",
+    "prompt": "Rebuild the scene entirely from food: bread crust and cake for buildings, broccoli and lettuce for trees, pasta and noodles for hair, sliced fruit and vegetables for details, like a food sculpture photograph. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/made-of-food.webp"
+  },
+  {
+    "id": "deep-sea",
+    "name": "Glowing deep sea",
+    "group": "Strange",
+    "prompt": "Submerge the same scene in the deep ocean: dark blue water, glowing bioluminescent cyan and magenta spots on every surface, drifting jellyfish and particles, with the person lit softly from above so the face stays visible. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/deep-sea.webp"
+  },
+  {
+    "id": "toy-miniature",
+    "name": "Toy-world miniature",
+    "group": "Strange",
+    "prompt": "Turn everything into a hand-painted plastic miniature diorama: tiny figurines with glossy painted faces, model-railway trees, toy buildings, visible paint strokes and strong tilt-shift blur. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/toy-miniature.webp"
+  },
+  {
+    "id": "robot-people",
+    "name": "Robot people",
+    "group": "Strange",
+    "prompt": "Turn every person into a humanoid robot with the same pose: white and grey metal plating, visible joints and panel seams, glowing eye lenses and exposed cables, while the background stays as it is, keep scene intact",
+    "thumbnail": "/styles/robot-people.webp"
+  },
+  {
+    "id": "haunted-victorian",
+    "name": "Haunted Victorian",
+    "group": "Strange",
+    "prompt": "Turn the scene into a haunted Victorian ghost story: sepia gloom, pale ghostly figures, cobwebs, flickering candlelight, mist, and people as translucent spectral apparitions in period clothes. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/haunted-victorian.webp"
+  },
+  {
+    "id": "x-ray",
+    "name": "X-ray",
+    "group": "Strange",
+    "prompt": "Render the same scene as an X-ray image: the person shows glowing white bones and skull inside a translucent grey-blue body, and the trees, lamp post, buildings and bridge appear as ghostly see-through outlines on a black background. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/x-ray.webp"
+  },
+  {
+    "id": "thermal-camera",
+    "name": "Thermal camera",
+    "group": "Strange",
+    "prompt": "Render as a thermal imaging camera view: warm bodies glowing yellow, orange and white, cool surroundings in deep purple and blue, smooth heat gradients and no surface texture. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/thermal-camera.webp"
+  },
+  {
+    "id": "overgrown-ruins",
+    "name": "Overgrown ruins",
+    "group": "Strange",
+    "prompt": "Show the same place decades after it was abandoned: thick moss, ivy and vines climbing every wall and surface, cracked crumbling stone, rust and ferns growing through. The person stays in the same pose with moss and vines creeping over their clothes. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "thumbnail": "/styles/overgrown-ruins.webp"
   }
 ]
