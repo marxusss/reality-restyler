@@ -222,3 +222,26 @@ test("styles toggle closed and Settings can take over", () => {
   assert.match(app, /closeSettings: \(\) => setPanel\(false\)/);
   assert.match(app, /settingsButton\.addEventListener\("click", \(\) => \{\s*const stylesDialog = \$\("stylesDialog"\);\s*if \(stylesDialog\.open\) stylesDialog\.close\(\);\s*setPanel\(settingsPanel\.hidden\);/);
 });
+
+test("a Home Screen app fills the screen from the top at the screen height", () => {
+  const css = readFileSync(new URL("../src/web/style.css", import.meta.url), "utf8");
+  const home = css.slice(css.indexOf("/* Home Screen app."));
+  assert.match(home, /html\.home-screen-app, \.home-screen-app body, \.home-screen-app #app\s*\{\s*height: var\(--app-height, 100lvh\);/);
+  assert.match(home, /\.home-screen-app body, \.home-screen-app #app\s*\{\s*inset: 0 auto auto 0;/);
+  assert.match(home, /\.home-screen-app #stylesDialog\[open\]\s*\{[^}]*top: calc\(var\(--app-height, 100lvh\) - var\(--styles-bottom\)\);[^}]*bottom: auto;/);
+  assert.match(home, /\.home-screen-app \.text-entry \.settings-panel\s*\{\s*bottom: calc\(var\(--app-height, 100lvh\) - var\(--keyboard-top, 0px\)/);
+  assert.doesNotMatch(home, /dvh/);
+});
+
+test("Home Screen height is the screen's, even when iOS reports display-mode browser", async () => {
+  const { homeScreenHeight } = await import("../src/web/home_screen.js");
+  const phone = { screenWidth: 402, screenHeight: 874 };
+  // iOS Home Screen bookmark: navigator.standalone, window short by the status bar.
+  assert.equal(homeScreenHeight({ ...phone, standalone: true, displayModeStandalone: false, innerWidth: 402, innerHeight: 812 }), 874);
+  assert.equal(homeScreenHeight({ ...phone, standalone: false, displayModeStandalone: true, innerWidth: 402, innerHeight: 812 }), 874);
+  // Landscape: iOS keeps screen in portrait terms.
+  assert.equal(homeScreenHeight({ ...phone, standalone: true, displayModeStandalone: false, innerWidth: 874, innerHeight: 380 }), 402);
+  // A browser tab is left alone, and a window narrower than the screen keeps its own height.
+  assert.equal(homeScreenHeight({ ...phone, standalone: false, displayModeStandalone: false, innerWidth: 402, innerHeight: 700 }), 0);
+  assert.equal(homeScreenHeight({ screenWidth: 1024, screenHeight: 1366, standalone: true, displayModeStandalone: false, innerWidth: 507, innerHeight: 1300 }), 1300);
+});
