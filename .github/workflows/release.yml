@@ -13,8 +13,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Check release version
         shell: pwsh
         run: |
@@ -33,8 +31,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = $env:GITHUB_REF_NAME
-          $ref = "refs/tags/$tag"
-          if ((git cat-file -t $ref) -ne 'tag') { throw 'Use an annotated release tag.' }
-          $notes = (git for-each-ref --format='%(contents)' $ref) -join "`n"
+          $tagObject = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object | select(.type == "tag") | .sha'
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($tagObject)) { throw 'Use an annotated release tag.' }
+          $notes = gh api "repos/$env:GITHUB_REPOSITORY/git/tags/$tagObject" --jq '.message'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read release notes from the tag.' }
           if ([string]::IsNullOrWhiteSpace($notes)) { throw 'Include release notes in the tag.' }
           $notes | gh release create $tag .\RealityRestylingSetup.exe .\RealityRestylingSetup.exe.sha256 .\RealityRestylingSource.zip --verify-tag --title $tag --notes-file -
