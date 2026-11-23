@@ -2,7 +2,7 @@ import { cameraFacing, cameraLenses, currentRotation, openStartingCamera, setCam
 import { mountCapture } from "./capture.js";
 import { encodeCameraFrame } from "./frame_encoding.js";
 import { createFrameRate, readWebRTCRoundTrip } from "./metrics.js";
-import { openWebRTC, openLocalSocket } from "./transport.js";
+import { openWebRTC, openLocalSocket, setWebRTCInputResolution } from "./transport.js";
 import { mountStyles } from "./styles.js";
 import { ErrorState } from "./errors.js";
 
@@ -73,6 +73,7 @@ let cameraSwitchSequence = 0;
 let cameraChanging = false;
 let recoveryAttempts = 0;
 let transportRequest = null;
+let pendingInputResize = Promise.resolve();
 let selectedCamera = null;
 let localFramePending = false;
 let localFrameTimer = 0;
@@ -496,6 +497,15 @@ function setMirror(value) {
   localOutput.classList.toggle("mirrored", mirror);
  }
 
+function resizeWebRTCInput() {
+  const active = peer;
+  if (!active) return pendingInputResize;
+  pendingInputResize = pendingInputResize.then(() => {
+    if (peer === active) return setWebRTCInputResolution(active, resolution);
+  });
+  return pendingInputResize;
+}
+
 async function connectWebRTC() {
   return openWebRTC(stream, {
     created: current => { peer = current; },
@@ -528,7 +538,8 @@ async function connectWebRTC() {
         }, current.connectionState === "disconnected" ? 3000 : 0);
       }
     },
-    offer: data => trackTransportRequest(request("/offer", data))
+    offer: data => trackTransportRequest(request("/offer", data)),
+    resolution
   });
 }
 
@@ -1114,8 +1125,10 @@ async function replaceCamera(lens, current, {reconnect = false} = {}) {
       const sender = peer.getSenders().find(item => item.track?.kind === "video");
       if (!sender || peer.connectionState === "closed" || peer.connectionState === "failed") reconnect = true;
       else {
-        try { await sender.replaceTrack(track); }
-        catch (_) { reconnect = true; }
+        try {
+          await sender.replaceTrack(track);
+          await resizeWebRTCInput();
+        } catch (_) { reconnect = true; }
       }
     } else if (!reconnect && localSocket?.readyState !== WebSocket.OPEN) {
       reconnect = true;
@@ -1237,7 +1250,10 @@ function selectResolution(value) {
 
 function stepResolution(direction) {
   const next = resolutions[resolutions.indexOf(resolution) + direction];
-  if (selectResolution(next)) void applySettings();
+  if (selectResolution(next)) {
+    void resizeWebRTCInput();
+    void applySettings();
+  }
 }
 
 function setPanel(open) {
