@@ -1,6 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {openWebRTC, setWebRTCInputResolution} from "../web/transport.js";
+import {openWebRTC, setWebRTCInputResolution} from "../src/web/transport.js";
 
 test("WebRTC negotiation keeps ownership checks across both stages", async () => {
   const Original = globalThis.RTCPeerConnection;

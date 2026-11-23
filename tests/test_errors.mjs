@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ErrorState } from "../web/errors.js";
+import { ErrorState } from "../src/web/errors.js";
 
 test("successful polling cannot erase a camera or settings failure", () => {
   const errors = new ErrorState();

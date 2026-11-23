@@ -20,34 +20,34 @@ UninstallDisplayName=Reality Restyling
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 
 [Files]
-Source: "..\app.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\hardware_check.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\phone_access.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\user_styles.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\log_retention.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\runtime.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\runtime_settings.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\preferences.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\timing.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\sessions.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\local_frames.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\webrtc_track.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\model_setup.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\runtime_cleanup.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\upscaler_models\*"; DestDir: "{app}\upscaler_models"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\src\app.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\hardware_check.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\phone_access.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\user_styles.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\log_retention.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\runtime.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\runtime_settings.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\preferences.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\timing.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\sessions.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\local_frames.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\webrtc_track.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\model_setup.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\runtime_cleanup.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\upscaler_models\*"; DestDir: "{app}\upscaler_models"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\requirements.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\updates.json"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\updater.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\updater.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#LauncherExe}"; DestDir: "{app}"; DestName: "RealityRestyling.exe"; Flags: ignoreversion
 Source: "{#BundledPythonDir}\*"; DestDir: "{app}\python"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\run.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\launcher.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\setup.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\run.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\launcher.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\setup.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "repair-runtime.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\NOTICE.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\web\*"; DestDir: "{app}\web"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\src\web\*"; DestDir: "{app}\web"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "install-flow.ps1"; DestDir: "{app}"; Flags: ignoreversion
 

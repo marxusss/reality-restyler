@@ -52,7 +52,7 @@ With Tailscale connected on both devices, open the phone link from the Windows l
 
 ## Development
 
-On Windows, run `.\dev.ps1` in a checkout to serve **that checkout** at [localhost:8782](http://127.0.0.1:8782/). It reuses local or installed dependencies; restart after editing. Installed versions continue updating from GitHub releases.
+On Windows, run `.\tools\dev.ps1` in a checkout to serve **that checkout** at [localhost:8782](http://127.0.0.1:8782/). It reuses local or installed dependencies; restart after editing. Installed versions continue updating from GitHub releases.
 
 ## Hello
 

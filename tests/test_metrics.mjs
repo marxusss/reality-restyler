@@ -1,6 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {createFrameRate, readWebRTCRoundTrip} from "../web/metrics.js";
+import {createFrameRate, readWebRTCRoundTrip} from "../src/web/metrics.js";
 
 test("frame rate uses new frames over the measured interval and clears on pause", () => {
   const rate = createFrameRate();

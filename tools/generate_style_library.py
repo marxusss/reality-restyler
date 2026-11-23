@@ -11,6 +11,7 @@ from urllib.request import urlopen
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 SOURCE_URL = "https://matplinta.github.io/t2i-krea-2-style-library/data/styles.json"
 SOURCE_IDS = {
     "anime": "anime-style",
@@ -73,7 +74,7 @@ SOURCE_IDS = {
 
 
 def load_catalog():
-    path = ROOT / "web" / "styles" / "catalog.json"
+    path = ROOT / "src" / "web" / "styles" / "catalog.json"
     entries = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(entries, list):
         raise SystemExit("Style catalog must be a list.")
@@ -123,7 +124,7 @@ def write_source_extract(entries, target):
 def write_contact_sheet(entries):
     tiles = []
     for entry in entries:
-        image_path = ROOT / "web" / "styles" / f"{entry['id']}.webp"
+        image_path = ROOT / "src" / "web" / "styles" / f"{entry['id']}.webp"
         if not image_path.is_file():
             continue
         image = Image.open(image_path).convert("RGB")
@@ -173,7 +174,7 @@ def main():
         parser.error("--input is required unless --no-generate is set")
     source = Image.open(args.input).convert("RGB")
     os.environ["REALITY_RESTYLE_MODELS_DIR"] = str(Path(args.models_dir).resolve())
-    sys.path.insert(0, str(ROOT))
+    sys.path.insert(0, str(ROOT / "src"))
     from runtime import Runtime
     runtime = Runtime()
     settings = {"prompt": "", "steps": 4, "resolution": 512, "upscale": False, "rotation": 0}
@@ -185,7 +186,7 @@ def main():
             started = time.perf_counter()
             runtime.set_settings({"prompt": entry["prompt"]})
             image = runtime.render(source)
-            path = ROOT / "web" / "styles" / f"{entry['id']}.webp"
+            path = ROOT / "src" / "web" / "styles" / f"{entry['id']}.webp"
             image.save(path, "WEBP", quality=82, method=5)
             print(f"{index}/{len(selected)} {entry['id']} {time.perf_counter() - started:.1f}s {path.stat().st_size} bytes", flush=True)
         print(f"Generated {len(selected)} thumbnails in {time.perf_counter() - start:.1f}s", flush=True)

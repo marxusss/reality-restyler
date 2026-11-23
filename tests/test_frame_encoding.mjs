@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cameraFrameSize, encodeCameraFrame } from "../web/frame_encoding.js";
+import { cameraFrameSize, encodeCameraFrame } from "../src/web/frame_encoding.js";
 
 test("adaptive sizing preserves landscape and portrait aspect ratios", () => {
   assert.deepEqual(cameraFrameSize(1920, 1080, 1024), [1024, 576]);

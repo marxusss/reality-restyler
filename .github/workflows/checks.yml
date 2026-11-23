@@ -27,13 +27,13 @@ jobs:
       - name: Compile Python and run targeted tests
         run: |
           python -m compileall -q -x '/(\.git|\.venv|dist)/' .
-          timeout --signal=INT --kill-after=5s 60s python -u -m unittest discover -s tests -v
+          timeout --signal=INT --kill-after=5s 60s python -u -m unittest discover -s tests -t . -v
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Browser syntax and transport tests
         run: |
-          for file in web/*.js; do node --check "$file"; done
+          for file in src/web/*.js; do node --check "$file"; done
           node --test tests/*.mjs
 
   windows-installer:

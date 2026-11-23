@@ -1,6 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {mountStyles} from "../web/styles.js";
+import {mountStyles} from "../src/web/styles.js";
 
 function fakeElement() {
   return {

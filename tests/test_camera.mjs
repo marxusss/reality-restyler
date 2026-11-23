@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cameraLenses } from "../web/camera.js";
+import { cameraLenses } from "../src/web/camera.js";
 
 test("selfie camera keeps the rear camera's observed zoom options", () => {
   const devices = [
@@ -45,7 +45,7 @@ test("camera can open on a device with only one camera", async t => {
       return {getTracks: () => [{stop() {}}]};
     }}
   }});
-  const {openStartingCamera} = await import("../web/camera.js");
+  const {openStartingCamera} = await import("../src/web/camera.js");
   const stream = await openStartingCamera();
   assert.ok(stream);
   assert.equal(calls, 1);
@@ -68,7 +68,7 @@ test("missing selected camera does not open a different camera", async t => {
       throw Object.assign(new Error("Missing camera"), {name: "NotFoundError"});
     }}
   }});
-  const {openStartingCamera} = await import("../web/camera.js");
+  const {openStartingCamera} = await import("../src/web/camera.js");
   await assert.rejects(openStartingCamera({deviceId: "missing"}), /No camera is available\./);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].deviceId.exact, "missing");

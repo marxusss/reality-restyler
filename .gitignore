@@ -10,3 +10,4 @@ __pycache__/
 !/models/
 /models/*
 !/models/.gitignore
+/src/models/

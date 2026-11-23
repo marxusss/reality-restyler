@@ -7,7 +7,7 @@ import threading
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent / ".runtime"
+ROOT = Path(os.environ.get("REALITY_RESTYLE_RUNTIME_DIR", Path(__file__).resolve().parent / ".runtime"))
 LOG_DIR = ROOT / "logs"
 RETENTION_DAYS = 4
 SERVER_LOG = re.compile(r"server-(\d{4}-\d{2}-\d{2})-\d+\.log$")

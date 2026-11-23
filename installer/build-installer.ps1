@@ -14,7 +14,7 @@ if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) { throw 'Inno Setup 6 is required to build the installer.' }
 
 $dist = Join-Path $root 'dist'
-$launcherSource = Join-Path $root 'launcher_bootstrap.cs'
+$launcherSource = Join-Path $root 'src\launcher_bootstrap.cs'
 $launcherExe = Join-Path $dist 'RealityRestylingLauncher.exe'
 $pythonCache = Join-Path $dist 'python-20261110'
 $pythonArchive = Join-Path $pythonCache 'python.tar.gz'

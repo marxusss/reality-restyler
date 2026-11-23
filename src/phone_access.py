@@ -11,7 +11,7 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-RUNTIME_DIR = Path(__file__).resolve().parent / ".runtime"
+RUNTIME_DIR = Path(os.environ.get("REALITY_RESTYLE_RUNTIME_DIR", Path(__file__).resolve().parent / ".runtime"))
 TLS_RENEW_SECONDS = 6 * 60 * 60
 NO_CONSOLE = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
