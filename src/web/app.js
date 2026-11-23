@@ -146,7 +146,7 @@ window.visualViewport?.addEventListener("resize", scheduleErrorPosition);
 
 const viewport = window.visualViewport;
 const touchScreen = window.matchMedia("(any-pointer: coarse)");
-const textFields = "textarea, input[type='text']";
+const textFields = "textarea, input[type='text'], input[type='search']";
 let lastTextField = null;
 
 function updateKeyboardLayout() {
