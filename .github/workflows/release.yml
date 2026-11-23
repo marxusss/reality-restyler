@@ -13,6 +13,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-tags: true
       - name: Check release version
         shell: pwsh
         run: |
@@ -29,4 +31,10 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME .\RealityRestylingSetup.exe .\RealityRestylingSetup.exe.sha256 .\RealityRestylingSource.zip --verify-tag --notes-from-tag
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $ref = "refs/tags/$tag"
+          if ((git cat-file -t $ref) -ne 'tag') { throw 'Use an annotated release tag.' }
+          $notes = (git for-each-ref --format='%(contents)' $ref) -join "`n"
+          if ([string]::IsNullOrWhiteSpace($notes)) { throw 'Include release notes in the tag.' }
+          $notes | gh release create $tag .\RealityRestylingSetup.exe .\RealityRestylingSetup.exe.sha256 .\RealityRestylingSource.zip --verify-tag --title $tag --notes-file -
