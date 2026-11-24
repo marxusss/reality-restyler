@@ -16,8 +16,14 @@ function Write-State {
     $pending = $path + '.tmp'
     $json = $State | ConvertTo-Json -Compress
     [IO.File]::WriteAllText($pending, $json, [Text.UTF8Encoding]::new($false))
-    if (Test-Path -LiteralPath $path) { [IO.File]::Replace($pending, $path, $null) }
-    else { [IO.File]::Move($pending, $path) }
+    if (Test-Path -LiteralPath $path) {
+        $backup = $pending + '.bak'
+        if (Test-Path -LiteralPath $backup) { [IO.File]::Delete($backup) }
+        [IO.File]::Replace($pending, $path, $backup)
+        if (Test-Path -LiteralPath $backup) { [IO.File]::Delete($backup) }
+    } else {
+        [IO.File]::Move($pending, $path)
+    }
 }
 
 function Read-UpdateConfig {
