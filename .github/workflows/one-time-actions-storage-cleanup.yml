@@ -1,0 +1,63 @@
+name: One-time Actions storage cleanup
+on:
+  push:
+    branches: [chatgpt/actions-storage-cleanup-20261123]
+    paths: ['.github/workflows/one-time-actions-storage-cleanup.yml']
+permissions:
+  actions: write
+  contents: read
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Inventory, delete, and verify Actions artifacts and caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          python3 -u - <<'PY'
+          import json, os, urllib.request, urllib.error, time
+          repo=os.environ['REPO']
+          assert repo in ('marxusss/AllLocalAllAI','marxusss/reality-restyler'), repo
+          base='https://api.github.com/repos/'+repo+'/actions/'
+          headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','User-Agent':'actions-storage-cleanup'}
+          def api(path,method='GET'):
+              for attempt in range(4):
+                  try:
+                      with urllib.request.urlopen(urllib.request.Request(base+path,headers=headers,method=method),timeout=30) as r:
+                          body=r.read()
+                          return json.loads(body) if body else None
+                  except urllib.error.HTTPError as e:
+                      if method=='DELETE' and e.code==404: return None
+                      if e.code not in (429,500,502,503,504) or attempt==3: raise
+                      time.sleep(2*(attempt+1))
+          def listing(endpoint,key):
+              items=[]
+              for page in range(1,1001):
+                  obj=api(f'{endpoint}?per_page=100&page={page}')
+                  batch=obj[key]
+                  items.extend(batch)
+                  if len(batch)<100: return items
+              raise RuntimeError('Listing exceeded page limit')
+          failures=[]
+          for endpoint,key in [('artifacts','artifacts'),('caches','actions_caches')]:
+              try:
+                  items=listing(endpoint,key)
+                  print('BEFORE',repo,endpoint,'count',len(items),'bytes',sum(x.get('size_in_bytes',0) for x in items))
+                  for item in items:
+                      try:
+                          api(f'{endpoint}/{item["id"]}','DELETE')
+                          print('DELETED',endpoint,item['id'],item.get('name',item.get('key','')),item.get('size_in_bytes',0))
+                      except Exception as exc:
+                          failures.append((endpoint,item['id'],str(exc)))
+                          print('DELETE_FAILED',endpoint,item['id'],str(exc))
+                  left=listing(endpoint,key)
+                  print('AFTER',repo,endpoint,'count',len(left),'bytes',sum(x.get('size_in_bytes',0) for x in left))
+                  if left: failures.append((endpoint,'remaining',len(left)))
+              except Exception as exc:
+                  print('ERROR',endpoint,str(exc))
+                  failures.append((endpoint,'listing',str(exc)))
+          if failures: raise SystemExit(f'Cleanup incomplete: {failures}')
+          PY
