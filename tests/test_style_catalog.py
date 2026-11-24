@@ -16,6 +16,11 @@ SPEC.loader.exec_module(library)
 NAMES = re.compile(
     r"\b(pixar|disney|ghibli|lego|simpsons|hanna|barbera|looney|muppets?|minecraft|nintendo|playstation|"
     r"sailor moon|aardman|laika|fleischer|cartoon network|nickelodeon|south park)\b", re.I)
+SCENE_OBJECT_EXAMPLES = re.compile(
+    r"\b(trees?|lamp posts?|lampposts?|buildings?|bridges?|riverbanks?|moons?|spores?|jellyfish|particles?|"
+    r"model[- ]railway|trains?|landmarks?|candles?|cobwebs?|petals?|flowers?|orbs?|balloons?|bread|cake|"
+    r"broccoli|lettuce|pasta|noodles?|fruits?|vegetables?)\b", re.I)
+REMOVED_STYLE_IDS = {"balloon-animal", "blown-glass", "chibi"}
 
 
 class StyleCatalogTests(unittest.TestCase):
@@ -39,6 +44,21 @@ class StyleCatalogTests(unittest.TestCase):
     def test_prompts_name_no_studio_or_franchise(self):
         for entry in self.entries:
             self.assertIsNone(NAMES.search(entry["prompt"] + " " + entry["name"]), entry["id"])
+
+    def test_removed_styles_stay_out_and_xray_remains(self):
+        style_ids = {entry["id"] for entry in self.entries}
+        self.assertTrue(REMOVED_STYLE_IDS.isdisjoint(style_ids))
+        self.assertIn("x-ray", style_ids)
+
+    def test_prompts_do_not_list_specific_scene_object_examples(self):
+        for entry in self.entries:
+            self.assertIsNone(SCENE_OBJECT_EXAMPLES.search(entry["prompt"]), entry["id"])
+
+    def test_haunted_victorian_does_not_request_apparitions(self):
+        prompt = next(entry["prompt"] for entry in self.entries if entry["id"] == "haunted-victorian")
+        self.assertIn("Victorian", prompt)
+        self.assertIn("add nothing", prompt)
+        self.assertIsNone(re.search(r"\b(ghosts?|apparitions?|spectral)\b", prompt, re.I))
 
     def test_validator_rejects_missing_unknown_and_scattered_groups(self):
         def entry(style_id, group):

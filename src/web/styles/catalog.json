@@ -227,7 +227,7 @@
     "id": "technical-drawing",
     "name": "Technical drawing",
     "group": "Drawing & print",
-    "prompt": "Use disciplined drafting lines, consistent stroke weights and measured geometric construction. Define edges with clean contours, restrained labels or guide marks and minimal shading, so the result feels engineered and legible while the existing forms and relationships remain clear., keep scene intact",
+    "prompt": "Use disciplined drafting lines, consistent stroke weights and measured geometric construction. Define existing forms with clean contours and minimal shading, preserving their relationships and adding no annotations or new content, keep scene intact",
     "thumbnail": "/styles/technical-drawing.webp"
   },
   {
@@ -318,7 +318,7 @@
     "id": "fisheye",
     "name": "Fisheye photography",
     "group": "Photography & light",
-    "prompt": "Apply extreme convex barrel-lens distortion to the existing scene: bend the building edges and riverbank into broad arcs, bulge the centered subject toward the viewer, and stretch forms at the left and right edges. Keep all content in a full-bleed rectangle with no circular mask or black corners, keep scene intact",
+    "prompt": "Apply extreme convex barrel-lens distortion to the existing scene: curve straight contours into broad arcs, bulge the centered subject toward the viewer, and stretch forms near the frame edges. Keep all content in a full-bleed rectangle with no circular mask or black corners, keep scene intact",
     "thumbnail": "/styles/fisheye.webp"
   },
   {
@@ -346,7 +346,7 @@
     "id": "infrared-film",
     "name": "Infrared film",
     "group": "Photography & light",
-    "prompt": "Render as false-color infrared film: every leaf, plant and tree turns vivid hot pink and magenta, skies become deep teal, skin goes pale and luminous, with fine film grain and high contrast. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Render as false-color infrared film with vivid hot-pink and magenta highlights, deep teal tones, pale luminous areas, fine film grain and high contrast. Preserve the original forms and composition, keep scene intact",
     "thumbnail": "/styles/infrared-film.webp"
   },
   {
@@ -360,7 +360,7 @@
     "id": "split-color-lighting",
     "name": "Split-color lighting",
     "group": "Photography & light",
-    "prompt": "Apply broad off-camera color lighting to the existing scene: warm amber across left-facing surfaces and cool cyan across right-facing surfaces, with even natural falloff. Show no lamps, sun or glowing orbs, keep scene intact",
+    "prompt": "Apply broad off-camera color lighting to the existing scene: warm amber across left-facing forms and cool cyan across right-facing forms, with even natural falloff. Keep illumination sources outside the frame and introduce no new content, keep scene intact",
     "thumbnail": "/styles/split-color-lighting.webp"
   },
   {
@@ -388,7 +388,7 @@
     "id": "animated-3d",
     "name": "Expressive 3D animation",
     "group": "Animation & comics",
-    "prompt": "Re-render the existing scene as polished 3D animation with smooth sculpted forms, soft material shading and warm cinematic light. Preserve identity, pose, facial expression and every existing scene element; add no props or characters, keep scene intact",
+    "prompt": "Re-render the existing scene as polished 3D animation with smooth sculpted forms, soft material shading and warm cinematic light. Preserve identity, pose, facial expression and every existing scene element; add no new content, keep scene intact",
     "thumbnail": "/styles/animated-3d.webp"
   },
   {
@@ -406,13 +406,6 @@
     "thumbnail": "/styles/manga.webp"
   },
   {
-    "id": "chibi",
-    "name": "Chibi",
-    "group": "Animation & comics",
-    "prompt": "Redraw every person as a cute chibi character: oversized head on a tiny rounded body, huge sparkling eyes, rosy cheeks, clean soft outlines and pastel cel shading. Draw the same background in the same cute style with full saturated color., keep scene intact",
-    "thumbnail": "/styles/chibi.webp"
-  },
-  {
     "id": "anime-ova",
     "name": "90s anime OVA",
     "group": "Animation & comics",
@@ -423,7 +416,7 @@
     "id": "rubber-hose",
     "name": "1930s rubber-hose cartoon",
     "group": "Animation & comics",
-    "prompt": "Redraw as a 1930s black-and-white rubber-hose cartoon: bendy noodle limbs, white pie-cut eyes, round bouncy shapes, white gloved hands, grey ink-wash backgrounds, flicker, scratches and old film grain. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Redraw as a 1930s black-and-white rubber-hose cartoon: flexible tube-like limbs, pie-cut eyes, simple bouncy forms and expressive gestures, with grey ink-wash backgrounds, flicker, scratches and old film grain. Preserve identity, pose, expression and the full background layout, keep scene intact",
     "thumbnail": "/styles/rubber-hose.webp"
   },
   {
@@ -444,7 +437,7 @@
     "id": "felt-stop-motion",
     "name": "Felt stop-motion",
     "group": "Animation & comics",
-    "prompt": "Rebuild the scene as a handmade stop-motion puppet set: the person becomes a fuzzy felt puppet with stitched seams, bead eyes and yarn hair, the surroundings become miniature felt and fabric props, with warm small-studio lighting. Add no extra characters. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Render the existing image as handmade stop-motion art using soft felt and fabric textures, fuzzy fibers, stitched details, gently uneven edges and warm studio lighting. Preserve all subjects and their positions; add no new forms, keep scene intact",
     "thumbnail": "/styles/felt-stop-motion.webp"
   },
   {
@@ -465,7 +458,7 @@
     "id": "magical-girl-anime",
     "name": "Sparkly 90s shoujo anime",
     "group": "Animation & comics",
-    "prompt": "Redraw as a 1990s shoujo anime frame: large glittering eyes, glossy hair, soft pastel pink and lavender cel colors, sparkles, bubbles and flower petals floating around and a dreamy glowing background. Keep the person's gender, face shape, hair and beard. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Redraw as a 1990s shoujo anime frame with expressive linework, glossy hair highlights, soft pink and lavender cel colors, luminous tonal accents, dreamy gradients and slight analog bloom. Preserve the person's gender, face shape, hair and beard; retain the existing composition, keep scene intact",
     "thumbnail": "/styles/magical-girl-anime.webp"
   },
   {
@@ -479,7 +472,7 @@
     "id": "silhouette-animation",
     "name": "Silhouette animation",
     "group": "Animation & comics",
-    "prompt": "Render as silhouette animation: the person, trees, lamp posts and buildings become crisp solid black cut-paper silhouettes with lacy edges, set against a bright glowing gradient sky of warm amber and pale gold. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Render the existing image as silhouette animation with crisp solid shapes, delicate cut-paper edge texture and a bright amber-to-gold gradient. Preserve the exact subjects, contours, placement and full composition, and add no new forms, keep scene intact",
     "thumbnail": "/styles/silhouette-animation.webp"
   },
   {
@@ -514,28 +507,28 @@
     "id": "comic-halftone",
     "name": "Comic halftone",
     "group": "Animation & comics",
-    "prompt": "Apply visible black halftone dots and limited print shading to existing forms, with dot density following image values. Preserve subject details and composition; no panels, text or speech balloons, keep scene intact",
+    "prompt": "Apply visible black halftone dots and limited print shading to existing forms, with dot density following image values. Preserve the original content and layout; add no new content, keep scene intact",
     "thumbnail": "/styles/comic-halftone.webp"
   },
   {
     "id": "plush-toy",
     "name": "Plush toy",
     "group": "Craft & texture",
-    "prompt": "Turn the person and everything around them into soft stuffed plush toys: fuzzy minky fabric, rounded puffy shapes, visible stitched seams, embroidered features, and plush trees, lamp posts and buildings. Everything looks squeezable. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Render all existing forms as soft stuffed plush with fuzzy minky fabric, rounded construction, visible stitched seams and embroidered surface detail. Preserve identity, pose and composition; add no new forms, keep scene intact",
     "thumbnail": "/styles/plush-toy.webp"
   },
   {
     "id": "toy-bricks",
     "name": "Toy bricks",
     "group": "Craft & texture",
-    "prompt": "Rebuild the same scene from glossy plastic interlocking toy bricks, keeping its composition: the person, trees, lamp posts and buildings are blocky stepped brick sculptures with round studs on top, in bright toy colors. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Rebuild the existing scene from glossy interlocking toy bricks, with block-built contours, round studs and bright plastic colors. Preserve all existing forms and their arrangement; add nothing, keep scene intact",
     "thumbnail": "/styles/toy-bricks.webp"
   },
   {
     "id": "knitted-yarn",
     "name": "Knitted yarn",
     "group": "Craft & texture",
-    "prompt": "Remake the entire scene from chunky knitted yarn: the face, hair, hands, clothes, trees, ground and sky are all made of visible knit stitches and woolly fibers, like a hand-knitted toy world in soft handmade colors. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Give the existing scene a chunky hand-knitted yarn treatment with visible stitches, woolly fibers, soft texture and handmade colors. Preserve recognizable forms, identity, pose and composition, keep scene intact",
     "thumbnail": "/styles/knitted-yarn.webp"
   },
   {
@@ -553,25 +546,11 @@
     "thumbnail": "/styles/gilded-gold.webp"
   },
   {
-    "id": "balloon-animal",
-    "name": "Balloon art",
-    "group": "Craft & texture",
-    "prompt": "Rebuild every person and object from twisted inflated balloons: shiny latex tubes, glossy highlights, rounded bulging segments with pinched twists, bright party colors. Preserve identity, pose, expression and the full background layout, keep scene intact",
-    "thumbnail": "/styles/balloon-animal.webp"
-  },
-  {
     "id": "gummy-candy",
     "name": "Gummy candy",
     "group": "Craft & texture",
     "prompt": "Turn every person and object into translucent gummy candy: glossy jelly surfaces, bright fruity colors, light glowing through, a light dusting of sugar crystals and soft squishy shapes. Preserve identity, pose, expression and the full background layout, keep scene intact",
     "thumbnail": "/styles/gummy-candy.webp"
-  },
-  {
-    "id": "blown-glass",
-    "name": "Blown glass",
-    "group": "Craft & texture",
-    "prompt": "Recreate everything as translucent hand-blown glass: clear and tinted glass forms, refractions, bright caustic highlights, swirls of colored glass inside and light shining through every surface. Preserve identity, pose, expression and the full background layout, keep scene intact",
-    "thumbnail": "/styles/blown-glass.webp"
   },
   {
     "id": "porcelain",
@@ -584,7 +563,7 @@
     "id": "brushed-metal",
     "name": "Brushed metal",
     "group": "Craft & texture",
-    "prompt": "Recast the person, clothes, trees, lamp posts and buildings as sculpted brushed steel: fine directional brushed grain on every surface, cool grey metallic sheen, crisp machined edges and panel seams, like a polished metal statue in a metal world. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Recast existing forms with sculpted brushed-steel surfaces, fine directional grain, cool metallic sheen, crisp machined edges and subtle panel seams. Preserve identity, pose and composition, keep scene intact",
     "thumbnail": "/styles/brushed-metal.webp"
   },
   {
@@ -633,7 +612,7 @@
     "id": "patchwork-quilt",
     "name": "Patchwork quilt",
     "group": "Craft & texture",
-    "prompt": "Rebuild the person and the whole scene as a stitched fabric quilt: skin, hair, clothes, trees and sky are sewn from patterned cotton patches in gingham, floral and polka-dot prints, with puffy padding and running stitches on every seam. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Render the existing scene as a stitched fabric quilt, with patterned cotton patches, puffy texture and running stitches that follow the contours of existing forms. Preserve identity, pose, expression and layout, keep scene intact",
     "thumbnail": "/styles/patchwork-quilt.webp"
   },
   {
@@ -703,7 +682,7 @@
     "id": "travel-poster",
     "name": "Flat travel poster",
     "group": "Graphic & poster",
-    "prompt": "Compose the scene from bold flat planes, angular cut-paper shapes and a compact vintage palette. Use simplified distant landmarks, confident silhouettes and subtle printed texture, like a destination poster designed for quick recognition from across a room., keep scene intact",
+    "prompt": "Compose the existing image from bold flat planes, angular shapes and a compact vintage palette. Use confident silhouettes, clear visual hierarchy and subtle printed texture while preserving the original content and layout, keep scene intact",
     "thumbnail": "/styles/travel-poster.webp"
   },
   {
@@ -794,28 +773,28 @@
     "id": "alien-world",
     "name": "Alien planet",
     "group": "Strange",
-    "prompt": "Transform the scene into an extraterrestrial world: turquoise and violet alien vegetation, glowing spores, two moons in a strange green sky, and every person with pale blue-green alien skin and large dark eyes. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Apply a non-naturalistic turquoise and violet color grade to the existing scene, with subtle iridescent light and diffuse atmospheric glow. Preserve all current forms and arrangement; introduce nothing new, keep scene intact",
     "thumbnail": "/styles/alien-world.webp"
   },
   {
     "id": "made-of-food",
     "name": "Made of food",
     "group": "Strange",
-    "prompt": "Rebuild the scene entirely from food: bread crust and cake for buildings, broccoli and lettuce for trees, pasta and noodles for hair, sliced fruit and vegetables for details, like a food sculpture photograph. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Treat all existing forms as edible sculpture, using tactile food-inspired surfaces, rich appetizing color, soft highlights and a handcrafted finish. Preserve identity, pose, expression and composition; add nothing, keep scene intact",
     "thumbnail": "/styles/made-of-food.webp"
   },
   {
     "id": "deep-sea",
     "name": "Glowing deep sea",
     "group": "Strange",
-    "prompt": "Submerge the same scene in the deep ocean: dark blue water, glowing bioluminescent cyan and magenta spots on every surface, drifting jellyfish and particles, with the person lit softly from above so the face stays visible. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Give the existing scene a deep-ocean atmosphere through dark blue tones, bioluminescent cyan and magenta light, and soft overhead illumination that keeps the main subject clear. Preserve existing content and composition; add nothing, keep scene intact",
     "thumbnail": "/styles/deep-sea.webp"
   },
   {
     "id": "toy-miniature",
     "name": "Toy-world miniature",
     "group": "Strange",
-    "prompt": "Turn everything into a hand-painted plastic miniature diorama: tiny figurines with glossy painted faces, model-railway trees, toy buildings, visible paint strokes and strong tilt-shift blur. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Give the existing scene a hand-painted miniature-diorama appearance through fine scale texture, visible brushwork, warm studio lighting and gentle tilt-shift focus. Preserve identity, pose and composition; add no new forms, keep scene intact",
     "thumbnail": "/styles/toy-miniature.webp"
   },
   {
@@ -829,14 +808,14 @@
     "id": "haunted-victorian",
     "name": "Haunted Victorian",
     "group": "Strange",
-    "prompt": "Turn the scene into a haunted Victorian ghost story: sepia gloom, pale ghostly figures, cobwebs, flickering candlelight, mist, and people as translucent spectral apparitions in period clothes. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Give the scene a subdued Victorian mood through sepia tones, deep shadows, aged texture and soft haze. Preserve every subject's appearance, exact number, pose and expression, along with the original composition; add nothing, keep scene intact",
     "thumbnail": "/styles/haunted-victorian.webp"
   },
   {
     "id": "x-ray",
     "name": "X-ray",
     "group": "Strange",
-    "prompt": "Render the same scene as an X-ray image: the person shows glowing white bones and skull inside a translucent grey-blue body, and the trees, lamp post, buildings and bridge appear as ghostly see-through outlines on a black background. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Render the existing scene as an X-ray image, with existing people shown as luminous skeletal detail inside translucent grey-blue forms and the rest of the scene reduced to faint outlines against black. Preserve all subjects and the original composition; add no new forms, keep scene intact",
     "thumbnail": "/styles/x-ray.webp"
   },
   {
@@ -850,7 +829,7 @@
     "id": "overgrown-ruins",
     "name": "Overgrown ruins",
     "group": "Strange",
-    "prompt": "Show the same place decades after it was abandoned: thick moss, ivy and vines climbing every wall and surface, cracked crumbling stone, rust and ferns growing through. The person stays in the same pose with moss and vines creeping over their clothes. Preserve identity, pose, expression and the full background layout, keep scene intact",
+    "prompt": "Give the scene the aged atmosphere of an overgrown ruin through subdued stone tones, weathered texture and subtle moss-like patina. Keep every person untouched and recognizable; apply the treatment only to existing non-person forms, preserving the composition and adding nothing, keep scene intact",
     "thumbnail": "/styles/overgrown-ruins.webp"
   }
 ]
