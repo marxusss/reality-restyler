@@ -7,6 +7,8 @@ from preferences import USER_DATA_ROOT
 
 USER_STYLES_PATH = USER_DATA_ROOT / "user_styles.json"
 USER_STYLES_LOCK = threading.Lock()
+DEFAULT_STYLE_SECTION = "Custom Styles"
+MAX_STYLE_SECTION_LENGTH = 60
 
 def _normalize_user_styles(styles):
     if not isinstance(styles, list):
@@ -52,14 +54,19 @@ def _normalize_user_styles(styles):
         updated_at = int(max(0, min(updated_at, 9007199254740991)))
         if "deleted" in item and item["deleted"] is not False:
             raise ValueError("A style deletion marker is invalid.")
+        group = item.get("group", DEFAULT_STYLE_SECTION)
+        if not isinstance(group, str) or not group.strip() or len(group) > MAX_STYLE_SECTION_LENGTH:
+            raise ValueError("A style section is invalid.")
         normalized.append({
             "id": style_id,
             "name": name.strip(),
             "prompt": prompt,
             "thumbnail": thumbnail,
+            "group": group.strip(),
             "updatedAt": updated_at,
         })
     return normalized
+
 
 def read_user_styles():
     with USER_STYLES_LOCK:

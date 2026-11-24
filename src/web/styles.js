@@ -39,12 +39,15 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   const styleSearch = $("styleSearch");
   const styleSearchEmpty = $("styleSearchEmpty");
   const customSection = $("customStyleSection");
+  const customStyleGroups = $("customStyleGroups");
   const store = openStorage(storage);
   const searchIndex = new WeakMap();
   let catalogLoaded = false;
+  let catalogPromise = null;
   const styleEditor = $("styleEditor");
   const styleForm = $("styleForm");
   const styleName = $("styleName");
+  const styleSection = $("styleSection");
   const stylePrompt = $("stylePrompt");
   const styleCapturePreview = $("styleCapturePreview");
   const deleteStyleButton = $("deleteStyleButton");
@@ -55,6 +58,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   let editingStyleId = null;
   let customStylesSync = Promise.resolve();
   let syncedStyles = [];
+  let catalogGroups = [];
   const maxStyles = 5;
   const collapsedGroups = new Set(readCollapsedGroups());
 
@@ -91,7 +95,8 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
         if (!card.hidden) visible += 1;
       }
       matches += visible;
-      section.hidden = !visible;
+      const keepEmpty = section.dataset.keepEmpty === "true";
+      section.hidden = !visible && !(keepEmpty && !searching);
       const expanded = searching || !collapsedGroups.has(section.dataset.group);
       grid.hidden = !expanded;
       const header = section.querySelector(".style-group-header");
@@ -103,35 +108,63 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     if (!styleSearchEmpty.hidden) styleSearchEmpty.textContent = `No styles match \u201c${query}\u201d`;
   }
 
+  function createStyleGroup(name, gridId, styles, editable = false, keepEmpty = false) {
+    const section = document.createElement("section");
+    section.className = "style-group";
+    section.dataset.group = name;
+    if (keepEmpty) section.dataset.keepEmpty = "true";
+    section.setAttribute("aria-label", name);
+    const heading = document.createElement("h3");
+    const header = document.createElement("button");
+    header.type = "button";
+    header.className = "style-group-header";
+    header.innerHTML = chevron;
+    const title = document.createElement("span");
+    title.className = "style-group-name";
+    title.textContent = name;
+    const count = document.createElement("span");
+    count.className = "style-group-count";
+    header.prepend(title, count);
+    const grid = document.createElement("div");
+    grid.className = "style-grid";
+    grid.id = gridId;
+    header.setAttribute("aria-controls", grid.id);
+    header.addEventListener("click", () => toggleGroup(section));
+    heading.append(header);
+    section.append(heading, grid);
+    renderStyleCards(grid, styles, editable, name);
+    return section;
+  }
+
   function renderStyleGroups(container, styles) {
-    const sections = groupStyles(styles).map(({name, styles: items}, index) => {
-      const section = document.createElement("section");
-      section.className = "style-group";
-      section.dataset.group = name;
-      section.setAttribute("aria-label", name);
-      const heading = document.createElement("h3");
-      const header = document.createElement("button");
-      header.type = "button";
-      header.className = "style-group-header";
-      header.innerHTML = chevron;
-      const title = document.createElement("span");
-      title.className = "style-group-name";
-      title.textContent = name;
-      const count = document.createElement("span");
-      count.className = "style-group-count";
-      header.prepend(title, count);
-      const grid = document.createElement("div");
-      grid.className = "style-grid";
-      grid.id = `styleGroup${index}`;
-      header.setAttribute("aria-controls", grid.id);
-      header.addEventListener("click", () => toggleGroup(section));
-      heading.append(header);
-      section.append(heading, grid);
-      renderStyleCards(grid, items, false, name);
-      return section;
-    });
+    catalogGroups = [...new Set(styles.map(style => style.group || "Other"))];
+    const sections = groupStyles(styles).map(({name, styles: items}, index) =>
+      createStyleGroup(name, "styleGroup" + index, items));
     container.replaceChildren(...sections);
+    populateStyleSections(styleSection.value || customGroup);
     applyStyleFilter();
+  }
+
+  function loadStyleCatalog() {
+    const presetStyles = $("presetStyles");
+    if (catalogLoaded || presetStyles.hasChildNodes()) return Promise.resolve();
+    if (catalogPromise) return catalogPromise;
+    const catalogError = $("catalogError");
+    setStyleError(catalogError);
+    catalogPromise = (async () => {
+      try {
+        const response = await fetch("/styles/catalog.json");
+        if (!response.ok) throw new Error();
+        const styles = await response.json();
+        catalogLoaded = true;
+        renderStyleGroups(presetStyles, styles);
+      } catch (_) {
+        setStyleError(catalogError, "Could not load styles.");
+      } finally {
+        catalogPromise = null;
+      }
+    })();
+    return catalogPromise;
   }
 
   function setStyleError(element, message = "") {
@@ -143,7 +176,8 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     // The PC is the only persistent store and already resolves edit conflicts.
     // Serialize requests so saves cannot race with the initial load or each other.
     const operation = customStylesSync.then(async () => {
-      const {styles} = await request("/styles/user", newStyle === null ? undefined : {styles: [newStyle]});
+      const body = newStyle === null ? undefined : {styles: [newStyle]};
+      const {styles} = await request("/styles/user", body);
       syncedStyles = styles;
       setStyleError($("styleStorageError"));
       renderCustomStyles();
@@ -259,9 +293,34 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     updateStyleSelection();
   }
 
+  function populateStyleSections(selected = customGroup) {
+    const names = [customGroup, ...catalogGroups];
+    styleSection.replaceChildren(...names.map(name => {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      return option;
+    }));
+    styleSection.value = names.includes(selected) ? selected : customGroup;
+  }
+
   function renderCustomStyles() {
     const styles = syncedStyles.filter(style => !style.deleted);
-    renderStyleCards($("customStyles"), styles, true, customGroup);
+    const groups = groupStyles(styles.map(style => ({
+      ...style,
+      group: catalogGroups.includes(style.group) ? style.group : customGroup
+    })));
+    const byName = new Map(groups.map(group => [group.name, group.styles]));
+    const sections = catalogGroups
+      .filter(name => byName.has(name))
+      .map((name, index) => createStyleGroup(
+        name,
+        "customStyleGroup" + index,
+        byName.get(name) || [],
+        true
+      ));
+    customStyleGroups.replaceChildren(...sections);
+    renderStyleCards($("customStyles"), byName.get(customGroup) || [], true, customGroup);
     applyStyleFilter();
   }
 
@@ -270,8 +329,6 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       stylesDialog.close();
       return;
     }
-    const presetStyles = $("presetStyles");
-    const catalogError = $("catalogError");
     setStyleSelection(null);
     renderCustomStyles();
     closeSettings();
@@ -282,25 +339,17 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       button.setAttribute("aria-expanded", "true");
     }
     void syncCustomStyles().catch(() => {});
-    if (presetStyles.hasChildNodes()) return;
-    setStyleError(catalogError);
-    try {
-      const response = await fetch("/styles/catalog.json");
-      if (!response.ok) throw new Error();
-      const styles = await response.json();
-      catalogLoaded = true;
-      renderStyleGroups(presetStyles, styles);
-    } catch (_) {
-      setStyleError(catalogError, "Could not load styles.");
-    }
+    await loadStyleCatalog();
   }
 
-  function openStyleEditor(style = null) {
+  async function openStyleEditor(style = null) {
+    if (!catalogLoaded) await loadStyleCatalog();
     editingStyleId = style?.id || null;
     deleteStyleButton.hidden = !editingStyleId;
     styleForm.reset();
     $("styleEditorTitle").textContent = style ? "Edit Style" : "Add Style";
     styleName.value = style?.name || "";
+    populateStyleSections(style?.group || customGroup);
     stylePrompt.value = style?.prompt ?? promptInput.value;
     if (style?.thumbnail) {
       styleCapturePreview.src = style.thumbnail;
@@ -383,6 +432,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       id: editingStyleId || (crypto.randomUUID ? crypto.randomUUID() : `style-${Date.now()}-${Math.random().toString(16).slice(2)}`),
       name,
       prompt,
+      group: styleSection.value || customGroup,
       thumbnail: styleCapturePreview.getAttribute("src"),
       updatedAt: Math.max(Date.now(), (previous?.updatedAt || 0) + 1)
     };

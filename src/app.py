@@ -24,7 +24,9 @@ from phone_access import (
 from runtime import Runtime, combine_style_prompts
 from sessions import PROTOCOL_PREFIX, SESSION_KEY, TOKEN_HEADER, SessionManager
 from timing import TimingWindow
-from user_styles import read_user_styles, write_user_styles
+from user_styles import (
+    read_user_styles, write_user_styles,
+)
 from webrtc_track import RestyleTrack
 
 ROOT = Path(__file__).resolve().parent

@@ -819,7 +819,7 @@ textarea:focus {
 #styleEditor h2 { font-size: 18px; letter-spacing: -.02em; }
 #styleEditor .field { gap: 8px; color: rgba(245,247,249,.82); font-size: 13px; }
 #styleEditor .field + .field { margin-top: 0; }
-#styleEditor input {
+#styleEditor input, #styleEditor select {
   width: 100%;
   min-width: 0;
   height: 46px;
@@ -830,6 +830,7 @@ textarea:focus {
   background: rgba(255,255,255,.075);
   font-size: 16px;
 }
+#styleEditor select { color-scheme: dark; }
 #styleEditor textarea {
   min-height: 170px;
   padding: 14px;
@@ -840,7 +841,7 @@ textarea:focus {
   scrollbar-width: none;
 }
 #styleEditor textarea::-webkit-scrollbar { display: none; }
-#styleEditor input:focus, #styleEditor textarea:focus {
+#styleEditor input:focus, #styleEditor select:focus, #styleEditor textarea:focus {
   border-color: rgba(255,255,255,.48);
   background: rgba(255,255,255,.09);
 }

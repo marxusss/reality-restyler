@@ -15,14 +15,18 @@ class UserStylePersistenceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.styles_path = Path(self.temp_dir.name) / "user_styles.json"
-        self.path_patch = patch.object(user_styles, "USER_STYLES_PATH", self.styles_path)
-        self.path_patch.start()
+        self.path_patches = [
+            patch.object(user_styles, "USER_STYLES_PATH", self.styles_path),
+        ]
+        for path_patch in self.path_patches:
+            path_patch.start()
         self.client = TestClient(TestServer(app.create_app()))
         await self.client.start_server()
 
     async def asyncTearDown(self):
         await self.client.close()
-        self.path_patch.stop()
+        for path_patch in self.path_patches:
+            path_patch.stop()
         self.temp_dir.cleanup()
 
     async def test_saves_merge_with_existing_styles_and_stale_edits_do_not_revert(self):
@@ -140,7 +144,37 @@ class UserStylePersistenceTests(unittest.IsolatedAsyncioTestCase):
 
         invalid = {"id": "two", "name": "Second", "prompt": "bad", "thumbnail": "data:image/png;base64,AA=="}
         response = await self.client.post("/styles/user", json={"styles": [invalid]})
+        self.assertEqual(response.status, 422)
+        self.assertEqual(self.styles_path.read_bytes(), before)
 
+    async def test_custom_styles_can_be_assigned_to_catalog_sections(self):
+        legacy = {"id": "one", "name": "First", "prompt": "current", "thumbnail": None, "updatedAt": 100}
+        self.styles_path.write_text(json.dumps([legacy]), encoding="utf-8")
+        before = self.styles_path.read_bytes()
+
+        response = await self.client.get("/styles/user")
+        payload = await response.json()
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["styles"][0]["group"], "Custom Styles")
+        self.assertEqual(set(payload), {"styles"})
+        self.assertEqual(self.styles_path.read_bytes(), before)
+
+        assigned = {**legacy, "group": "Craft & texture", "updatedAt": 101}
+        response = await self.client.post("/styles/user", json={"styles": [assigned]})
+        payload = await response.json()
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["styles"][0]["group"], "Craft & texture")
+        response = await self.client.get("/styles/user")
+        self.assertEqual((await response.json())["styles"][0]["group"], "Craft & texture")
+        self.assertFalse((Path(self.temp_dir.name) / "user_style_sections.json").exists())
+
+    async def test_invalid_style_group_does_not_save_changes(self):
+        saved = {"id": "one", "name": "First", "prompt": "current", "updatedAt": 100}
+        await self.client.post("/styles/user", json={"styles": [saved]})
+        before = self.styles_path.read_bytes()
+        added = {"id": "two", "name": "Second", "prompt": "second", "updatedAt": 101, "group": ""}
+
+        response = await self.client.post("/styles/user", json={"styles": [added]})
         self.assertEqual(response.status, 422)
         self.assertEqual(self.styles_path.read_bytes(), before)
 
