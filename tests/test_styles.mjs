@@ -41,7 +41,6 @@ function fakeElement() {
 
 test("custom styles load and save through the PC", async () => {
   const previousDocument = globalThis.document;
-  const previousWindow = globalThis.window;
   const previousFetch = globalThis.fetch;
   const elements = new Map();
   const get = id => {
@@ -60,12 +59,10 @@ test("custom styles load and save through the PC", async () => {
   get("customStyleGroups").className = "style-groups";
   get("presetStyles").className = "style-groups";
   get("stylesDialog").append(get("styleSearch"), get("customStyleGroups"), customSection, get("presetStyles"), get("styleSearchEmpty"));
-  get("styleList").append(get("addCustomSectionButton"), get("customStyleGroups"), customSection, get("presetStyles"));
+  get("styleList").append(get("customStyleGroups"), customSection, get("presetStyles"));
   const requests = [];
   // A prior deletion remains in the host store but is not rendered as a card.
   let stored = [{id: "deleted-first", deleted: true, updatedAt: Date.now() + 100000}];
-  let sections = [];
-  globalThis.window = {prompt: () => "Favorites"};
   globalThis.fetch = async () => ({
     ok: true,
     json: async () => [{id: "oil", name: "Impasto oil", group: "Painting", prompt: "oil", thumbnail: null}]
@@ -83,15 +80,15 @@ test("custom styles load and save through the PC", async () => {
           const merged = new Map(stored.map(style => [style.id, style]));
           for (const style of body.styles) merged.set(style.id, style);
           stored = [...merged.values()];
-          if (Array.isArray(body.sections)) sections = [...new Set([...sections, ...body.sections])];
         }
-        return {styles: stored, sections};
+        return {styles: stored};
       },
       closeSettings() {}
     });
     await new Promise(resolve => setImmediate(resolve));
     assert.deepEqual(requests, [{method: "GET"}]);
     await get("addStyleButton").events.click();
+    assert.deepEqual(get("styleSection").children.map(option => option.value), ["Custom Styles", "Painting"]);
     get("styleName").value = "Example";
     get("stylePrompt").value = "watercolor";
     get("styleForm").events.submit({preventDefault() {}});
@@ -106,12 +103,6 @@ test("custom styles load and save through the PC", async () => {
 
     get("quickStylesButton").events.click();
     await new Promise(resolve => setImmediate(resolve));
-    get("addCustomSectionButton").events.click();
-    await new Promise(resolve => setImmediate(resolve));
-    assert.deepEqual(sections, ["Favorites"]);
-    assert.equal(get("customStyleGroups").children[0].dataset.group, "Favorites");
-    assert.deepEqual(requests[3].body, {styles: [], sections: ["Favorites"]});
-
     await get("customStyles").children[0].children[1].events.click();
     assert.equal(get("styleEditorTitle").textContent, "Edit Style");
     assert.ok(get("styleSection").children.some(option => option.value === "Painting"));
@@ -122,7 +113,6 @@ test("custom styles load and save through the PC", async () => {
     assert.equal(stored.find(style => style.name === "Example").group, "Painting");
     assert.equal(get("customStyleGroups").children.some(group => group.dataset.group === "Painting"), true);
     assert.equal(get("presetStyles").children[0].dataset.group, "Painting");
-    assert.equal(get("customStyleGroups").children[0].dataset.group, "Favorites");
     const paintingUserGroup = get("customStyleGroups").children.find(group => group.dataset.group === "Painting");
     get("styleSearch").value = "painting";
     get("styleSearch").events.input();
@@ -132,17 +122,15 @@ test("custom styles load and save through the PC", async () => {
     get("styleSearch").value = "";
     get("styleSearch").events.input();
     await paintingUserGroup.querySelector(".style-grid").children[0].children[1].events.click();
-    get("styleSection").value = "Favorites";
+    get("styleSection").value = "Custom Styles";
     get("styleForm").events.submit({preventDefault() {}});
     await new Promise(resolve => setImmediate(resolve));
-    assert.equal(stored.find(style => style.name === "Example").group, "Favorites");
-    assert.equal(get("customStyleGroups").children[0].dataset.group, "Favorites");
-    assert.equal(get("customStyleGroups").children[0].querySelector(".style-grid").children.length, 1);
+    assert.equal(stored.find(style => style.name === "Example").group, "Custom Styles");
+    assert.equal(get("customStyleGroups").children.length, 0);
+    assert.equal(get("customStyles").children.length, 1);
   } finally {
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
-    if (previousWindow === undefined) delete globalThis.window;
-    else globalThis.window = previousWindow;
     if (previousFetch === undefined) delete globalThis.fetch;
     else globalThis.fetch = previousFetch;
   }

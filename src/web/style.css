@@ -658,20 +658,6 @@ textarea:focus {
 .style-group-header[aria-disabled="true"] { cursor: default; }
 .style-group-header[aria-disabled="true"] svg { visibility: hidden; }
 .style-group .style-grid { padding-bottom: 10px; }
-.style-section-add {
-  display: block;
-  min-height: 34px;
-  margin: 0 0 4px;
-  padding: 0 4px;
-  border: 0;
-  background: transparent;
-  color: rgba(235,238,242,.68);
-  font-size: 13px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-}
-.style-section-add:hover, .style-section-add:focus-visible { color: #fff; }
 .style-empty {
   margin: 32px 0;
   color: rgba(235,238,242,.62);

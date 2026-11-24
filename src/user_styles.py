@@ -6,7 +6,6 @@ import threading
 from preferences import USER_DATA_ROOT
 
 USER_STYLES_PATH = USER_DATA_ROOT / "user_styles.json"
-USER_STYLE_SECTIONS_PATH = USER_DATA_ROOT / "user_style_sections.json"
 USER_STYLES_LOCK = threading.Lock()
 DEFAULT_STYLE_SECTION = "Custom Styles"
 MAX_STYLE_SECTION_LENGTH = 60
@@ -69,23 +68,6 @@ def _normalize_user_styles(styles):
     return normalized
 
 
-def normalize_user_style_sections(sections):
-    if not isinstance(sections, list):
-        raise ValueError("The section list is invalid.")
-    normalized = []
-    seen = set()
-    for section in sections:
-        if (not isinstance(section, str) or not section.strip()
-                or len(section) > MAX_STYLE_SECTION_LENGTH
-                or any(ord(character) < 32 for character in section)):
-            raise ValueError("A section name is invalid.")
-        name = section.strip()
-        key = name.casefold()
-        if key not in seen:
-            seen.add(key)
-            normalized.append(name)
-    return normalized
-
 def read_user_styles():
     with USER_STYLES_LOCK:
         if not USER_STYLES_PATH.exists():
@@ -129,47 +111,4 @@ def write_user_styles(styles):
         finally:
             pending.unlink(missing_ok=True)
     return normalized
-
-
-def read_user_style_sections():
-    with USER_STYLES_LOCK:
-        if not USER_STYLE_SECTIONS_PATH.exists():
-            return []
-        data = json.loads(USER_STYLE_SECTIONS_PATH.read_text(encoding="utf-8"))
-        return normalize_user_style_sections(data)
-
-
-def write_user_style_sections(sections):
-    incoming = normalize_user_style_sections(sections)
-    with USER_STYLES_LOCK:
-        existing = []
-        if USER_STYLE_SECTIONS_PATH.exists():
-            try:
-                existing = normalize_user_style_sections(
-                    json.loads(USER_STYLE_SECTIONS_PATH.read_text(encoding="utf-8"))
-                )
-            except Exception as exc:
-                raise RuntimeError("The custom section store is invalid.") from exc
-        merged = list(existing)
-        seen = {section.casefold() for section in existing}
-        for section in incoming:
-            if section.casefold() not in seen:
-                seen.add(section.casefold())
-                merged.append(section)
-        if merged == existing:
-            return existing
-        payload = json.dumps(merged, ensure_ascii=False, separators=(",", ":"))
-        USER_STYLE_SECTIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        pending = USER_STYLE_SECTIONS_PATH.with_name(
-            f".{USER_STYLE_SECTIONS_PATH.name}.{os.getpid()}.{threading.get_ident()}.tmp"
-        )
-        try:
-            with pending.open("w", encoding="utf-8", newline="") as output:
-                output.write(payload)
-                output.flush()
-                os.fsync(output.fileno())
-            os.replace(pending, USER_STYLE_SECTIONS_PATH)
-        finally:
-            pending.unlink(missing_ok=True)
-    return merged
 

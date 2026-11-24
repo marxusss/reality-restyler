@@ -1,5 +1,4 @@
 const customGroup = "Custom Styles";
-const maxSectionNameLength = 60;
 const collapsedKey = "realityRestyle.collapsedStyleGroups";
 const chevron = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>';
 
@@ -41,7 +40,6 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   const styleSearchEmpty = $("styleSearchEmpty");
   const customSection = $("customStyleSection");
   const customStyleGroups = $("customStyleGroups");
-  const addCustomSectionButton = $("addCustomSectionButton");
   const store = openStorage(storage);
   const searchIndex = new WeakMap();
   let catalogLoaded = false;
@@ -60,7 +58,6 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   let editingStyleId = null;
   let customStylesSync = Promise.resolve();
   let syncedStyles = [];
-  let customSections = [];
   let catalogGroups = [];
   const maxStyles = 5;
   const collapsedGroups = new Set(readCollapsedGroups());
@@ -175,17 +172,13 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     element.hidden = !message;
   }
 
-  function syncCustomStyles(newStyle = null, sectionsToSave = undefined) {
+  function syncCustomStyles(newStyle = null) {
     // The PC is the only persistent store and already resolves edit conflicts.
     // Serialize requests so saves cannot race with the initial load or each other.
     const operation = customStylesSync.then(async () => {
-      const body = newStyle === null && sectionsToSave === undefined ? undefined : {
-        styles: newStyle === null ? [] : [newStyle],
-        ...(sectionsToSave === undefined ? {} : {sections: sectionsToSave})
-      };
-      const {styles, sections} = await request("/styles/user", body);
+      const body = newStyle === null ? undefined : {styles: [newStyle]};
+      const {styles} = await request("/styles/user", body);
       syncedStyles = styles;
-      if (Array.isArray(sections)) customSections = sections;
       setStyleError($("styleStorageError"));
       renderCustomStyles();
       return syncedStyles;
@@ -301,10 +294,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   }
 
   function populateStyleSections(selected = customGroup) {
-    const names = [];
-    for (const name of [customGroup, ...catalogGroups, ...customSections, selected]) {
-      if (typeof name === "string" && name && !names.includes(name)) names.push(name);
-    }
+    const names = [customGroup, ...catalogGroups];
     styleSection.replaceChildren(...names.map(name => {
       const option = document.createElement("option");
       option.value = name;
@@ -316,25 +306,18 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
 
   function renderCustomStyles() {
     const styles = syncedStyles.filter(style => !style.deleted);
-    const groups = groupStyles(styles.map(style => ({...style, group: style.group || customGroup})));
+    const groups = groupStyles(styles.map(style => ({
+      ...style,
+      group: catalogGroups.includes(style.group) ? style.group : customGroup
+    })));
     const byName = new Map(groups.map(group => [group.name, group.styles]));
-    const ordered = [];
-    const addGroup = name => {
-      if (name !== customGroup && !ordered.includes(name)) ordered.push(name);
-    };
-    for (const name of customSections) addGroup(name);
-    for (const name of catalogGroups) {
-      if (byName.has(name)) addGroup(name);
-    }
-    for (const {name} of groups) addGroup(name);
-    const sections = ordered
-      .filter(name => byName.has(name) || customSections.includes(name))
+    const sections = catalogGroups
+      .filter(name => byName.has(name))
       .map((name, index) => createStyleGroup(
         name,
         "customStyleGroup" + index,
         byName.get(name) || [],
-        true,
-        customSections.includes(name)
+        true
       ));
     customStyleGroups.replaceChildren(...sections);
     renderStyleCards($("customStyles"), byName.get(customGroup) || [], true, customGroup);
@@ -377,36 +360,6 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     }
     setStyleError(styleEditorError);
     styleEditor.showModal();
-  }
-
-  async function addCustomSection() {
-    setStyleError($("styleStorageError"));
-    const value = typeof window === "undefined" ? null : window.prompt("Section name");
-    const name = typeof value === "string" ? value.trim() : "";
-    if (!name) return;
-    if (name.length > maxSectionNameLength) {
-      setStyleError($("styleStorageError"), "Section names must be 60 characters or fewer.");
-      return;
-    }
-    const existingNames = [customGroup, ...catalogGroups, ...customSections];
-    if (existingNames.some(existing => existing.toLowerCase() === name.toLowerCase())) {
-      setStyleError($("styleStorageError"), "A section with that name already exists.");
-      return;
-    }
-    const previousSections = customSections;
-    customSections = [...customSections, name];
-    populateStyleSections(styleSection.value || customGroup);
-    renderCustomStyles();
-    addCustomSectionButton.disabled = true;
-    try {
-      await syncCustomStyles(null, customSections);
-    } catch (_) {
-      customSections = previousSections;
-      populateStyleSections(styleSection.value || customGroup);
-      renderCustomStyles();
-    } finally {
-      addCustomSectionButton.disabled = false;
-    }
   }
 
   function captureStyle() {
@@ -532,7 +485,6 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   $("useStylesButton").addEventListener("click", () => void useStyleSelection());
   $("closeStylesButton").addEventListener("click", () => stylesDialog.close());
   $("addStyleButton").addEventListener("click", () => openStyleEditor());
-  addCustomSectionButton.addEventListener("click", () => void addCustomSection());
   $("closeStyleEditorButton").addEventListener("click", () => styleEditor.close());
   $("captureStyleButton").addEventListener("click", captureStyle);
   deleteStyleButton.addEventListener("click", () => void deleteStyle());

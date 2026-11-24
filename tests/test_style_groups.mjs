@@ -207,7 +207,8 @@ test("search sits above the list and lifts the dialog above the keyboard", () =>
   const css = readFileSync(new URL("../src/web/style.css", import.meta.url), "utf8");
   const app = readFileSync(new URL("../src/web/app.js", import.meta.url), "utf8");
   assert.match(html, /id="stylesDialog"[\s\S]*?id="styleSearch" type="search"[\s\S]*?id="styleList"/);
-  assert.match(html, /id="addCustomSectionButton"[\s\S]*?id="customStyleSection"[\s\S]*?id="presetStyles"/);
+  assert.doesNotMatch(html, /addCustomSectionButton|Add Custom Section/);
+  assert.match(html, /id="customStyleGroups"[\s\S]*?id="customStyleSection"[\s\S]*?id="presetStyles"/);
   assert.match(html, /<select id="styleSection"/);
   assert.match(html, /id="styleSearchEmpty"[^>]*role="status"/);
   // dialog.show() focuses the first focusable element; that must not be the search field, or every open
