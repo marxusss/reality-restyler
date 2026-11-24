@@ -1,4 +1,5 @@
 const customGroup = "Custom Styles";
+const maxSectionNameLength = 60;
 const collapsedKey = "realityRestyle.collapsedStyleGroups";
 const chevron = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>';
 
@@ -39,12 +40,16 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   const styleSearch = $("styleSearch");
   const styleSearchEmpty = $("styleSearchEmpty");
   const customSection = $("customStyleSection");
+  const customStyleGroups = $("customStyleGroups");
+  const addCustomSectionButton = $("addCustomSectionButton");
   const store = openStorage(storage);
   const searchIndex = new WeakMap();
   let catalogLoaded = false;
+  let catalogPromise = null;
   const styleEditor = $("styleEditor");
   const styleForm = $("styleForm");
   const styleName = $("styleName");
+  const styleSection = $("styleSection");
   const stylePrompt = $("stylePrompt");
   const styleCapturePreview = $("styleCapturePreview");
   const deleteStyleButton = $("deleteStyleButton");
@@ -55,6 +60,8 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   let editingStyleId = null;
   let customStylesSync = Promise.resolve();
   let syncedStyles = [];
+  let customSections = [];
+  let catalogGroups = [];
   const maxStyles = 5;
   const collapsedGroups = new Set(readCollapsedGroups());
 
@@ -91,7 +98,8 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
         if (!card.hidden) visible += 1;
       }
       matches += visible;
-      section.hidden = !visible;
+      const keepEmpty = section.dataset.keepEmpty === "true";
+      section.hidden = !visible && !(keepEmpty && !searching);
       const expanded = searching || !collapsedGroups.has(section.dataset.group);
       grid.hidden = !expanded;
       const header = section.querySelector(".style-group-header");
@@ -103,35 +111,63 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     if (!styleSearchEmpty.hidden) styleSearchEmpty.textContent = `No styles match \u201c${query}\u201d`;
   }
 
+  function createStyleGroup(name, gridId, styles, editable = false, keepEmpty = false) {
+    const section = document.createElement("section");
+    section.className = "style-group";
+    section.dataset.group = name;
+    if (keepEmpty) section.dataset.keepEmpty = "true";
+    section.setAttribute("aria-label", name);
+    const heading = document.createElement("h3");
+    const header = document.createElement("button");
+    header.type = "button";
+    header.className = "style-group-header";
+    header.innerHTML = chevron;
+    const title = document.createElement("span");
+    title.className = "style-group-name";
+    title.textContent = name;
+    const count = document.createElement("span");
+    count.className = "style-group-count";
+    header.prepend(title, count);
+    const grid = document.createElement("div");
+    grid.className = "style-grid";
+    grid.id = gridId;
+    header.setAttribute("aria-controls", grid.id);
+    header.addEventListener("click", () => toggleGroup(section));
+    heading.append(header);
+    section.append(heading, grid);
+    renderStyleCards(grid, styles, editable, name);
+    return section;
+  }
+
   function renderStyleGroups(container, styles) {
-    const sections = groupStyles(styles).map(({name, styles: items}, index) => {
-      const section = document.createElement("section");
-      section.className = "style-group";
-      section.dataset.group = name;
-      section.setAttribute("aria-label", name);
-      const heading = document.createElement("h3");
-      const header = document.createElement("button");
-      header.type = "button";
-      header.className = "style-group-header";
-      header.innerHTML = chevron;
-      const title = document.createElement("span");
-      title.className = "style-group-name";
-      title.textContent = name;
-      const count = document.createElement("span");
-      count.className = "style-group-count";
-      header.prepend(title, count);
-      const grid = document.createElement("div");
-      grid.className = "style-grid";
-      grid.id = `styleGroup${index}`;
-      header.setAttribute("aria-controls", grid.id);
-      header.addEventListener("click", () => toggleGroup(section));
-      heading.append(header);
-      section.append(heading, grid);
-      renderStyleCards(grid, items, false, name);
-      return section;
-    });
+    catalogGroups = [...new Set(styles.map(style => style.group || "Other"))];
+    const sections = groupStyles(styles).map(({name, styles: items}, index) =>
+      createStyleGroup(name, "styleGroup" + index, items));
     container.replaceChildren(...sections);
+    populateStyleSections(styleSection.value || customGroup);
     applyStyleFilter();
+  }
+
+  function loadStyleCatalog() {
+    const presetStyles = $("presetStyles");
+    if (catalogLoaded || presetStyles.hasChildNodes()) return Promise.resolve();
+    if (catalogPromise) return catalogPromise;
+    const catalogError = $("catalogError");
+    setStyleError(catalogError);
+    catalogPromise = (async () => {
+      try {
+        const response = await fetch("/styles/catalog.json");
+        if (!response.ok) throw new Error();
+        const styles = await response.json();
+        catalogLoaded = true;
+        renderStyleGroups(presetStyles, styles);
+      } catch (_) {
+        setStyleError(catalogError, "Could not load styles.");
+      } finally {
+        catalogPromise = null;
+      }
+    })();
+    return catalogPromise;
   }
 
   function setStyleError(element, message = "") {
@@ -139,12 +175,17 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     element.hidden = !message;
   }
 
-  function syncCustomStyles(newStyle = null) {
+  function syncCustomStyles(newStyle = null, sectionsToSave = undefined) {
     // The PC is the only persistent store and already resolves edit conflicts.
     // Serialize requests so saves cannot race with the initial load or each other.
     const operation = customStylesSync.then(async () => {
-      const {styles} = await request("/styles/user", newStyle === null ? undefined : {styles: [newStyle]});
+      const body = newStyle === null && sectionsToSave === undefined ? undefined : {
+        styles: newStyle === null ? [] : [newStyle],
+        ...(sectionsToSave === undefined ? {} : {sections: sectionsToSave})
+      };
+      const {styles, sections} = await request("/styles/user", body);
       syncedStyles = styles;
+      if (Array.isArray(sections)) customSections = sections;
       setStyleError($("styleStorageError"));
       renderCustomStyles();
       return syncedStyles;
@@ -259,9 +300,44 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     updateStyleSelection();
   }
 
+  function populateStyleSections(selected = customGroup) {
+    const names = [];
+    for (const name of [customGroup, ...catalogGroups, ...customSections, selected]) {
+      if (typeof name === "string" && name && !names.includes(name)) names.push(name);
+    }
+    styleSection.replaceChildren(...names.map(name => {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      return option;
+    }));
+    styleSection.value = names.includes(selected) ? selected : customGroup;
+  }
+
   function renderCustomStyles() {
     const styles = syncedStyles.filter(style => !style.deleted);
-    renderStyleCards($("customStyles"), styles, true, customGroup);
+    const groups = groupStyles(styles.map(style => ({...style, group: style.group || customGroup})));
+    const byName = new Map(groups.map(group => [group.name, group.styles]));
+    const ordered = [];
+    const addGroup = name => {
+      if (name !== customGroup && !ordered.includes(name)) ordered.push(name);
+    };
+    for (const name of customSections) addGroup(name);
+    for (const name of catalogGroups) {
+      if (byName.has(name)) addGroup(name);
+    }
+    for (const {name} of groups) addGroup(name);
+    const sections = ordered
+      .filter(name => byName.has(name) || customSections.includes(name))
+      .map((name, index) => createStyleGroup(
+        name,
+        "customStyleGroup" + index,
+        byName.get(name) || [],
+        true,
+        customSections.includes(name)
+      ));
+    customStyleGroups.replaceChildren(...sections);
+    renderStyleCards($("customStyles"), byName.get(customGroup) || [], true, customGroup);
     applyStyleFilter();
   }
 
@@ -270,8 +346,6 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       stylesDialog.close();
       return;
     }
-    const presetStyles = $("presetStyles");
-    const catalogError = $("catalogError");
     setStyleSelection(null);
     renderCustomStyles();
     closeSettings();
@@ -282,25 +356,17 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       button.setAttribute("aria-expanded", "true");
     }
     void syncCustomStyles().catch(() => {});
-    if (presetStyles.hasChildNodes()) return;
-    setStyleError(catalogError);
-    try {
-      const response = await fetch("/styles/catalog.json");
-      if (!response.ok) throw new Error();
-      const styles = await response.json();
-      catalogLoaded = true;
-      renderStyleGroups(presetStyles, styles);
-    } catch (_) {
-      setStyleError(catalogError, "Could not load styles.");
-    }
+    await loadStyleCatalog();
   }
 
-  function openStyleEditor(style = null) {
+  async function openStyleEditor(style = null) {
+    if (!catalogLoaded) await loadStyleCatalog();
     editingStyleId = style?.id || null;
     deleteStyleButton.hidden = !editingStyleId;
     styleForm.reset();
     $("styleEditorTitle").textContent = style ? "Edit Style" : "Add Style";
     styleName.value = style?.name || "";
+    populateStyleSections(style?.group || customGroup);
     stylePrompt.value = style?.prompt ?? promptInput.value;
     if (style?.thumbnail) {
       styleCapturePreview.src = style.thumbnail;
@@ -311,6 +377,36 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
     }
     setStyleError(styleEditorError);
     styleEditor.showModal();
+  }
+
+  async function addCustomSection() {
+    setStyleError($("styleStorageError"));
+    const value = typeof window === "undefined" ? null : window.prompt("Section name");
+    const name = typeof value === "string" ? value.trim() : "";
+    if (!name) return;
+    if (name.length > maxSectionNameLength) {
+      setStyleError($("styleStorageError"), "Section names must be 60 characters or fewer.");
+      return;
+    }
+    const existingNames = [customGroup, ...catalogGroups, ...customSections];
+    if (existingNames.some(existing => existing.toLowerCase() === name.toLowerCase())) {
+      setStyleError($("styleStorageError"), "A section with that name already exists.");
+      return;
+    }
+    const previousSections = customSections;
+    customSections = [...customSections, name];
+    populateStyleSections(styleSection.value || customGroup);
+    renderCustomStyles();
+    addCustomSectionButton.disabled = true;
+    try {
+      await syncCustomStyles(null, customSections);
+    } catch (_) {
+      customSections = previousSections;
+      populateStyleSections(styleSection.value || customGroup);
+      renderCustomStyles();
+    } finally {
+      addCustomSectionButton.disabled = false;
+    }
   }
 
   function captureStyle() {
@@ -383,6 +479,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
       id: editingStyleId || (crypto.randomUUID ? crypto.randomUUID() : `style-${Date.now()}-${Math.random().toString(16).slice(2)}`),
       name,
       prompt,
+      group: styleSection.value || customGroup,
       thumbnail: styleCapturePreview.getAttribute("src"),
       updatedAt: Math.max(Date.now(), (previous?.updatedAt || 0) + 1)
     };
@@ -435,6 +532,7 @@ export function mountStyles({promptInput, applyPromptNow, request, getRenderedFr
   $("useStylesButton").addEventListener("click", () => void useStyleSelection());
   $("closeStylesButton").addEventListener("click", () => stylesDialog.close());
   $("addStyleButton").addEventListener("click", () => openStyleEditor());
+  addCustomSectionButton.addEventListener("click", () => void addCustomSection());
   $("closeStyleEditorButton").addEventListener("click", () => styleEditor.close());
   $("captureStyleButton").addEventListener("click", captureStyle);
   deleteStyleButton.addEventListener("click", () => void deleteStyle());

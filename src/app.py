@@ -24,7 +24,10 @@ from phone_access import (
 from runtime import Runtime, combine_style_prompts
 from sessions import PROTOCOL_PREFIX, SESSION_KEY, TOKEN_HEADER, SessionManager
 from timing import TimingWindow
-from user_styles import read_user_styles, write_user_styles
+from user_styles import (
+    normalize_user_style_sections, read_user_styles, read_user_style_sections,
+    write_user_styles, write_user_style_sections,
+)
 from webrtc_track import RestyleTrack
 
 ROOT = Path(__file__).resolve().parent
@@ -148,21 +151,27 @@ async def combine_styles(request):
 async def get_user_styles(request):
     try:
         styles = await asyncio.to_thread(read_user_styles)
+        sections = await asyncio.to_thread(read_user_style_sections)
     except Exception as exc:
         print(f"Could not read custom styles: {type(exc).__name__}: {exc}", flush=True)
         return web.json_response({"error": "Could not load custom styles."}, status=500)
-    return web.json_response({"styles": styles})
+    return web.json_response({"styles": styles, "sections": sections})
 
 async def save_user_styles(request):
     data = await _json(request)
     try:
+        sections = normalize_user_style_sections(data["sections"]) if "sections" in data else None
         styles = await asyncio.to_thread(write_user_styles, data.get("styles"))
+        if sections is not None:
+            sections = await asyncio.to_thread(write_user_style_sections, sections)
+        else:
+            sections = await asyncio.to_thread(read_user_style_sections)
     except ValueError as exc:
         return web.json_response({"error": str(exc)}, status=422)
     except Exception as exc:
         print(f"Could not save custom styles: {type(exc).__name__}: {exc}", flush=True)
         return web.json_response({"error": "Could not save custom styles."}, status=500)
-    return web.json_response({"styles": styles})
+    return web.json_response({"styles": styles, "sections": sections})
 
 async def get_preferences(request):
     try:

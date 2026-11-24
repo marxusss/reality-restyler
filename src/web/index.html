@@ -108,6 +108,8 @@
           </button>
         </div>
         <div id="styleList" class="style-list" role="region" aria-label="Style library" tabindex="0">
+          <button id="addCustomSectionButton" class="style-section-add" type="button">+ Add Custom Section</button>
+          <div id="customStyleGroups" class="style-groups"></div>
           <section id="customStyleSection" class="style-group" data-group="Custom Styles" aria-labelledby="customStylesTitle" hidden>
             <h3><button class="style-group-header" type="button" aria-expanded="true" aria-controls="customStyles"><span id="customStylesTitle">Custom Styles</span><span class="style-group-count"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button></h3>
             <div id="customStyles" class="style-grid"></div>
@@ -141,6 +143,10 @@
             <label class="field">
               <span>Name</span>
               <input id="styleName" type="text" maxlength="60" required autofocus>
+            </label>
+            <label class="field">
+              <span>Section</span>
+              <select id="styleSection" aria-label="Style section"></select>
             </label>
             <label class="field">
               <span>Prompt</span>
