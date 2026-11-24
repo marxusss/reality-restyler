@@ -8,17 +8,6 @@
   color: #f4f4f4;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  /* Glass: a light tint, a small blur that boosts colour, a specular rim and a soft drop shadow.
-     Inner controls are flat fills on the glass, never a second layer of glass. */
-  --glass-tint: rgba(26,28,32,.26);
-  --glass-panel: rgba(26,28,32,.44);
-  --glass-blur: blur(14px) saturate(180%);
-  --glass-shadow: 0 10px 30px rgba(0,0,0,.24), 0 1px 3px rgba(0,0,0,.14);
-  --glass-sheen: inset 0 1px 0 rgba(255,255,255,.2), inset 0 -1px 0 rgba(255,255,255,.04);
-  --fill: rgba(255,255,255,.1);
-  --fill-strong: rgba(255,255,255,.2);
-  --hairline: rgba(255,255,255,.13);
-  --accent: #ffd60a;
 }
 html, body, #app {
   width: 100%;
@@ -50,17 +39,13 @@ button, input, select, textarea {
 }
 button {
   color: inherit;
-  -webkit-tap-highlight-color: transparent;
 }
-button:focus { outline: none; }
-button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset: 2px; }
-/* The picture fills the screen; controls float over it. */
 #output {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   background: #050505;
 }
 #output.camera-source {
@@ -72,7 +57,7 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   background: #050505;
 }
 #output[hidden], #localOutput[hidden], .icon-button[hidden] {
@@ -88,33 +73,8 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(0,0,0,.22), transparent 18%, transparent 74%, rgba(0,0,0,.26));
+  background: linear-gradient(180deg, rgba(0,0,0,.24), transparent 24%, transparent 68%, rgba(0,0,0,.3));
 }
-
-/* Liquid-glass material shared by the few floating groups. */
-.glass {
-  border: 0;
-  background: var(--glass-tint);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-shadow), var(--glass-sheen);
-}
-.glass::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  padding: 1px;
-  border-radius: inherit;
-  background: linear-gradient(155deg, rgba(255,255,255,.55), rgba(255,255,255,.12) 26%, rgba(255,255,255,0) 50%,
-    rgba(255,255,255,.06) 74%, rgba(255,255,255,.3));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
 .icon-button {
   width: 46px;
   height: 46px;
@@ -123,12 +83,12 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
   padding: 0;
   appearance: none;
   -webkit-appearance: none;
-  border: 0;
-  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 15px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--fill);
+  background: rgba(13,15,18,.36);
   color: #f7f8fa;
   line-height: 0;
   cursor: pointer;
@@ -164,34 +124,21 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
   flex-direction: column;
   gap: 10px;
   width: min(250px, calc(100vw - 40px));
-  padding: 14px 16px;
-  border-radius: 24px;
-  background: var(--glass-panel);
+  padding: 13px 15px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 14px;
+  background: rgba(12,14,17,.78);
   color: rgba(255,255,255,.9);
   font-size: 13px;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
-.startup > * { position: relative; }
 .startup progress {
   width: 100%;
-  height: 4px;
-  accent-color: #fff;
+  height: 6px;
+  accent-color: #a7ecd0;
 }
-.startup .toggle-button { align-self: flex-start; }
 #cancelStartupButton[hidden] { display: none; }
-
-/* Flash: iOS keeps it top left, away from the shutter. Hidden unless the camera has a torch. */
-.flash-button {
-  position: absolute;
-  z-index: 1;
-  top: max(12px, env(safe-area-inset-top));
-  left: max(12px, env(safe-area-inset-left));
-  width: 44px;
-  height: 44px;
-}
-.flash-button svg { width: 20px; height: 20px; }
-.flash-button[aria-pressed="true"] { color: var(--accent); }
-.flash-button[aria-pressed="true"] svg { fill: currentColor; }
-
 .camera-controls {
   position: absolute;
   left: 50%;
@@ -203,21 +150,24 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
   width: max-content;
   max-width: calc(100% - 16px);
 }
-/* The dock: one glass capsule for every camera action. */
 .actions {
-  position: relative;
   display: grid;
-  grid-template-columns: 42px 42px 68px 42px;
+  grid-template-columns: 42px 42px 68px 42px 42px;
   justify-content: center;
   align-items: end;
   column-gap: 10px;
-  width: 270px;
+  width: 312px;
   max-width: calc(100vw - 16px);
   height: 72px;
   padding: 6px 8px;
-  border-radius: 36px;
+  border: 1px solid rgba(255,255,255,.27);
+  border-radius: 22px;
+  background: rgba(23,28,32,.28);
+  box-shadow: 0 12px 32px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.16);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
 }
-.actions > #settingsButton { grid-column: 1; grid-row: 1; }
+.actions > #flashButton { grid-column: 1; grid-row: 1; }
 .actions > #startButton {
   grid-column: 2; grid-row: 1; justify-self: center; align-self: end; z-index: 1;
   display: grid; place-items: center;
@@ -231,28 +181,19 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
   transition: opacity .2s ease .12s;
 }
 .actions:not(.activated) > .capture-controls { opacity: 0; pointer-events: none; }
-.actions > #quickStylesButton { grid-column: 4; grid-row: 1; }
-.actions .icon-button {
-  width: 42px;
-  height: 42px;
-  background: transparent;
-}
-.actions .icon-button:active, .lens-button:active { background: var(--fill-strong); }
+.actions > #settingsButton { grid-column: 4; grid-row: 1; }
+.actions > #quickStylesButton { grid-column: 5; grid-row: 1; }
 @media (prefers-reduced-motion: reduce) {
   .actions > #startButton, .actions > .capture-controls { transition: none; }
 }
 .lens-bar, .capture-file-actions {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
 }
-/* Front and rear lens choices share one small glass capsule. */
 .lens-bar {
-  gap: 2px;
-  padding: 4px;
-  border-radius: 21px;
+  gap: 7px;
   flex-wrap: nowrap;
   max-width: calc(100vw - 24px);
   overflow-x: auto;
@@ -263,35 +204,29 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
 .capture-file-actions {
   gap: 4px;
   padding: 4px;
-  border-radius: 23px;
-  background: var(--glass-panel);
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 18px;
+  background: rgba(11,13,16,.86);
 }
-.capture-file-actions > * { position: relative; }
-.capture-file-actions #saveCaptureButton {
-  background: #f5f6f7;
-  color: #141619;
-  font-weight: 650;
-}
-.capture-file-actions .icon-button { background: transparent; }
 .lens-bar[hidden], .capture-file-actions[hidden], .capture-mode[hidden], .capture-mode-other[hidden] {
   display: none;
 }
 .lens-button {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  min-height: 34px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   aspect-ratio: 1;
-  flex: 0 0 34px;
+  flex: 0 0 36px;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: transparent;
-  color: rgba(255,255,255,.92);
+  background: rgba(25,29,33,.38);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  color: #fff;
   font-size: 11px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -299,11 +234,21 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
   cursor: pointer;
 }
 .lens-button[aria-pressed="true"] {
-  background: rgba(0,0,0,.32);
-  color: var(--accent);
-  font-size: 12px;
+  background: rgba(38,38,38,.52);
+  color: #f3e8a7;
 }
-.lens-button[aria-pressed="true"]::after { content: "×"; }
+.actions .icon-button {
+  width: 42px;
+  height: 44px;
+  border-color: transparent;
+  box-shadow: none;
+  background: transparent;
+  backdrop-filter: none;
+}
+.icon-button[aria-pressed="true"] {
+  background: rgba(255,255,255,.16);
+  border-color: rgba(255,255,255,.24);
+}
 #startButton .pause-icon, #startButton.playing .play-icon {
   display: none;
 }
@@ -327,9 +272,8 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
 }
 .capture-mode, .capture-mode-other {
   border: 0; padding: 0 3px; background: transparent;
-  color: var(--accent); font-size: 11px; line-height: 16px;
+  color: rgba(244,245,246,.78); font-size: 11px; line-height: 16px;
   font-weight: 650; white-space: nowrap; cursor: pointer;
-  letter-spacing: .02em;
   text-shadow: 0 1px 3px rgba(0,0,0,.45);
 }
 .capture-mode-other {
@@ -343,20 +287,17 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
   flex: 0 0 42px;
   width: 42px; height: 42px; min-width: 42px; min-height: 42px;
   max-width: 42px; max-height: 42px; aspect-ratio: 1;
-  padding: 0; border: 2.5px solid #fff; border-radius: 50%;
-  background: transparent; cursor: pointer;
-  box-shadow: 0 1px 6px rgba(0,0,0,.25);
+  padding: 0; border: 2px solid #fff; border-radius: 50%;
+  background: rgba(0,0,0,.28); cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 .shutter-button::before {
-  content: ""; width: 31px; height: 31px; aspect-ratio: 1;
+  content: ""; width: 32px; height: 32px; aspect-ratio: 1;
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   border-radius: 50%; background: #fff;
 }
-.shutter-button[data-mode="video"]::before { background: #ff3b30; }
-.shutter-button.recording::before { width: 17px; height: 17px; border-radius: 5px; }
-.shutter-button:active::before { width: 28px; height: 28px; }
-.shutter-button.recording:active::before { width: 17px; height: 17px; }
+.shutter-button[data-mode="video"]::before { background: #f14f58; }
+.shutter-button.recording::before { width: 18px; height: 18px; border-radius: 4px; }
 .shutter-button:disabled { opacity: 1; cursor: default; }
 .settings-panel {
   --settings-bottom: calc(max(12px, env(safe-area-inset-bottom)) + 88px);
@@ -366,13 +307,16 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
   bottom: var(--settings-bottom);
   width: min(430px, calc(100vw - 24px));
   transform: translateX(-50%);
-  padding: 10px 12px 6px 14px;
-  border-radius: 28px;
-  background: var(--glass-panel);
+  padding: 9px 12px;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 20px;
+  background: rgba(25,29,33,.29);
+  box-shadow: 0 14px 42px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.12);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
 }
-.settings-panel > * { position: relative; }
 #app:has(.lens-bar:not([hidden])) {
-  --lens-height: 48px;
+  --lens-height: 42px;
 }
 #app:has(.capture-file-actions:not([hidden])) {
   --capture-save-height: 54px;
@@ -398,7 +342,7 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
 .icon-button.small {
   width: 34px;
   height: 34px;
-  border-radius: 50%;
+  border-radius: 11px;
 }
 .icon-button.small svg {
   width: 17px;
@@ -416,7 +360,7 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
 .prompt-line {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   margin-bottom: 6px;
 }
 .prompt-line textarea {
@@ -427,7 +371,7 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
   height: 36px;
   padding: 7px 2px;
   border: 0;
-  border-bottom: 1px solid rgba(255,255,255,.24);
+  border-bottom: 1px solid rgba(255,255,255,.38);
   border-radius: 0;
   background: transparent;
   font-size: 16px;
@@ -435,14 +379,15 @@ button:focus-visible { outline: 2px solid rgba(255,255,255,.75); outline-offset:
   overflow-y: auto;
   resize: none;
 }
-.prompt-line #stylesButton { flex: 0 0 auto; min-height: 32px; padding: 0 10px 0 8px; gap: 5px; }
+.prompt-line #stylesButton { flex: 0 0 auto; min-height: 30px; padding: 5px 7px; }
 .prompt-line .settings-done {
   flex: 0 0 auto;
-  min-height: 32px;
-  padding: 0 11px;
-  background: var(--fill);
-  color: #fff;
-  font-size: 12px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-color: rgba(255,255,255,.13);
+  background: rgba(255,255,255,.018);
+  color: rgba(244,245,246,.78);
+  font-size: 11px;
   font-weight: 650;
 }
 .prompt-line #stylesButton svg { width: 18px; height: 18px; }
@@ -454,10 +399,10 @@ textarea {
   width: 100%;
   min-width: 0;
   color: #f4f5f6;
-  border: 0;
-  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
   outline: none;
-  background: var(--fill);
+  background: rgba(255,255,255,.055);
 }
 textarea {
   min-height: 76px;
@@ -466,7 +411,7 @@ textarea {
   line-height: 1.4;
 }
 textarea:focus {
-  border-color: rgba(255,255,255,.5);
+  border-color: rgba(255,255,255,.44);
 }
 .setting-row {
   display: flex; align-items: center; gap: 8px;
@@ -474,9 +419,10 @@ textarea:focus {
 }
 .setting-row .steps-field { flex: 1 1 auto; }
 .setting-row .resolution-field {
-  display: grid; grid-template-columns: 30px 36px 30px;
+  display: grid; grid-template-columns: 29px 34px 29px;
   flex: 0 0 auto; min-height: 32px;
-  border-radius: 16px; background: var(--fill);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 9px; background: rgba(255,255,255,.035);
   font-variant-numeric: tabular-nums;
 }
 .resolution-field output {
@@ -484,7 +430,7 @@ textarea:focus {
   font-size: 12px; font-weight: 650;
 }
 .resolution-field button {
-  padding: 0; border: 0; border-radius: 16px;
+  padding: 0; border: 0; border-radius: 8px;
   background: transparent; font-size: 16px; line-height: 1; cursor: pointer;
 }
 .resolution-field button:enabled:hover { background: rgba(255,255,255,.12); }
@@ -493,17 +439,21 @@ textarea:focus {
   outline: 2px solid #a7ecd0; outline-offset: -2px;
 }
 .setting-row #upscaleButton {
-  flex: 0 0 auto; min-height: 32px; padding: 0 11px 0 9px; gap: 5px;
-  font-size: 12px;
+  flex: 0 0 auto; min-height: 30px; padding: 0 8px; gap: 5px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 9px; background: rgba(255,255,255,.035); font-size: 11px;
 }
 .setting-row #upscaleButton svg { width: 15px; height: 15px; }
 .setting-row #upscaleButton[aria-pressed="true"] {
-  color: #eafff1;
-  background: rgba(62,164,102,.5);
+  color: #e8fff0;
+  border-color: rgba(129,220,165,.65);
+  background: rgba(62,164,102,.24);
+  box-shadow: inset 0 0 0 1px rgba(129,220,165,.16);
 }
 .setting-row #upscaleButton[aria-pressed="false"] {
-  color: rgba(255,255,255,.6);
-  background: rgba(255,255,255,.07);
+  color: rgba(255,255,255,.56);
+  border-color: rgba(255,255,255,.11);
+  background: rgba(255,255,255,.025);
 }
 .setting-row .field { flex-direction: row; align-items: center; gap: 5px; font-size: 11px; }
 .setting-row .range-wrap { flex: 1; height: 30px; gap: 5px; }
@@ -516,7 +466,7 @@ textarea:focus {
 }
 .range-wrap input {
   width: 100%;
-  accent-color: #fff;
+  accent-color: #ededed;
 }
 .range-wrap output {
   min-width: 24px;
@@ -528,7 +478,7 @@ textarea:focus {
   display: flex; align-items: center; justify-content: space-between;
   min-height: 30px; gap: 8px;
   line-height: 16px;
-  border-top: 1px solid var(--hairline); padding-top: 3px;
+  border-top: 1px solid rgba(255,255,255,.13); padding-top: 3px;
 }
 .setting-footer #quitModelButton {
   flex: 0 0 auto;
@@ -537,24 +487,22 @@ textarea:focus {
   display: inline-flex; align-items: center; line-height: 16px;
   background: none; border: 0; color: rgba(235,238,242,.58); font-size: 11px;
 }
-/* Buttons inside glass are flat capsules. */
 .toggle-button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-height: 38px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--fill);
-  color: rgba(255,255,255,.9);
+  padding: 0 13px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 12px;
+  background: rgba(255,255,255,.055);
+  color: rgba(255,255,255,.84);
   font-size: 12px;
-  font-weight: 550;
   cursor: pointer;
 }
-.toggle-button:active { background: var(--fill-strong); }
 .toggle-button[aria-pressed="true"] {
-  background: var(--fill-strong);
+  border-color: rgba(255,255,255,.32);
+  background: rgba(255,255,255,.15);
   color: #fff;
 }
 .toggle-button svg {
@@ -567,12 +515,15 @@ textarea:focus {
   max-height: min(66dvh,400px);
   overflow: auto;
   margin: auto;
-  padding: 14px;
-  border-radius: 30px;
-  background: var(--glass-panel);
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 19px;
+  background: rgba(27,27,27,.23);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
   color: inherit;
+  box-shadow: 0 14px 48px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.12);
 }
-.style-dialog > * { position: relative; }
 .style-dialog::backdrop { background: transparent; }
 #stylesDialog[open] {
   --styles-bottom: calc(max(12px, env(safe-area-inset-bottom)) + 80px + var(--lens-height, 0px) + var(--capture-save-height, 0px));
@@ -589,7 +540,7 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: rgba(26,28,32,.58);
+  background: rgba(27,27,27,.62);
 }
 /* Search shares the top row with Close: one flat capsule on the glass, never a second layer of glass. */
 .style-search-row {
@@ -640,14 +591,15 @@ textarea:focus {
 .style-search input::-webkit-search-decoration { -webkit-appearance: none; }
 #closeStylesButton, #closeStyleEditorButton {
   align-self: flex-end;
-  flex: 0 0 auto;
-  margin: -2px -2px 6px 0;
+  margin-bottom: 5px;
   width: 30px;
   height: 30px;
+  border: 1px solid rgba(255,255,255,.10);
   border-radius: 50%;
-  background: var(--fill);
+  background: rgba(27,27,27,.08);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
-#closeStylesButton svg, #closeStyleEditorButton svg { width: 15px; height: 15px; stroke-width: 2; }
 #stylesDialog .style-toolbar { flex: 0 0 auto; }
 .style-list {
   flex: 1 1 auto;
@@ -664,11 +616,6 @@ textarea:focus {
   margin-bottom: 7px;
   padding-left: 3px;
   font-size: 13px;
-}
-#customStyleSection {
-  margin-bottom: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--hairline);
 }
 /* Groups are a header line over their grid: no card or fill around a group. */
 .style-group[hidden], .style-grid[hidden], .style-card[hidden], .custom-style-card[hidden], .style-empty[hidden] {
@@ -733,7 +680,7 @@ textarea:focus {
 .style-card {
   display: block;
   width: 100%; min-width: 0; padding: 0;
-  border: 0; border-radius: 16px;
+  border: 1px solid transparent; border-radius: 9px;
   background: transparent; text-align: left;
   font-size: 10px; line-height: 1.2; font-weight: 550; cursor: pointer;
 }
@@ -763,16 +710,13 @@ textarea:focus {
   stroke-width: .85;
   filter: drop-shadow(0 1px 1px rgba(0,0,0,.65));
 }
-.style-card:focus-visible {
-  outline: 2px solid rgba(255,255,255,.8);
-  outline-offset: 2px;
-}
-@media (hover: hover) {
-  .style-card:hover { background: rgba(255,255,255,.06); }
+.style-card:hover, .style-card:focus-visible {
+  border-color: rgba(255,255,255,.35);
+  background: rgba(255,255,255,.06);
 }
 .style-card[aria-pressed="true"] {
-  outline: 3px solid #a7f4d4;
-  outline-offset: -3px;
+  outline: 8px solid #a7f4d4;
+  outline-offset: -8px;
   background: rgba(145,213,189,.16);
 }
 .style-card:disabled {
@@ -788,7 +732,7 @@ textarea:focus {
   width: 100%;
   aspect-ratio: 8 / 5;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: 7px;
   background: transparent;
 }
 .style-thumbnail img {
@@ -806,7 +750,7 @@ textarea:focus {
   right: 0;
   z-index: 1;
   display: block;
-  padding: 5px 8px 6px;
+  padding: 4px 5px;
   color: #fff;
   font-size: clamp(11px, 1vw, 14px);
   font-weight: 550;
@@ -823,8 +767,8 @@ textarea:focus {
 }
 #stylesDialog .style-toolbar {
   justify-content: flex-start;
-  border-top: 1px solid var(--hairline);
-  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,.17);
+  padding-top: 7px;
 }
 #stylesDialog .style-toolbar .toggle-button {
   min-height: 34px;
@@ -837,7 +781,6 @@ textarea:focus {
   background: transparent;
   font-weight: 650;
 }
-#combineStylesButton[aria-pressed="true"] { padding-left: 14px; background: var(--fill-strong); }
 #addStyleButton, #useStylesButton { margin-left: auto; }
 #addStyleButton { gap: 5px; padding-right: 13px; }
 #addStyleButton span { line-height: 16px; }
@@ -849,9 +792,6 @@ textarea:focus {
   max-height: min(92dvh, 900px);
   padding: 24px;
 }
-/* The editor is modal and full height on a phone: a denser glass keeps the dock from showing through. */
-#styleEditor.style-editor { background: rgba(26,28,32,.9); }
-#styleEditor::backdrop { background: rgba(0,0,0,.28); }
 #styleEditor[open] {
   display: flex;
   flex-direction: column;
@@ -883,12 +823,11 @@ textarea:focus {
   width: 100%;
   min-width: 0;
   height: 46px;
-  padding: 0 15px;
+  padding: 0 13px;
   color: #f4f5f6;
-  border: 0;
-  border-radius: 16px;
-  outline: none;
-  background: var(--fill);
+  border: 1px solid rgba(255,255,255,.19);
+  border-radius: 12px;
+  background: rgba(255,255,255,.075);
   font-size: 16px;
 }
 #styleEditor textarea {
@@ -896,19 +835,21 @@ textarea:focus {
   padding: 14px;
   font-size: 16px;
   line-height: 1.5;
-  background: var(--fill);
+  border-color: rgba(255,255,255,.19);
+  background: rgba(255,255,255,.075);
   scrollbar-width: none;
 }
 #styleEditor textarea::-webkit-scrollbar { display: none; }
 #styleEditor input:focus, #styleEditor textarea:focus {
-  background: rgba(255,255,255,.14);
-  box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4);
+  border-color: rgba(255,255,255,.48);
+  background: rgba(255,255,255,.09);
 }
 #styleEditor #styleCapturePreview {
   width: min(100%, 320px);
   height: auto;
   aspect-ratio: 8 / 5;
   margin: 0 auto;
+  border: 1px solid rgba(255,255,255,.14);
   object-fit: cover;
   background: transparent;
 }
@@ -922,7 +863,7 @@ textarea:focus {
   gap: 10px;
   margin: 0;
   padding: 14px 0 0;
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid rgba(255,255,255,.16);
   border-radius: 0;
   background: none;
 }
@@ -941,7 +882,8 @@ textarea:focus {
   line-height: 1;
 }
 #styleEditor .style-delete {
-  background: rgba(255,69,58,.2);
+  border-color: rgba(255,145,145,.25);
+  background: rgba(111,37,41,.24);
   color: #ffc2c2;
 }
 @media (min-width: 700px) {
@@ -1029,7 +971,7 @@ textarea:focus {
 }
 #styleCapturePreview {
   display: block;
-  border-radius: 16px;
+  border-radius: 9px;
 }
 #styleCapturePreview[hidden] {
   display: none;
@@ -1051,22 +993,25 @@ textarea:focus {
   bottom: calc(max(20px, env(safe-area-inset-bottom)) + 100px);
   width: min(430px, calc(100vw - 24px));
   transform: translateX(-50%);
-  padding: 12px 16px;
-  border-radius: 22px;
-  background: rgba(70,18,22,.6);
-  color: #ffe3e3;
+  padding: 11px 14px;
+  border: 1px solid rgba(255,120,120,.28);
+  border-radius: 13px;
+  background: rgba(38,15,17,.88);
+  color: #ffdede;
   font-size: 12px;
   line-height: 1.4;
+  box-shadow: 0 8px 30px rgba(0,0,0,.28);
 }
 .error[hidden], .startup[hidden], .latency[hidden] {
   display: none;
 }
 @media (max-width: 440px) {
   .settings-panel {
-    padding: 10px 10px 6px 12px;
+    padding: 10px;
+    border-radius: 20px;
   }
   .setting-row {
-    gap: 8px;
+    gap: 9px;
   }
 }
 @media (any-pointer: coarse) {
@@ -1084,7 +1029,7 @@ textarea:focus {
     top: auto;
     bottom: calc(100dvh - var(--keyboard-top, 0px) - var(--keyboard-height, 100dvh) + 8px);
     margin-bottom: 0;
-    padding: 9px 9px 9px 12px;
+    padding: 9px;
   }
   .text-entry .settings-panel > :not(.prompt-line),
   .text-entry .style-editor #styleCapturePreview,
@@ -1115,30 +1060,14 @@ textarea:focus {
   .settings-panel { --settings-bottom: calc(max(6px,env(safe-area-inset-bottom)) + 75px); }
 }
 @media (max-width: 360px) {
-  .actions { width: 260px; grid-template-columns: 40px 40px 62px 40px; column-gap: 8px; }
+  .actions { width: 292px; grid-template-columns: 40px 40px 62px 40px 40px; column-gap: 8px; }
   .actions:not(.activated) > #startButton { transform: translateX(59px); }
   .setting-row { gap: 4px; }
-  .setting-row #upscaleButton { padding-left: 6px; padding-right: 8px; }
-  .actions .icon-button { width: 40px; height: 40px; }
+  .setting-row #upscaleButton { padding-left: 4px; }
 }
-/* A dialog over the top of the screen should not show the flash button through its glass. */
-body:has(#stylesDialog[open], #styleEditor[open]) .flash-button { visibility: hidden; }
 /* Opening the style editor should not leave a second glass dialog visible. */
 body:has(#styleEditor[open]) #stylesDialog { visibility: hidden; }
 
-/* Reduce Transparency: solid surfaces, no blur. */
-@media (prefers-reduced-transparency: reduce) {
-  #app .glass, #app #stylesDialog[open] {
-    background: rgb(30,32,36);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-  #app .error { background: rgb(64,20,24); }
-  #app .lens-button[aria-pressed="true"] { background: rgba(255,255,255,.12); }
-}
-
-/* While the search field has the keyboard, the styles dialog hangs below the top of the visible area and ends
-   above the keyboard, so results stay in view; the bottom toolbar steps aside until the keyboard goes. */
 /* Home Screen app. With viewport-fit=cover, iOS can leave the layout viewport short of the screen by about the
    status bar (WebKit bug 237961), and dynamic-viewport units and `bottom` stop short with it. home_screen.js marks
    a full-screen Home Screen app and sets --app-height to the screen's height, so the app hangs from the top at that
