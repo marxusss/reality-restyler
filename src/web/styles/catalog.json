@@ -406,13 +406,6 @@
     "thumbnail": "/styles/manga.webp"
   },
   {
-    "id": "chibi",
-    "name": "Chibi",
-    "group": "Animation & comics",
-    "prompt": "Redraw every person as a cute chibi character: oversized head on a tiny rounded body, huge sparkling eyes, rosy cheeks, clean soft outlines and pastel cel shading. Draw the same background in the same cute style with full saturated color., keep scene intact",
-    "thumbnail": "/styles/chibi.webp"
-  },
-  {
     "id": "anime-ova",
     "name": "90s anime OVA",
     "group": "Animation & comics",
