@@ -144,6 +144,21 @@ function Download-Asset {
     return $received
 }
 
+function Get-Sha256 {
+    param([string]$Path)
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try {
+        $stream = [IO.File]::OpenRead($Path)
+        try {
+            return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+        } finally {
+            $stream.Dispose()
+        }
+    } finally {
+        $algorithm.Dispose()
+    }
+}
+
 function Get-SafeSessionPath {
     $full = [IO.Path]::GetFullPath($SessionPath)
     $parent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([char[]]@('\', '/'))
@@ -191,7 +206,7 @@ function Install-Release {
     $checksumText = Get-Content -LiteralPath $checksumPath -Raw
     if ($checksumText -notmatch '(?m)^([A-Fa-f0-9]{64})\s+\*?RealityRestylingSetup\.exe\s*$') { throw 'The update checksum file is invalid.' }
     $expectedHash = $Matches[1].ToLowerInvariant()
-    $actualHash = (Get-FileHash -LiteralPath $installerPart -Algorithm SHA256).Hash.ToLowerInvariant()
+    $actualHash = Get-Sha256 -Path $installerPart
     if ($actualHash -ne $expectedHash) { throw 'The update checksum did not match.' }
     Move-Item -LiteralPath $installerPart -Destination $installerPath -Force
     Write-ProgressState -Phase 'ready' -Bytes ([long]$installerAsset.size) -Total ([long]$installerAsset.size) -Message $release.tag_name
