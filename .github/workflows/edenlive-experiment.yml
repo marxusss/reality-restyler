@@ -1,0 +1,50 @@
+name: EdenLive 5B isolated GPU experiment
+on:
+  push:
+    branches: [experiment/edenlive-5b]
+    paths: ['.github/workflows/edenlive-experiment.yml', 'experiments/edenlive/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: edenlive-maxpc
+  cancel-in-progress: false
+jobs:
+  benchmark:
+    runs-on: [self-hosted, Windows, second5090]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check MAXPC and existing GPU environment
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:COMPUTERNAME -ne 'MAXPC') { throw 'Refusing to run outside MAXPC' }
+          nvidia-smi
+          if ($LASTEXITCODE -ne 0) { throw 'NVIDIA driver unavailable' }
+          $gpu = nvidia-smi --query-gpu=name,memory.free --format=csv,noheader,nounits
+          if ($gpu -notmatch 'RTX 5090') { throw 'RTX 5090 not detected' }
+          if (-not (Test-Path F:\)) { throw 'F: not available' }
+          Get-PSDrive F
+          wsl.exe --list --verbose
+          wsl.exe --exec bash -lc 'nvidia-smi && python3 --version && command -v nvcc && test -d /mnt/f'
+          if ($LASTEXITCODE -ne 0) { throw 'No suitable existing WSL CUDA development environment; no system changes made' }
+      - name: Run isolated EdenLive experiment
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = 'F:\AI-experiments\edenlive-5b'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Copy-Item experiments/edenlive/benchmark.sh "$root\benchmark.sh" -Force
+          wsl.exe --exec bash /mnt/f/AI-experiments/edenlive-5b/benchmark.sh
+          $code = $LASTEXITCODE
+          if ($code -ne 0) { throw "EdenLive benchmark exited $code" }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: edenlive-maxpc-results
+          path: F:/AI-experiments/edenlive-5b/results/
+          retention-days: 4
+          if-no-files-found: ignore
